@@ -24,7 +24,23 @@ header {
 }
 
 header h1 { margin: 0 0 4px; }
-.subtitle { color: var(--muted); margin: 0; }
+.subtitle { color: var(--muted); margin: 0 0 10px; }
+
+.owner-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.owner-field input {
+  background: #0f1115;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
 
 main {
   padding: 16px 32px 48px;
@@ -47,7 +63,16 @@ main {
 
 .panel-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.panel-actions select {
+  background: #0f1115;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
 }
 
 .file-btn {

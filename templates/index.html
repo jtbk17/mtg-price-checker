@@ -10,6 +10,11 @@
   <header>
     <h1>MTG Price Checker</h1>
     <p class="subtitle">Magic: The Gathering &mdash; Card Kingdom market &amp; buylist prices</p>
+    <label class="owner-field">
+      Tracking as
+      <input type="text" id="current-owner" placeholder="Your name" list="known-owners">
+      <datalist id="known-owners"></datalist>
+    </label>
   </header>
 
   <main>
@@ -27,6 +32,9 @@
       <div class="panel-header">
         <h2>Watchlist</h2>
         <div class="panel-actions">
+          <select id="owner-filter">
+            <option value="">All owners</option>
+          </select>
           <form id="import-form">
             <label class="file-btn">
               Import ManaBox CSV

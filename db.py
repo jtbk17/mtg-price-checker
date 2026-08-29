@@ -6,7 +6,7 @@ DB_PATH = Path(__file__).parent / "tcg_prices.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS watchlist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    variant_id TEXT UNIQUE NOT NULL,
+    variant_id TEXT NOT NULL,
     card_id TEXT,
     game TEXT,
     name TEXT,
@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS watchlist (
     mtgjson_id TEXT,
     cardkingdom_price REAL,
     cardkingdom_buylist_price REAL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    owner TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (variant_id, owner)
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -49,9 +51,50 @@ def init_db():
             ("mtgjson_id", "TEXT"),
             ("cardkingdom_price", "REAL"),
             ("cardkingdom_buylist_price", "REAL"),
+            ("owner", "TEXT"),
         ):
             if column not in existing_columns:
                 conn.execute(f"ALTER TABLE watchlist ADD COLUMN {column} {coltype}")
+
+        table_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='watchlist'"
+        ).fetchone()[0]
+        if "UNIQUE (variant_id, owner)" not in table_sql:
+            # Older databases had a bare UNIQUE(variant_id), which blocks a
+            # second owner from tracking the same card+finish. SQLite can't
+            # alter a constraint in place, so recreate the table.
+            conn.executescript(
+                """
+                CREATE TABLE watchlist_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    variant_id TEXT NOT NULL,
+                    card_id TEXT,
+                    game TEXT,
+                    name TEXT,
+                    set_name TEXT,
+                    condition TEXT,
+                    printing TEXT,
+                    tcgplayer_id TEXT,
+                    image_url TEXT,
+                    mtgjson_id TEXT,
+                    cardkingdom_price REAL,
+                    cardkingdom_buylist_price REAL,
+                    owner TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (variant_id, owner)
+                );
+                INSERT INTO watchlist_new
+                    (id, variant_id, card_id, game, name, set_name, condition, printing,
+                     tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
+                     cardkingdom_buylist_price, owner, created_at)
+                SELECT id, variant_id, card_id, game, name, set_name, condition, printing,
+                       tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
+                       cardkingdom_buylist_price, owner, created_at
+                FROM watchlist;
+                DROP TABLE watchlist;
+                ALTER TABLE watchlist_new RENAME TO watchlist;
+                """
+            )
         conn.commit()
     finally:
         conn.close()
@@ -62,14 +105,17 @@ def add_to_watchlist(card):
     try:
         cur = conn.execute(
             """
-            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price)
-            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price)
-            ON CONFLICT(variant_id) DO NOTHING
+            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price, owner)
+            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price, :owner)
+            ON CONFLICT(variant_id, owner) DO NOTHING
             """,
             card,
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM watchlist WHERE variant_id = ?", (card["variant_id"],)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM watchlist WHERE variant_id = ? AND owner IS ?",
+            (card["variant_id"], card.get("owner")),
+        ).fetchone()
         if card.get("price") is not None:
             record_price(row["variant_id"], card["price"])
         return dict(row)
@@ -101,10 +147,15 @@ def record_price(variant_id, price):
         conn.close()
 
 
-def list_watchlist():
+def list_watchlist(owner=None):
     conn = get_connection()
     try:
-        rows = conn.execute("SELECT * FROM watchlist ORDER BY created_at DESC").fetchall()
+        if owner:
+            rows = conn.execute(
+                "SELECT * FROM watchlist WHERE owner = ? ORDER BY created_at DESC", (owner,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM watchlist ORDER BY created_at DESC").fetchall()
         result = []
         for row in rows:
             item = dict(row)
@@ -116,6 +167,17 @@ def list_watchlist():
             item["previous_price"] = history[1]["price"] if len(history) > 1 else None
             result.append(item)
         return result
+    finally:
+        conn.close()
+
+
+def list_owners():
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT owner FROM watchlist WHERE owner IS NOT NULL AND owner != '' ORDER BY owner"
+        ).fetchall()
+        return [r["owner"] for r in rows]
     finally:
         conn.close()
 

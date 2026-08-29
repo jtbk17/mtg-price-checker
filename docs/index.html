@@ -63,6 +63,24 @@
     table.movers th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
     table.movers td.pct.up { color: var(--up); font-weight: 700; }
     table.movers td.pct.down { color: var(--down); font-weight: 700; }
+    #alerts-section {
+      border: 1px solid var(--up);
+      background: #142016;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    #alerts-section h2 { color: var(--up); }
+    #alerts-list { list-style: none; padding: 0; margin: 0; }
+    #alerts-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    #alerts-list li:last-child { border-bottom: none; }
+    .owner-select {
+      background: #0f1115;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      margin-left: 12px;
+    }
   </style>
 </head>
 <body>
@@ -71,8 +89,16 @@
     <p class="subtitle" id="subtitle">Card Kingdom market &amp; buylist prices, refreshed nightly</p>
   </header>
   <main>
+    <section id="alerts-section" hidden>
+      <h2>🔔 Price alerts</h2>
+      <p class="section-sub" id="alerts-sub"></p>
+      <ul id="alerts-list"></ul>
+    </section>
+
     <section>
-      <h2>Watchlist</h2>
+      <h2>Watchlist
+        <select id="owner-select" class="owner-select"><option value="">All owners</option></select>
+      </h2>
       <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
     </section>
 
@@ -191,6 +217,40 @@
       }
     }
 
+    let watchlistItems = [];
+
+    function renderWatchlist() {
+      const container = document.getElementById("watchlist");
+      const owner = document.getElementById("owner-select").value;
+      const items = owner ? watchlistItems.filter((i) => i.owner === owner) : watchlistItems;
+
+      if (!items.length) {
+        container.innerHTML = '<p class="empty">Nothing tracked yet.</p>';
+        return;
+      }
+
+      container.innerHTML = "";
+      items.forEach((item) => {
+        const delta = deltaInfo(item.latest_price, item.previous_price);
+        const el = document.createElement("div");
+        el.className = "card";
+        el.innerHTML = `
+          ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
+          <div class="name">${escapeHtml(item.name)}</div>
+          <div class="meta">${escapeHtml(item.set_name || "")}</div>
+          <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
+          <div class="price">${formatPrice(item.latest_price)}</div>
+          ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
+          <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+          <canvas></canvas>
+        `;
+        container.appendChild(el);
+        if (item.history && item.history.length > 1) {
+          drawSparkline(el.querySelector("canvas"), item.history);
+        }
+      });
+    }
+
     async function load() {
       const container = document.getElementById("watchlist");
       try {
@@ -203,38 +263,54 @@
             `Card Kingdom market & buylist prices — last updated ${dt.toLocaleString()}`;
         }
 
-        if (!data.items.length) {
-          container.innerHTML = '<p class="empty">Nothing tracked yet.</p>';
-          return;
-        }
+        watchlistItems = data.items || [];
 
-        container.innerHTML = "";
-        data.items.forEach((item) => {
-          const delta = deltaInfo(item.latest_price, item.previous_price);
-          const el = document.createElement("div");
-          el.className = "card";
-          el.innerHTML = `
-            ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
-            <div class="name">${escapeHtml(item.name)}</div>
-            <div class="meta">${escapeHtml(item.set_name || "")}</div>
-            <div class="meta">${escapeHtml(item.printing || "")}</div>
-            <div class="price">${formatPrice(item.latest_price)}</div>
-            ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
-            <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
-            <canvas></canvas>
-          `;
-          container.appendChild(el);
-          if (item.history && item.history.length > 1) {
-            drawSparkline(el.querySelector("canvas"), item.history);
-          }
-        });
+        const owners = [...new Set(watchlistItems.map((i) => i.owner).filter(Boolean))].sort();
+        const ownerSelect = document.getElementById("owner-select");
+        ownerSelect.innerHTML =
+          '<option value="">All owners</option>' +
+          owners.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+        ownerSelect.addEventListener("change", renderWatchlist);
+
+        renderWatchlist();
       } catch (err) {
         container.innerHTML = `<p class="empty">Couldn't load price data: ${escapeHtml(err.message)}</p>`;
       }
     }
 
+    async function loadAlerts() {
+      const section = document.getElementById("alerts-section");
+      try {
+        const resp = await fetch("alerts.json", { cache: "no-store" });
+        const data = await resp.json();
+        const alerts = data.alerts || [];
+        if (!alerts.length) {
+          section.hidden = true;
+          return;
+        }
+        section.hidden = false;
+        document.getElementById("alerts-sub").textContent = data.generated_at
+          ? `As of ${new Date(data.generated_at).toLocaleString()}`
+          : "";
+        document.getElementById("alerts-list").innerHTML = alerts
+          .map(
+            (a) => `
+              <li>
+                <strong>${escapeHtml(a.name)}</strong> (${escapeHtml(a.set_name)}, ${escapeHtml(a.printing)})${a.owner ? ` · ${escapeHtml(a.owner)}` : ""}:
+                ${formatPrice(a.price_before)} → ${formatPrice(a.price_now)}
+                <span class="delta up">+${a.pct_change}%</span>
+              </li>
+            `
+          )
+          .join("");
+      } catch (err) {
+        section.hidden = true;
+      }
+    }
+
     load();
     loadMovers();
+    loadAlerts();
   </script>
 </body>
 </html>

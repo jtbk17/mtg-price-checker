@@ -7,6 +7,9 @@ const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
 const importInput = document.getElementById("import-input");
 const importStatus = document.getElementById("import-status");
+const currentOwnerInput = document.getElementById("current-owner");
+const knownOwnersList = document.getElementById("known-owners");
+const ownerFilter = document.getElementById("owner-filter");
 const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
 const historyCanvas = document.getElementById("history-chart");
@@ -35,6 +38,24 @@ function priceSectionHtml(variant) {
 
 function cardMeta(card) {
   return card.setName || card.set || "";
+}
+
+function currentOwner() {
+  return currentOwnerInput.value.trim();
+}
+
+async function loadOwners() {
+  try {
+    const owners = await fetchJSON("/api/owners");
+    knownOwnersList.innerHTML = owners.map((o) => `<option value="${escapeHtml(o)}">`).join("");
+    const selected = ownerFilter.value;
+    ownerFilter.innerHTML =
+      '<option value="">All owners</option>' +
+      owners.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+    ownerFilter.value = selected;
+  } catch (err) {
+    // Non-critical — the owner dropdown just stays empty.
+  }
 }
 
 async function fetchJSON(url, options) {
@@ -137,9 +158,10 @@ async function trackCard(card, variant) {
         mtgjsonId: card.mtgjsonId,
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
+        owner: currentOwner(),
       }),
     });
-    await loadWatchlist();
+    await Promise.all([loadWatchlist(), loadOwners()]);
   } catch (err) {
     showError(searchError, err.message);
   }
@@ -148,7 +170,8 @@ async function trackCard(card, variant) {
 async function loadWatchlist() {
   showError(watchlistError, "");
   try {
-    const items = await fetchJSON("/api/watchlist");
+    const params = ownerFilter.value ? `?owner=${encodeURIComponent(ownerFilter.value)}` : "";
+    const items = await fetchJSON(`/api/watchlist${params}`);
     renderWatchlist(items);
   } catch (err) {
     showError(watchlistError, err.message);
@@ -170,7 +193,7 @@ function renderWatchlist(items) {
       ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
       <div class="name">${escapeHtml(item.name)}</div>
       <div class="meta">${escapeHtml(item.set_name || "")}</div>
-      <div class="meta">${escapeHtml(item.printing || "")}</div>
+      <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
       <div class="price">${formatPrice(item.latest_price)}</div>
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
@@ -231,12 +254,13 @@ async function importCsv(file) {
 
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("owner", currentOwner());
 
   try {
     const result = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
     importStatus.className = "status-info";
     importStatus.textContent = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
-    await loadWatchlist();
+    await Promise.all([loadWatchlist(), loadOwners()]);
   } catch (err) {
     importStatus.className = "error";
     importStatus.textContent = err.message;
@@ -307,5 +331,20 @@ importInput.addEventListener("change", () => {
     importInput.value = "";
   }
 });
+ownerFilter.addEventListener("change", loadWatchlist);
 
+try {
+  currentOwnerInput.value = localStorage.getItem("currentOwner") || "";
+} catch (err) {
+  // localStorage can throw in some browser contexts — just skip remembering it.
+}
+currentOwnerInput.addEventListener("change", () => {
+  try {
+    localStorage.setItem("currentOwner", currentOwnerInput.value.trim());
+  } catch (err) {
+    // Non-critical.
+  }
+});
+
+loadOwners();
 loadWatchlist();

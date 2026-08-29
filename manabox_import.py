@@ -71,7 +71,7 @@ def parse_csv(file_bytes):
     return list(reader)
 
 
-def import_rows(rows):
+def import_rows(rows, owner=None):
     scryfall_cards = _fetch_scryfall_cards(row.get("Scryfall ID") for row in rows)
 
     imported = 0
@@ -105,6 +105,7 @@ def import_rows(rows):
             "mtgjson_id": uuid,
             "cardkingdom_price": ck_prices["market"] if ck_prices else None,
             "cardkingdom_buylist_price": ck_prices["buylist"] if ck_prices else None,
+            "owner": owner,
         }
         db.add_to_watchlist(watchlist_card)
         imported += 1

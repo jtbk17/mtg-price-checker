@@ -21,7 +21,11 @@ jobs:
 
       - run: pip install requests ijson
 
-      - run: python refresh_job.py
+      - name: Refresh watchlist prices and send alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python refresh_job.py
 
       - name: Download existing all-cards database, if any
         env:
@@ -35,7 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tcg_prices.db docs/watchlist.json docs/movers.json
+          git add tcg_prices.db docs/watchlist.json docs/movers.json docs/alerts.json
           git diff --cached --quiet || git commit -m "Nightly price refresh"
           git pull --rebase
           git push

@@ -10,7 +10,7 @@ import db
 import manabox_import
 import mtgjson_crosswalk
 import scryfall
-from refresh_job import export_snapshot, refresh_watchlist_prices
+from refresh_job import export_alerts, export_snapshot, notify_alerts, refresh_watchlist_prices
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tcg-price-checker")
@@ -112,9 +112,14 @@ def api_search():
         return jsonify({"error": str(exc)}), 400
 
 
+@app.route("/api/owners")
+def api_owners():
+    return jsonify(db.list_owners())
+
+
 @app.route("/api/watchlist", methods=["GET"])
 def api_watchlist_list():
-    return jsonify(db.list_watchlist())
+    return jsonify(db.list_watchlist(owner=request.args.get("owner") or None))
 
 
 @app.route("/api/watchlist", methods=["POST"])
@@ -125,6 +130,7 @@ def api_watchlist_add():
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
+    owner = (payload.get("owner") or "").strip() or None
     card = {
         "variant_id": payload["variantId"],
         "card_id": payload.get("cardId"),
@@ -139,9 +145,10 @@ def api_watchlist_add():
         "mtgjson_id": payload.get("mtgjsonId"),
         "cardkingdom_price": payload.get("cardKingdomPrice"),
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
+        "owner": owner,
     }
     item = db.add_to_watchlist(card)
-    _git_sync(f"Track {item['name']} ({item['set_name']})")
+    _git_sync(f"Track {item['name']} ({item['set_name']}){f' for {owner}' if owner else ''}")
     return jsonify(item), 201
 
 
@@ -150,6 +157,7 @@ def api_watchlist_import():
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "No file uploaded"}), 400
+    owner = (request.form.get("owner") or "").strip() or None
     try:
         rows = manabox_import.parse_csv(file.read())
     except ValueError as exc:
@@ -157,9 +165,9 @@ def api_watchlist_import():
     except UnicodeDecodeError:
         return jsonify({"error": "Could not read file as text — is this a CSV file?"}), 400
 
-    result = manabox_import.import_rows(rows)
+    result = manabox_import.import_rows(rows, owner=owner)
     if result["imported"]:
-        _git_sync(f"Import {result['imported']} card(s) from ManaBox CSV")
+        _git_sync(f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}")
     return jsonify(result), 201
 
 
@@ -182,8 +190,10 @@ def api_watchlist_history(watchlist_id):
 
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
-    refresh_watchlist_prices()
+    alerts = refresh_watchlist_prices()
     export_snapshot()
+    export_alerts(alerts)
+    notify_alerts(alerts)
     return jsonify(db.list_watchlist())
 
 
