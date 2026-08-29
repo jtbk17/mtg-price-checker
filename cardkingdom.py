@@ -69,6 +69,13 @@ def _load():
     return data
 
 
+def get_all_prices():
+    """Return the full {uuid: {"retail_normal": ..., ...}} map for every
+    card Card Kingdom prices — used by all_cards_history.py to snapshot
+    every card, not just a single lookup."""
+    return _load()
+
+
 def get_prices(mtgjson_id, foil=False):
     """Return {"market": ..., "buylist": ...} Card Kingdom prices for a
     Magic card, or None if the card isn't in the feed (e.g. non-Magic

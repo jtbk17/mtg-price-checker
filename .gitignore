@@ -3,3 +3,4 @@ __pycache__/
 .env
 cardkingdom_cache.json
 mtgjson_crosswalk_cache.json
+all_cards_*.db

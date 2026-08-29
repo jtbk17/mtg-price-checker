@@ -23,10 +23,25 @@ jobs:
 
       - run: python refresh_job.py
 
-      - name: Commit updated prices
+      - name: Commit updated watchlist data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add tcg_prices.db docs/watchlist.json
           git diff --cached --quiet || git commit -m "Nightly price refresh"
           git push
+
+      - name: Download existing all-cards database, if any
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download data --pattern "all_cards_*.db" --clobber || true
+
+      - name: Snapshot all-card prices
+        run: python all_cards_history.py
+
+      - name: Upload updated all-cards database
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent all-cards price history (kept out of git history; not the same as source code releases)"
+          gh release upload data all_cards_*.db --clobber
