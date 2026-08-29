@@ -1,6 +1,20 @@
 {
-  "generated_at": "2026-08-29T11:40:14.288865+00:00",
+  "generated_at": "2026-08-29T13:40:38.532532+00:00",
   "daily_gainers": [
+    {
+      "name": "Franklin Richards, Ascendant",
+      "set": "MSC",
+      "price_now": 1.99,
+      "price_before": 0.49,
+      "pct_change": 306.1
+    },
+    {
+      "name": "Island",
+      "set": "WC02",
+      "price_now": 2.49,
+      "price_before": 0.79,
+      "pct_change": 215.2
+    },
     {
       "name": "Technodrome",
       "set": "TMT",
@@ -25,25 +39,11 @@
       "pct_change": -89.0
     },
     {
-      "name": "Fish",
-      "set": "TA25",
-      "price_now": 0.49,
-      "price_before": 2.99,
-      "pct_change": -83.6
-    },
-    {
       "name": "Zack Fair",
       "set": "FIN",
       "price_now": 0.35,
       "price_before": 1.79,
       "pct_change": -80.4
-    },
-    {
-      "name": "Myr",
-      "set": "TBRC",
-      "price_now": 0.35,
-      "price_before": 1.29,
-      "pct_change": -72.9
     },
     {
       "name": "Circle of Protection: White",
@@ -53,13 +53,6 @@
       "pct_change": -71.6
     },
     {
-      "name": "Cat",
-      "set": "PLST",
-      "price_now": 0.49,
-      "price_before": 1.29,
-      "pct_change": -62.0
-    },
-    {
       "name": "Grazilaxx, Illithid Scholar",
       "set": "CLB",
       "price_now": 2.29,
@@ -67,32 +60,11 @@
       "pct_change": -61.8
     },
     {
-      "name": "Robot",
-      "set": "TPIP",
-      "price_now": 0.79,
-      "price_before": 1.79,
-      "pct_change": -55.9
-    },
-    {
       "name": "Plains",
       "set": "PTC",
       "price_now": 1.29,
       "price_before": 2.79,
       "pct_change": -53.8
-    },
-    {
-      "name": "Copy",
-      "set": "TECC",
-      "price_now": 0.79,
-      "price_before": 1.29,
-      "pct_change": -38.8
-    },
-    {
-      "name": "Samurai",
-      "set": "TONE",
-      "price_now": 0.99,
-      "price_before": 1.29,
-      "pct_change": -23.3
     },
     {
       "name": "Psychic Frog",
@@ -111,11 +83,53 @@
   ],
   "weekly_gainers": [
     {
+      "name": "Island",
+      "set": "WC02",
+      "price_now": 2.49,
+      "price_before": 0.79,
+      "pct_change": 215.2
+    },
+    {
+      "name": "Agent Bishop, Man in Black",
+      "set": "TMT",
+      "price_now": 1.49,
+      "price_before": 0.49,
+      "pct_change": 204.1
+    },
+    {
+      "name": "Plains",
+      "set": "PTC",
+      "price_now": 1.49,
+      "price_before": 0.69,
+      "pct_change": 115.9
+    },
+    {
       "name": "Great Goblin, Foul-Hearted",
       "set": "HOC",
       "price_now": 29.99,
       "price_before": 17.99,
       "pct_change": 66.7
+    },
+    {
+      "name": "Sting, Bilbo's Sword",
+      "set": "HOB",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
+    },
+    {
+      "name": "F\u00edli the Pathfinder",
+      "set": "HOB",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
+    },
+    {
+      "name": "Chromatic Sphere",
+      "set": "INV",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
     },
     {
       "name": "Thorin, King of Durin's Folk",
@@ -125,95 +139,53 @@
       "pct_change": 55.6
     },
     {
-      "name": "Skyshroud Claim",
-      "set": "NEM",
-      "price_now": 2.49,
-      "price_before": 1.79,
-      "pct_change": 39.1
+      "name": "Dream Beavers",
+      "set": "TMT",
+      "price_now": 0.59,
+      "price_before": 0.39,
+      "pct_change": 51.3
     },
     {
-      "name": "Abrade",
-      "set": "SOA",
-      "price_now": 1.79,
-      "price_before": 1.29,
-      "pct_change": 38.8
+      "name": "Illness in the Ranks",
+      "set": "GTC",
+      "price_now": 0.59,
+      "price_before": 0.39,
+      "pct_change": 51.3
     },
     {
-      "name": "Mountain",
+      "name": "Walker of Secret Ways",
+      "set": "BOK",
+      "price_now": 1.49,
+      "price_before": 0.99,
+      "pct_change": 50.5
+    },
+    {
+      "name": "K\u00edli the Resourceful",
       "set": "HOB",
-      "price_now": 1.79,
-      "price_before": 1.29,
-      "pct_change": 38.8
+      "price_now": 1.49,
+      "price_before": 0.99,
+      "pct_change": 50.5
     },
     {
-      "name": "Plains",
-      "set": "LTR",
-      "price_now": 1.79,
-      "price_before": 1.29,
-      "pct_change": 38.8
+      "name": "Mercadia's Downfall",
+      "set": "MMQ",
+      "price_now": 1.49,
+      "price_before": 0.99,
+      "pct_change": 50.5
     },
     {
-      "name": "Jori En, Ruin Diver",
-      "set": "OGW",
-      "price_now": 1.79,
-      "price_before": 1.29,
-      "pct_change": 38.8
+      "name": "Forest",
+      "set": "OTJ",
+      "price_now": 0.99,
+      "price_before": 0.69,
+      "pct_change": 43.5
     },
     {
-      "name": "Pestilence",
-      "set": "5ED",
-      "price_now": 1.79,
-      "price_before": 1.29,
-      "pct_change": 38.8
-    },
-    {
-      "name": "Jarad, Golgari Lich Lord",
-      "set": "RTR",
-      "price_now": 5.49,
-      "price_before": 3.99,
-      "pct_change": 37.6
-    },
-    {
-      "name": "Somberwald Sage",
-      "set": "AVR",
-      "price_now": 1.99,
-      "price_before": 1.49,
-      "pct_change": 33.6
-    },
-    {
-      "name": "Goblin Chirurgeon",
-      "set": "FEM",
-      "price_now": 1.99,
-      "price_before": 1.49,
-      "pct_change": 33.6
-    },
-    {
-      "name": "Bloatfly Swarm",
-      "set": "PIP",
-      "price_now": 1.99,
-      "price_before": 1.49,
-      "pct_change": 33.6
-    },
-    {
-      "name": "Goblin Chirurgeon",
-      "set": "FEM",
-      "price_now": 1.99,
-      "price_before": 1.49,
-      "pct_change": 33.6
-    },
-    {
-      "name": "Faerie Harbinger",
-      "set": "PLST",
-      "price_now": 3.99,
-      "price_before": 2.99,
-      "pct_change": 33.4
-    },
-    {
-      "name": "Captain Lannery Storm",
-      "set": "SLD",
-      "price_now": 7.99,
-      "price_before": 5.99,
-      "pct_change": 33.4
+      "name": "The Sackville-Bagginses",
+      "set": "HOB",
+      "price_now": 0.99,
+      "price_before": 0.69,
+      "pct_change": 43.5
     }
   ],
   "weekly_losers": [
@@ -239,6 +211,13 @@
       "pct_change": -65.3
     },
     {
+      "name": "Salvage",
+      "set": "P02",
+      "price_now": 0.35,
+      "price_before": 0.79,
+      "pct_change": -55.7
+    },
+    {
       "name": "Supper for Spiders",
       "set": "HOB",
       "price_now": 0.99,
@@ -258,6 +237,27 @@
       "price_now": 0.99,
       "price_before": 1.49,
       "pct_change": -33.6
+    },
+    {
+      "name": "Cantankerous Keepers",
+      "set": "HOB",
+      "price_now": 0.49,
+      "price_before": 0.69,
+      "pct_change": -29.0
+    },
+    {
+      "name": "Getaway Barrel",
+      "set": "HOB",
+      "price_now": 0.49,
+      "price_before": 0.69,
+      "pct_change": -29.0
+    },
+    {
+      "name": "Hobbit Hole",
+      "set": "HOB",
+      "price_now": 0.35,
+      "price_before": 0.49,
+      "pct_change": -28.6
     },
     {
       "name": "Gandalf, Party Guest",
@@ -293,34 +293,6 @@
       "price_now": 15.99,
       "price_before": 20.99,
       "pct_change": -23.8
-    },
-    {
-      "name": "Grave Titan",
-      "set": "DRC",
-      "price_now": 0.99,
-      "price_before": 1.29,
-      "pct_change": -23.3
-    },
-    {
-      "name": "Talisman of Hierarchy",
-      "set": "FIC",
-      "price_now": 0.99,
-      "price_before": 1.29,
-      "pct_change": -23.3
-    },
-    {
-      "name": "Gwaihir the Windlord",
-      "set": "LTR",
-      "price_now": 0.99,
-      "price_before": 1.29,
-      "pct_change": -23.3
-    },
-    {
-      "name": "Vela the Night-Clad",
-      "set": "PCA",
-      "price_now": 0.99,
-      "price_before": 1.29,
-      "pct_change": -23.3
     }
   ]
 }
