@@ -42,6 +42,21 @@ header h1 { margin: 0 0 4px; }
   border-radius: 8px;
 }
 
+.section-sub {
+  color: var(--muted);
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.qty-input {
+  width: 56px;
+  background: #0f1115;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
 main {
   padding: 16px 32px 48px;
   display: grid;

@@ -71,13 +71,24 @@ def parse_csv(file_bytes):
     return list(reader)
 
 
+def _parse_quantity(value):
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return 1
+
+
 def import_rows(rows, owner=None):
     scryfall_cards = _fetch_scryfall_cards(row.get("Scryfall ID") for row in rows)
 
-    imported = 0
+    # ManaBox splits the same card+finish across multiple rows when you
+    # own copies in different conditions (e.g. 2 Near Mint + 1 Lightly
+    # Played) — our watchlist doesn't track condition separately, so sum
+    # quantities for any rows that collapse to the same variant here,
+    # rather than letting the last one silently overwrite the others.
+    grouped = {}
     skipped = 0
     errors = []
-
     for row in rows:
         scryfall_id = row.get("Scryfall ID")
         card = scryfall_cards.get(scryfall_id)
@@ -86,19 +97,37 @@ def import_rows(rows, owner=None):
             errors.append(f"{row.get('Name', '?')}: not found on Scryfall")
             continue
 
-        set_code = card.get("set") or row.get("Set code")
         finish, printing = _finish_and_label(row.get("Foil"))
-        uuid = mtgjson_crosswalk.get_uuid(scryfall_id, set_code)
-        ck_prices = cardkingdom.get_prices(uuid, foil=(finish != "nonfoil")) if uuid else None
+        variant_id = f"{scryfall_id}:{finish}"
+        quantity = _parse_quantity(row.get("Quantity"))
+
+        if variant_id in grouped:
+            grouped[variant_id]["quantity"] += quantity
+        else:
+            grouped[variant_id] = {
+                "scryfall_id": scryfall_id,
+                "card": card,
+                "row": row,
+                "finish": finish,
+                "printing": printing,
+                "quantity": quantity,
+            }
+
+    imported = 0
+    for variant_id, g in grouped.items():
+        card, row = g["card"], g["row"]
+        set_code = card.get("set") or row.get("Set code")
+        uuid = mtgjson_crosswalk.get_uuid(g["scryfall_id"], set_code)
+        ck_prices = cardkingdom.get_prices(uuid, foil=(g["finish"] != "nonfoil")) if uuid else None
 
         watchlist_card = {
-            "variant_id": f"{scryfall_id}:{finish}",
-            "card_id": scryfall_id,
+            "variant_id": variant_id,
+            "card_id": g["scryfall_id"],
             "game": "Magic: The Gathering",
             "name": card.get("name") or row.get("Name"),
             "set_name": card.get("set_name") or row.get("Set name"),
             "condition": "Near Mint",
-            "printing": printing,
+            "printing": g["printing"],
             "tcgplayer_id": card.get("tcgplayer_id"),
             "image_url": _image_url(card),
             "price": ck_prices["market"] if ck_prices else None,
@@ -106,6 +135,7 @@ def import_rows(rows, owner=None):
             "cardkingdom_price": ck_prices["market"] if ck_prices else None,
             "cardkingdom_buylist_price": ck_prices["buylist"] if ck_prices else None,
             "owner": owner,
+            "quantity": g["quantity"],
         }
         db.add_to_watchlist(watchlist_card)
         imported += 1

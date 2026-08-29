@@ -57,6 +57,53 @@ class DbTests(unittest.TestCase):
         db.remove_from_watchlist(item["id"])
         self.assertEqual(db.list_watchlist(owner="TestOwner"), [])
 
+    def test_quantity_defaults_and_updates_on_retrack(self):
+        card = {
+            "variant_id": "qty-test:nonfoil",
+            "card_id": "qty-test",
+            "game": "Magic: The Gathering",
+            "name": "Qty Card",
+            "set_name": "Test Set",
+            "condition": "Near Mint",
+            "printing": "Normal",
+            "price": 1.0,
+            "cardkingdom_price": 1.0,
+            "cardkingdom_buylist_price": 0.4,
+            "owner": None,
+        }
+        item = db.add_to_watchlist(card)
+        self.assertEqual(item["quantity"], 1)
+
+        item = db.add_to_watchlist({**card, "quantity": 4})
+        self.assertEqual(item["quantity"], 4)
+        self.assertEqual(len(db.list_watchlist()), 1)  # still one row, not a duplicate
+
+        db.remove_from_watchlist(item["id"])
+
+    def test_market_and_buylist_history_are_independent(self):
+        # record_price()'s recorded_at defaults to CURRENT_TIMESTAMP, which
+        # only has second-level granularity, so inserting explicit
+        # timestamps here (rather than calling record_price() twice in a
+        # row for the same kind) avoids a same-second collision making
+        # this test timing-dependent.
+        variant_id = "history-test:nonfoil"
+        conn = db.get_connection()
+        conn.executemany(
+            "INSERT INTO price_history (variant_id, price, kind, recorded_at) VALUES (?, ?, ?, ?)",
+            [
+                (variant_id, 5.00, "market", "2026-01-01 00:00:00"),
+                (variant_id, 2.00, "buylist", "2026-01-01 00:00:00"),
+                (variant_id, 6.00, "market", "2026-01-02 00:00:00"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        market = db.get_history(variant_id, kind="market")
+        buylist = db.get_history(variant_id, kind="buylist")
+        self.assertEqual([h["price"] for h in market], [5.00, 6.00])
+        self.assertEqual([h["price"] for h in buylist], [2.00])
+
     def test_second_owner_can_track_same_card(self):
         base_card = {
             "variant_id": "shared-variant:nonfoil",
@@ -190,6 +237,7 @@ class ImportsTests(unittest.TestCase):
     and top-level exceptions before they reach the nightly job."""
 
     def test_all_modules_import(self):
+        import all_cards_lookup  # noqa: F401
         import cardkingdom  # noqa: F401
         import market_alerts  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401

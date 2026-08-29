@@ -99,6 +99,7 @@
       <h2>Watchlist
         <select id="owner-select" class="owner-select"><option value="">All owners</option></select>
       </h2>
+      <p class="section-sub" id="portfolio-value"></p>
       <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
     </section>
 
@@ -168,27 +169,36 @@
         .replace(/"/g, "&quot;");
     }
 
-    function drawSparkline(canvas, history) {
+function drawSparkline(canvas, marketHistory, buylistHistory) {
       const ctx = canvas.getContext("2d");
       canvas.width = canvas.clientWidth * 2;
       canvas.height = canvas.clientHeight * 2;
       const { width, height } = canvas;
       ctx.clearRect(0, 0, width, height);
-      const prices = history.map((h) => h.price).filter((p) => p != null);
-      if (prices.length < 2) return;
-      const min = Math.min(...prices);
-      const max = Math.max(...prices);
+
+      const series = [
+        { data: marketHistory || [], color: "#5b8cff" },
+        { data: buylistHistory || [], color: "#d4a24c" },
+      ].filter((s) => s.data.length >= 2);
+      if (!series.length) return;
+
+      const allPrices = series.flatMap((s) => s.data.map((h) => h.price)).filter((p) => p != null);
+      const min = Math.min(...allPrices);
+      const max = Math.max(...allPrices);
       const range = max - min || 1;
-      ctx.strokeStyle = "#5b8cff";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      history.forEach((point, i) => {
-        const x = (i / (history.length - 1)) * width;
-        const y = height - ((point.price - min) / range) * height;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+
+      series.forEach(({ data, color }) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        data.forEach((point, i) => {
+          const x = (i / (data.length - 1)) * width;
+          const y = height - ((point.price - min) / range) * height;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
       });
-      ctx.stroke();
     }
 
     function renderMoversTable(tbodyId, movers) {
@@ -232,10 +242,22 @@
 
     let watchlistItems = [];
 
+    function renderPortfolioValue(items) {
+      const total = items.reduce(
+        (sum, item) => sum + (item.latest_price != null ? item.latest_price * (item.quantity || 1) : 0),
+        0
+      );
+      const totalCards = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+      document.getElementById("portfolio-value").textContent =
+        `Portfolio value: ${formatPrice(total)} (${totalCards} card${totalCards === 1 ? "" : "s"})`;
+    }
+
     function renderWatchlist() {
       const container = document.getElementById("watchlist");
       const owner = document.getElementById("owner-select").value;
       const items = owner ? watchlistItems.filter((i) => i.owner === owner) : watchlistItems;
+
+      renderPortfolioValue(items);
 
       if (!items.length) {
         container.innerHTML = '<p class="empty">Nothing tracked yet.</p>';
@@ -245,21 +267,22 @@
       container.innerHTML = "";
       items.forEach((item) => {
         const delta = deltaInfo(item.latest_price, item.previous_price);
+        const qty = item.quantity || 1;
         const el = document.createElement("div");
         el.className = "card";
         el.innerHTML = `
           ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
-          <div class="name">${escapeHtml(item.name)}</div>
+          <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
           <div class="meta">${escapeHtml(item.set_name || "")}</div>
           <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
-          <div class="price">${formatPrice(item.latest_price)}</div>
+          <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
           ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
           <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
           <canvas></canvas>
         `;
         container.appendChild(el);
-        if (item.history && item.history.length > 1) {
-          drawSparkline(el.querySelector("canvas"), item.history);
+        if ((item.history && item.history.length > 1) || (item.buylist_history && item.buylist_history.length > 1)) {
+          drawSparkline(el.querySelector("canvas"), item.history, item.buylist_history);
         }
       });
     }

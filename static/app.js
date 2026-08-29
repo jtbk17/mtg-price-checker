@@ -10,10 +10,15 @@ const importStatus = document.getElementById("import-status");
 const currentOwnerInput = document.getElementById("current-owner");
 const knownOwnersList = document.getElementById("known-owners");
 const ownerFilter = document.getElementById("owner-filter");
+const portfolioValueEl = document.getElementById("portfolio-value");
 const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
 const historyCanvas = document.getElementById("history-chart");
 const closeHistoryBtn = document.getElementById("close-history");
+const lookupForm = document.getElementById("lookup-form");
+const lookupInput = document.getElementById("lookup-input");
+const lookupResults = document.getElementById("lookup-results");
+const lookupError = document.getElementById("lookup-error");
 
 function showError(el, message) {
   el.textContent = message;
@@ -108,6 +113,7 @@ function renderSearchResults(cards) {
       }
       <div class="price-section"></div>
       <div class="actions">
+        <input type="number" class="qty-input" min="1" value="1" title="Quantity owned">
         <button type="button" data-action="track">Track</button>
       </div>
     `;
@@ -133,12 +139,15 @@ function renderSearchResults(cards) {
       });
     }
 
-    el.querySelector('[data-action="track"]').addEventListener("click", () => trackCard(card, selected));
+    const qtyInput = el.querySelector(".qty-input");
+    el.querySelector('[data-action="track"]').addEventListener("click", () =>
+      trackCard(card, selected, Number(qtyInput.value) || 1)
+    );
     searchResults.appendChild(el);
   });
 }
 
-async function trackCard(card, variant) {
+async function trackCard(card, variant, quantity) {
   if (!variant.variantId) {
     showError(searchError, "This card is missing a variant id and can't be tracked.");
     return;
@@ -159,6 +168,7 @@ async function trackCard(card, variant) {
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
         owner: currentOwner(),
+        quantity: quantity || 1,
       }),
     });
     await Promise.all([loadWatchlist(), loadOwners()]);
@@ -180,6 +190,7 @@ async function loadWatchlist() {
 
 function renderWatchlist(items) {
   watchlistEl.innerHTML = "";
+  renderPortfolioValue(items);
   if (!items.length) {
     watchlistEl.innerHTML = "<p class=\"empty\">Nothing tracked yet — search above and hit Track.</p>";
     return;
@@ -187,14 +198,15 @@ function renderWatchlist(items) {
 
   items.forEach((item) => {
     const delta = deltaInfo(item.latest_price, item.previous_price);
+    const qty = item.quantity || 1;
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `
       ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
-      <div class="name">${escapeHtml(item.name)}</div>
+      <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
       <div class="meta">${escapeHtml(item.set_name || "")}</div>
       <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
-      <div class="price">${formatPrice(item.latest_price)}</div>
+      <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
       <div class="actions">
@@ -210,6 +222,15 @@ function renderWatchlist(items) {
     );
     watchlistEl.appendChild(el);
   });
+}
+
+function renderPortfolioValue(items) {
+  const total = items.reduce(
+    (sum, item) => sum + (item.latest_price != null ? item.latest_price * (item.quantity || 1) : 0),
+    0
+  );
+  const totalCards = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  portfolioValueEl.textContent = `Portfolio value: ${formatPrice(total)} (${totalCards} card${totalCards === 1 ? "" : "s"})`;
 }
 
 function deltaInfo(latest, previous) {
@@ -269,48 +290,98 @@ async function importCsv(file) {
 
 async function showHistory(item) {
   try {
-    const history = await fetchJSON(`/api/watchlist/${item.id}/history`);
-    historyTitle.textContent = `${item.name} — ${item.printing || ""}`;
-    drawSparkline(history);
+    const [market, buylist] = await Promise.all([
+      fetchJSON(`/api/watchlist/${item.id}/history`),
+      fetchJSON(`/api/watchlist/${item.id}/history?kind=buylist`),
+    ]);
+    historyTitle.innerHTML = `${escapeHtml(item.name)} — ${escapeHtml(item.printing || "")}
+      <span class="meta"><span style="color:#5b8cff">■</span> Market &nbsp; <span style="color:#d4a24c">■</span> Buylist</span>`;
+    drawSparkline(historyCanvas, [
+      { data: market, color: "#5b8cff" },
+      { data: buylist, color: "#d4a24c" },
+    ]);
     historyDialog.showModal();
   } catch (err) {
     showError(watchlistError, err.message);
   }
 }
 
-function drawSparkline(history) {
-  const ctx = historyCanvas.getContext("2d");
-  const { width, height } = historyCanvas;
+function drawSparkline(canvas, series) {
+  const ctx = canvas.getContext("2d");
+  const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
 
-  if (history.length < 2) {
+  const usable = series.filter((s) => s.data.length >= 2);
+  if (!usable.length) {
     ctx.fillStyle = "#9096a3";
     ctx.font = "14px sans-serif";
     ctx.fillText("Not enough data yet — check back after another refresh.", 12, height / 2);
     return;
   }
 
-  const prices = history.map((h) => h.price).filter((p) => p !== null && p !== undefined);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
+  const allPrices = usable.flatMap((s) => s.data.map((h) => h.price)).filter((p) => p != null);
+  const min = Math.min(...allPrices);
+  const max = Math.max(...allPrices);
   const pad = 24;
   const range = max - min || 1;
 
-  ctx.strokeStyle = "#5b8cff";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  history.forEach((point, i) => {
-    const x = pad + (i / (history.length - 1)) * (width - pad * 2);
-    const y = height - pad - ((point.price - min) / range) * (height - pad * 2);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  usable.forEach(({ data, color }) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    data.forEach((point, i) => {
+      const x = pad + (i / (data.length - 1)) * (width - pad * 2);
+      const y = height - pad - ((point.price - min) / range) * (height - pad * 2);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
   });
-  ctx.stroke();
 
   ctx.fillStyle = "#9096a3";
   ctx.font = "12px sans-serif";
   ctx.fillText(`$${min.toFixed(2)}`, 4, height - 6);
   ctx.fillText(`$${max.toFixed(2)}`, 4, 14);
+}
+
+async function runLookup(event) {
+  event.preventDefault();
+  showError(lookupError, "");
+  lookupResults.innerHTML = "<p class=\"empty\">Searching…</p>";
+
+  const name = lookupInput.value.trim();
+  try {
+    const cards = await fetchJSON(`/api/lookup?name=${encodeURIComponent(name)}`);
+    renderLookupResults(cards);
+  } catch (err) {
+    lookupResults.innerHTML = "";
+    showError(lookupError, err.message);
+  }
+}
+
+function renderLookupResults(cards) {
+  lookupResults.innerHTML = "";
+  if (!cards.length) {
+    lookupResults.innerHTML = '<p class="empty">No matches found.</p>';
+    return;
+  }
+
+  cards.forEach((card) => {
+    const prices = card.history.map((h) => h.price);
+    const latest = prices.length ? prices[prices.length - 1] : null;
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      <div class="name">${escapeHtml(card.name)}</div>
+      <div class="meta">${escapeHtml(card.set || "")}</div>
+      <div class="price">${formatPrice(latest)}</div>
+      <canvas width="240" height="60"></canvas>
+    `;
+    lookupResults.appendChild(el);
+    if (card.history.length > 1) {
+      drawSparkline(el.querySelector("canvas"), [{ data: card.history, color: "#5b8cff" }]);
+    }
+  });
 }
 
 function escapeHtml(str) {
@@ -332,6 +403,7 @@ importInput.addEventListener("change", () => {
   }
 });
 ownerFilter.addEventListener("change", loadWatchlist);
+lookupForm.addEventListener("submit", runLookup);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";

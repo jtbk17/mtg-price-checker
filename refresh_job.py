@@ -62,7 +62,9 @@ def refresh_watchlist_prices():
                             "pct_change": round(pct, 1),
                         }
                     )
-            db.record_price(item["variant_id"], new_price)
+            db.record_price(item["variant_id"], new_price, kind="market")
+        if ck_prices["buylist"] is not None:
+            db.record_price(item["variant_id"], ck_prices["buylist"], kind="buylist")
         db.update_cardkingdom_price(item["variant_id"], new_price, ck_prices["buylist"])
 
     return alerts
@@ -73,7 +75,8 @@ def export_snapshot():
 
     items = db.list_watchlist()
     for item in items:
-        item["history"] = db.get_history(item["variant_id"])
+        item["history"] = db.get_history(item["variant_id"], kind="market")
+        item["buylist_history"] = db.get_history(item["variant_id"], kind="buylist")
 
     DOCS_DIR.mkdir(exist_ok=True)
     SNAPSHOT_FILE.write_text(

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+import all_cards_lookup
 import cardkingdom
 import db
 import manabox_import
@@ -117,6 +118,14 @@ def _serialize_card(card):
     }
 
 
+@app.route("/api/lookup")
+def api_lookup():
+    name = request.args.get("name")
+    if not name:
+        return jsonify({"error": "Query parameter 'name' is required."}), 400
+    return jsonify(all_cards_lookup.search(name))
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -153,6 +162,10 @@ def api_watchlist_add():
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
 
     owner = (payload.get("owner") or "").strip() or None
+    try:
+        quantity = max(1, int(payload.get("quantity") or 1))
+    except (TypeError, ValueError):
+        quantity = 1
     card = {
         "variant_id": payload["variantId"],
         "card_id": payload.get("cardId"),
@@ -168,6 +181,7 @@ def api_watchlist_add():
         "cardkingdom_price": payload.get("cardKingdomPrice"),
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
         "owner": owner,
+        "quantity": quantity,
     }
     item = _git_sync(
         lambda: db.add_to_watchlist(card),
@@ -214,7 +228,8 @@ def api_watchlist_history(watchlist_id):
     item = db.get_watchlist_item(watchlist_id)
     if not item:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(db.get_history(item["variant_id"]))
+    kind = "buylist" if request.args.get("kind") == "buylist" else "market"
+    return jsonify(db.get_history(item["variant_id"], kind=kind))
 
 
 @app.route("/api/refresh", methods=["POST"])

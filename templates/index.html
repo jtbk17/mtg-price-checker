@@ -30,7 +30,10 @@
 
     <section class="panel" id="watchlist-panel">
       <div class="panel-header">
-        <h2>Watchlist</h2>
+        <div>
+          <h2>Watchlist</h2>
+          <p id="portfolio-value" class="section-sub"></p>
+        </div>
         <div class="panel-actions">
           <select id="owner-filter">
             <option value="">All owners</option>
@@ -47,6 +50,17 @@
       <div id="import-status" class="error" hidden></div>
       <div id="watchlist-error" class="error" hidden></div>
       <div id="watchlist" class="card-grid"></div>
+    </section>
+
+    <section class="panel" id="lookup-panel">
+      <h2>Look up any card's history</h2>
+      <p class="section-sub">Not limited to your watchlist &mdash; searches every Card Kingdom-priced card.</p>
+      <form id="lookup-form">
+        <input type="text" id="lookup-input" placeholder="Card name, e.g. Battle of Wits" required>
+        <button type="submit">Look up</button>
+      </form>
+      <div id="lookup-error" class="error" hidden></div>
+      <div id="lookup-results" class="card-grid"></div>
     </section>
   </main>
 

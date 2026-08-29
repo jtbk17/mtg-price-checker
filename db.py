@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
     cardkingdom_price REAL,
     cardkingdom_buylist_price REAL,
     owner TEXT,
+    quantity INTEGER DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (variant_id, owner)
 );
@@ -30,11 +31,9 @@ CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     variant_id TEXT NOT NULL,
     price REAL,
+    kind TEXT NOT NULL DEFAULT 'market',
     recorded_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_price_history_variant_time
-    ON price_history (variant_id, recorded_at);
 
 CREATE TABLE IF NOT EXISTS recommendations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,9 +73,33 @@ def init_db():
             ("cardkingdom_price", "REAL"),
             ("cardkingdom_buylist_price", "REAL"),
             ("owner", "TEXT"),
+            ("quantity", "INTEGER DEFAULT 1"),
         ):
             if column not in existing_columns:
                 conn.execute(f"ALTER TABLE watchlist ADD COLUMN {column} {coltype}")
+
+        price_history_columns = {row["name"] for row in conn.execute("PRAGMA table_info(price_history)")}
+        if "kind" not in price_history_columns:
+            conn.execute("ALTER TABLE price_history ADD COLUMN kind TEXT NOT NULL DEFAULT 'market'")
+            # The old unique index was (variant_id, recorded_at); a buylist
+            # point recorded in the same instant as a market point would
+            # collide with it, so it has to be replaced rather than kept
+            # alongside the new one.
+            conn.execute("DROP INDEX IF EXISTS idx_price_history_variant_time")
+
+        # Created here (not in SCHEMA) so it always runs after the `kind`
+        # column above is guaranteed to exist, whether that's from the
+        # ALTER TABLE just above or because CREATE TABLE already included
+        # it for a brand new database.
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_price_history_variant_kind_time "
+            "ON price_history (variant_id, kind, recorded_at)"
+        )
+
+        # Normalize any pre-existing NULL owners to '' — see the comment in
+        # add_to_watchlist() for why NULL doesn't work as the "no owner"
+        # sentinel with a UNIQUE(variant_id, owner) constraint.
+        conn.execute("UPDATE watchlist SET owner = '' WHERE owner IS NULL")
 
         table_sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='watchlist'"
@@ -102,16 +125,17 @@ def init_db():
                     cardkingdom_price REAL,
                     cardkingdom_buylist_price REAL,
                     owner TEXT,
+                    quantity INTEGER DEFAULT 1,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE (variant_id, owner)
                 );
                 INSERT INTO watchlist_new
                     (id, variant_id, card_id, game, name, set_name, condition, printing,
                      tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
-                     cardkingdom_buylist_price, owner, created_at)
+                     cardkingdom_buylist_price, owner, quantity, created_at)
                 SELECT id, variant_id, card_id, game, name, set_name, condition, printing,
                        tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
-                       cardkingdom_buylist_price, owner, created_at
+                       cardkingdom_buylist_price, owner, quantity, created_at
                 FROM watchlist;
                 DROP TABLE watchlist;
                 ALTER TABLE watchlist_new RENAME TO watchlist;
@@ -122,14 +146,47 @@ def init_db():
         conn.close()
 
 
+_WATCHLIST_FIELDS = (
+    "variant_id",
+    "card_id",
+    "game",
+    "name",
+    "set_name",
+    "condition",
+    "printing",
+    "tcgplayer_id",
+    "image_url",
+    "mtgjson_id",
+    "cardkingdom_price",
+    "cardkingdom_buylist_price",
+    "owner",
+)
+
+
 def add_to_watchlist(card):
     conn = get_connection()
     try:
-        cur = conn.execute(
+        # Callers only need to pass the fields they actually have — treat
+        # anything else as null rather than crashing on a missing binding.
+        # `price` (the initial market price to seed history with) isn't a
+        # watchlist column, so it's carried over separately.
+        price = card.get("price")
+        quantity = card.get("quantity") or 1
+        card = {field: card.get(field) for field in _WATCHLIST_FIELDS}
+        card["quantity"] = quantity
+        card["price"] = price
+        # SQL's UNIQUE(variant_id, owner) treats every NULL as distinct
+        # from every other NULL, so an untagged card would never actually
+        # be deduplicated against itself — a second "track" of the exact
+        # same card+finish would silently insert a duplicate row instead
+        # of hitting ON CONFLICT. Normalize "no owner" to '' so the
+        # constraint (and re-tracking with an updated quantity) works.
+        card["owner"] = card.get("owner") or ""
+        conn.execute(
             """
-            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price, owner)
-            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price, :owner)
-            ON CONFLICT(variant_id, owner) DO NOTHING
+            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price, owner, quantity)
+            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price, :owner, :quantity)
+            ON CONFLICT(variant_id, owner) DO UPDATE SET quantity = excluded.quantity
             """,
             card,
         )
@@ -139,7 +196,9 @@ def add_to_watchlist(card):
             (card["variant_id"], card.get("owner")),
         ).fetchone()
         if card.get("price") is not None:
-            record_price(row["variant_id"], card["price"])
+            record_price(row["variant_id"], card["price"], kind="market")
+        if card.get("cardkingdom_buylist_price") is not None:
+            record_price(row["variant_id"], card["cardkingdom_buylist_price"], kind="buylist")
         return dict(row)
     finally:
         conn.close()
@@ -157,12 +216,12 @@ def remove_from_watchlist(watchlist_id):
         conn.close()
 
 
-def record_price(variant_id, price):
+def record_price(variant_id, price, kind="market"):
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO price_history (variant_id, price) VALUES (?, ?)",
-            (variant_id, price),
+            "INSERT OR IGNORE INTO price_history (variant_id, price, kind) VALUES (?, ?, ?)",
+            (variant_id, price, kind),
         )
         conn.commit()
     finally:
@@ -182,7 +241,8 @@ def list_watchlist(owner=None):
         for row in rows:
             item = dict(row)
             history = conn.execute(
-                "SELECT price, recorded_at FROM price_history WHERE variant_id = ? ORDER BY recorded_at DESC LIMIT 2",
+                "SELECT price, recorded_at FROM price_history WHERE variant_id = ? AND kind = 'market' "
+                "ORDER BY recorded_at DESC LIMIT 2",
                 (item["variant_id"],),
             ).fetchall()
             item["latest_price"] = history[0]["price"] if len(history) > 0 else None
@@ -204,12 +264,13 @@ def list_owners():
         conn.close()
 
 
-def get_history(variant_id):
+def get_history(variant_id, kind="market"):
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT price, recorded_at FROM price_history WHERE variant_id = ? ORDER BY recorded_at ASC",
-            (variant_id,),
+            "SELECT price, recorded_at FROM price_history WHERE variant_id = ? AND kind = ? "
+            "ORDER BY recorded_at ASC",
+            (variant_id, kind),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
