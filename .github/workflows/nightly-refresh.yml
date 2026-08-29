@@ -2,8 +2,10 @@ name: Nightly price refresh
 
 on:
   schedule:
-    # 18:00 UTC = 02:00 SGT the next day
-    - cron: "0 18 * * *"
+    # 07:00 UTC = 15:00 (3pm) SGT — MTGJSON's price feed refreshes ~06:00-06:10
+    # UTC daily, so this runs after that day's fresh data actually lands
+    # (the old 18:00 UTC / 2am SGT slot was pulling the *previous* day's prices)
+    - cron: "0 7 * * *"
   workflow_dispatch: {}
 
 permissions:
