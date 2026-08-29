@@ -1,0 +1,63 @@
+"""Sends a Telegram alert, with 'Good pick' / 'False positive' feedback
+buttons, for every general-market mover found by all_cards_history.py's
+nightly snapshot — not just watchlist cards. Each alert is logged as a
+recommendation; feedback collected by poll_telegram_feedback.py trains
+recommender.py's model to annotate future alerts with a confidence score.
+"""
+
+import json
+import logging
+from pathlib import Path
+
+import db
+import recommender
+import telegram_notify
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("tcg-price-checker")
+
+MOVERS_FILE = Path(__file__).parent / "docs" / "movers.json"
+
+
+def send_market_alerts():
+    if not MOVERS_FILE.exists():
+        logger.info("No movers.json yet — nothing to alert on")
+        return
+
+    data = json.loads(MOVERS_FILE.read_text())
+    gainers = data.get("daily_gainers", [])
+    if not gainers:
+        logger.info("No general-market movers today")
+        return
+
+    model = recommender.train()
+
+    for mover in gainers:
+        rec_id = db.record_recommendation(
+            card_name=mover["name"],
+            set_name=mover["set"],
+            price_before=mover["price_before"],
+            price_now=mover["price_now"],
+            pct_change=mover["pct_change"],
+        )
+
+        confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
+        confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
+
+        text = (
+            f"<b>Market mover</b>\n"
+            f"{mover['name']} ({mover['set']}): ${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
+            f"(+{mover['pct_change']}%){confidence_line}"
+        )
+        buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
+        sent = telegram_notify.send_message_with_buttons(text, buttons)
+        if sent:
+            chat_id, message_id = sent
+            db.set_recommendation_telegram_info(rec_id, chat_id, message_id)
+
+    logger.info("Sent %d market alert(s)", len(gainers))
+
+
+if __name__ == "__main__":
+    db.init_db()
+    send_market_alerts()

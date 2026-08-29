@@ -32,6 +32,25 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_price_history_variant_time
     ON price_history (variant_id, recorded_at);
+
+CREATE TABLE IF NOT EXISTS recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_name TEXT,
+    set_name TEXT,
+    price_before REAL,
+    price_now REAL,
+    pct_change REAL,
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    telegram_chat_id TEXT,
+    telegram_message_id TEXT,
+    feedback TEXT,
+    feedback_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -209,6 +228,87 @@ def update_cardkingdom_price(variant_id, market_price, buylist_price):
         conn.execute(
             "UPDATE watchlist SET cardkingdom_price = ?, cardkingdom_buylist_price = ? WHERE variant_id = ?",
             (market_price, buylist_price, variant_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def record_recommendation(card_name, set_name, price_before, price_now, pct_change):
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO recommendations (card_name, set_name, price_before, price_now, pct_change)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (card_name, set_name, price_before, price_now, pct_change),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def set_recommendation_telegram_info(rec_id, chat_id, message_id):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE recommendations SET telegram_chat_id = ?, telegram_message_id = ? WHERE id = ?",
+            (str(chat_id), str(message_id), rec_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_recommendation_feedback(rec_id, feedback):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE recommendations SET feedback = ?, feedback_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (feedback, rec_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_recommendation(rec_id):
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM recommendations WHERE id = ?", (rec_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_labeled_recommendations():
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT price_before, price_now, pct_change, feedback FROM recommendations WHERE feedback IS NOT NULL"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_state(key, default=None):
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT value FROM app_state WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def set_state(key, value):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
         )
         conn.commit()
     finally:

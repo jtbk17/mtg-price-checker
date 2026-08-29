@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install requests ijson
+      - run: pip install requests ijson scikit-learn
 
       - name: Refresh watchlist prices and send alerts
         env:
@@ -34,6 +34,12 @@ jobs:
 
       - name: Snapshot all-card prices and compute movers
         run: python all_cards_history.py
+
+      - name: Send market-wide mover alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python market_alerts.py
 
       - name: Commit updated watchlist + movers data
         run: |
