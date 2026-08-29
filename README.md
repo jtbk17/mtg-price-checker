@@ -15,7 +15,9 @@ GitHub's infrastructure, not your machine.
    - snapshots today's market price for **every** Card Kingdom-priced card
      (~85,000+), building indefinite price history over time
 3. **GitHub Pages dashboard** (`docs/index.html`) — a read-only page showing
-   your watchlist's current prices and history charts, updated nightly.
+   your watchlist's current prices/history and a **market movers** section
+   (biggest daily/weekly gainers and losers across every card), updated
+   nightly.
 
 ## Running the local app
 
@@ -23,15 +25,14 @@ GitHub's infrastructure, not your machine.
 py -m pip install -r requirements.txt
 py app.py
 ```
-Open http://127.0.0.1:5000, search, and hit **Track**. This writes to your
-local `tcg_prices.db`. To sync a newly tracked card so it starts showing up
-in the nightly job and dashboard:
-```
-git pull
-git add tcg_prices.db
-git commit -m "track new card"
-git push
-```
+Open http://127.0.0.1:5000, search, and hit **Track** (or use **Import
+ManaBox CSV** to bulk-add a whole collection export at once — matched by
+its `Scryfall ID` column). Tracking, untracking, or importing automatically
+commits and pushes `tcg_prices.db` for you, so changes show up in the
+nightly job and dashboard without a manual git step. If a push fails (e.g.
+you're offline, or there's a conflict), it's logged to the console and the
+change stays committed locally — just run `git push` yourself once you're
+able to.
 
 ## How pricing works
 
@@ -58,9 +59,10 @@ git push
   stay under GitHub's 2GB-per-file limit) and is automatically seeded with
   MTGJSON's own ~88-day rolling history the first time it's created, so
   there's no cold-start gap.
-- **Pages snapshot** (`docs/watchlist.json`): a plain JSON export of the
-  watchlist + its history, regenerated every run for the dashboard to read.
-  Also committed to git since it's small.
+- **Pages snapshot** (`docs/watchlist.json`, `docs/movers.json`): plain JSON
+  exports of the watchlist + its history, and the day/week's biggest movers,
+  regenerated every run for the dashboard to read. Committed to git since
+  they're small.
 
 ## Notes
 
@@ -79,7 +81,8 @@ git push
 - `cardkingdom.py` — Card Kingdom market/buylist prices (MTGJSON price feed)
 - `db.py` — watchlist SQLite schema and queries
 - `refresh_job.py` — nightly watchlist refresh + dashboard snapshot export
-- `all_cards_history.py` — nightly full-catalog price snapshot + yearly backfill
+- `all_cards_history.py` — nightly full-catalog snapshot, card-name backfill, and movers computation (needs `ijson`, only used in CI)
+- `manabox_import.py` — bulk-import a ManaBox CSV export into the watchlist
 - `templates/`, `static/` — local app frontend
 - `docs/` — GitHub Pages dashboard
 - `.github/workflows/` — the nightly GitHub Actions job
