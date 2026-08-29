@@ -119,4 +119,11 @@ if __name__ == "__main__":
     alerts = refresh_watchlist_prices()
     export_snapshot()
     export_alerts(alerts)
-    notify_alerts(alerts)
+    # Guarded here (the CI entrypoint) rather than inside notify_alerts()
+    # itself, so a CI retry-replay after a git conflict can't double-send —
+    # but app.py's manual "Refresh prices" button still notifies every time,
+    # since a user-triggered refresh finding a real threshold crossing
+    # should always alert regardless of how many times they've clicked it.
+    if not db.already_ran_today("watchlist_alerts_sent"):
+        notify_alerts(alerts)
+        db.mark_ran_today("watchlist_alerts_sent")

@@ -21,41 +21,63 @@ db.init_db()
 PROJECT_DIR = Path(__file__).parent
 
 
-def _git_sync(message):
-    """Best-effort: commit and push tcg_prices.db so the nightly job and
-    dashboard pick up watchlist changes without a manual git step. Failures
-    (offline, no remote, merge conflict) are logged, not raised — the
-    watchlist change itself already succeeded locally regardless."""
-    try:
-        subprocess.run(
-            ["git", "add", "tcg_prices.db"], cwd=PROJECT_DIR, capture_output=True, timeout=10, check=True
-        )
-        commit = subprocess.run(
-            ["git", "commit", "-m", message], cwd=PROJECT_DIR, capture_output=True, timeout=10
-        )
-        if commit.returncode != 0:
-            if b"nothing to commit" in commit.stdout:
-                return
-            logger.warning("git commit failed: %s", commit.stdout.decode(errors="replace"))
-            return
-    except Exception as exc:
-        logger.warning("Could not commit watchlist change to git (%s)", exc)
-        return
+def _git_sync(operation, message_fn, max_retries=3):
+    """Runs `operation()` (a callable that mutates tcg_prices.db — e.g. a
+    watchlist insert or a feedback update) and syncs the result to git.
+    `message_fn(result)` builds the commit message from whatever
+    `operation()` returns.
 
-    # `git commit` (no -a) only ever touched the staged file above, so any
-    # *other* dirty files in the working tree are harmless here — but they
-    # can still make `pull --rebase` refuse to run at all. Don't let that
-    # block the push: a plain push succeeds in the common case where the
-    # remote hasn't moved, and if it has, we just log it for manual fixup.
-    subprocess.run(["git", "pull", "--rebase"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
-    push = subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
-    if push.returncode != 0:
-        logger.warning(
-            "Committed locally but could not push (%s) — run `git push` manually",
-            push.stderr.decode(errors="replace").strip(),
-        )
-    else:
-        logger.info("Synced to git: %s", message)
+    tcg_prices.db is a SQLite binary, so git can't meaningfully merge two
+    divergent writes to it the way it can with text — a conflict there
+    isn't something `git pull --rebase` can resolve safely. Instead, on a
+    rejected push, this resets the working tree to the remote's latest
+    state and re-runs `operation()` on top of it. That's safe specifically
+    because our writes are idempotent (ON CONFLICT DO NOTHING inserts,
+    or plain field updates) — replaying after a fresh pull converges on
+    the correct combined state instead of risking a botched binary merge.
+    """
+    result = operation()
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            subprocess.run(
+                ["git", "add", "tcg_prices.db"], cwd=PROJECT_DIR, capture_output=True, timeout=10, check=True
+            )
+            commit = subprocess.run(
+                ["git", "commit", "-m", message_fn(result)], cwd=PROJECT_DIR, capture_output=True, timeout=10
+            )
+            if commit.returncode != 0 and b"nothing to commit" not in commit.stdout:
+                logger.warning("git commit failed: %s", commit.stdout.decode(errors="replace"))
+                return result
+
+            push = subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
+            if push.returncode == 0:
+                logger.info("Synced to git: %s", message_fn(result))
+                return result
+
+            logger.info(
+                "Push rejected (attempt %d/%d) — resetting to remote and retrying: %s",
+                attempt,
+                max_retries,
+                push.stderr.decode(errors="replace").strip(),
+            )
+            subprocess.run(
+                ["git", "fetch", "origin", "main"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True
+            )
+            subprocess.run(
+                ["git", "reset", "--hard", "origin/main"],
+                cwd=PROJECT_DIR,
+                capture_output=True,
+                timeout=10,
+                check=True,
+            )
+            result = operation()
+        except Exception as exc:
+            logger.warning("Could not sync to git (%s)", exc)
+            return result
+
+    logger.warning("Could not sync to git after %d attempt(s) — you may need to push manually", max_retries)
+    return result
 
 
 def _is_foil(finish):
@@ -147,8 +169,10 @@ def api_watchlist_add():
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
         "owner": owner,
     }
-    item = db.add_to_watchlist(card)
-    _git_sync(f"Track {item['name']} ({item['set_name']}){f' for {owner}' if owner else ''}")
+    item = _git_sync(
+        lambda: db.add_to_watchlist(card),
+        lambda item: f"Track {item['name']} ({item['set_name']}){f' for {owner}' if owner else ''}",
+    )
     return jsonify(item), 201
 
 
@@ -165,18 +189,23 @@ def api_watchlist_import():
     except UnicodeDecodeError:
         return jsonify({"error": "Could not read file as text — is this a CSV file?"}), 400
 
-    result = manabox_import.import_rows(rows, owner=owner)
-    if result["imported"]:
-        _git_sync(f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}")
+    result = _git_sync(
+        lambda: manabox_import.import_rows(rows, owner=owner),
+        lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
+    )
     return jsonify(result), 201
 
 
 @app.route("/api/watchlist/<int:watchlist_id>", methods=["DELETE"])
 def api_watchlist_remove(watchlist_id):
     item = db.get_watchlist_item(watchlist_id)
-    db.remove_from_watchlist(watchlist_id)
     if item:
-        _git_sync(f"Untrack {item['name']} ({item['set_name']})")
+        _git_sync(
+            lambda: db.remove_from_watchlist(watchlist_id),
+            lambda _: f"Untrack {item['name']} ({item['set_name']})",
+        )
+    else:
+        db.remove_from_watchlist(watchlist_id)
     return "", 204
 
 

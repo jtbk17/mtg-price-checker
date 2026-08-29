@@ -17,14 +17,30 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Record feedback
-        run: python record_feedback.py "${{ github.event.client_payload.rec_id }}" "${{ github.event.client_payload.verdict }}"
-
-      - name: Commit feedback
+      # tcg_prices.db is a SQLite binary, so a conflict here (e.g. this
+      # dispatch landing mid-nightly-run) can't be git-merged — reset to
+      # remote and replay the feedback update instead, which is safe since
+      # it's just an idempotent UPDATE keyed by recommendation id.
+      - name: Record feedback and push (retries on conflict)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tcg_prices.db
-          git diff --cached --quiet || git commit -m "Record recommendation feedback"
-          git pull --rebase
-          git push
+
+          for attempt in 1 2 3; do
+            python record_feedback.py "${{ github.event.client_payload.rec_id }}" "${{ github.event.client_payload.verdict }}"
+
+            git add tcg_prices.db
+            git diff --cached --quiet || git commit -m "Record recommendation feedback"
+
+            if git push; then
+              echo "Pushed successfully on attempt $attempt"
+              exit 0
+            fi
+
+            echo "Push rejected on attempt $attempt — resetting to remote and retrying"
+            git fetch origin main
+            git reset --hard origin/main
+          done
+
+          echo "Could not push after 3 attempts" >&2
+          exit 1

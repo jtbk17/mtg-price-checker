@@ -23,34 +23,52 @@ jobs:
 
       - run: pip install requests ijson scikit-learn
 
-      - name: Refresh watchlist prices and send alerts
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python refresh_job.py
-
       - name: Download existing all-cards database, if any
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release download data --pattern "all_cards_*.db" --clobber || true
 
-      - name: Snapshot all-card prices and compute movers
-        run: python all_cards_history.py
-
-      - name: Send market-wide mover alerts
+      # tcg_prices.db is a SQLite binary, so git can't merge two divergent
+      # writes to it (e.g. this job vs. a feedback-button dispatch landing
+      # around the same time) the way it can with text. On a rejected push,
+      # reset to the remote's latest state and re-run the whole pipeline
+      # rather than attempting a doomed merge. This is safe to repeat:
+      # refresh_job.py/all_cards_history.py are idempotent, and
+      # market_alerts.py / the watchlist alert step both skip sending twice
+      # in the same day (see db.already_ran_today), so a retry can't double
+      # up your Telegram alerts.
+      - name: Run pipeline and push (retries on conflict)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python market_alerts.py
-
-      - name: Commit updated watchlist + movers data
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tcg_prices.db docs/watchlist.json docs/movers.json docs/alerts.json
-          git diff --cached --quiet || git commit -m "Nightly price refresh"
-          git pull --rebase
-          git push
+
+          for attempt in 1 2 3; do
+            echo "--- attempt $attempt ---"
+            python refresh_job.py
+            python all_cards_history.py
+            python market_alerts.py
+
+            git add tcg_prices.db docs/watchlist.json docs/movers.json docs/alerts.json
+            git diff --cached --quiet || git commit -m "Nightly price refresh"
+
+            if git push; then
+              echo "Pushed successfully on attempt $attempt"
+              exit 0
+            fi
+
+            echo "Push rejected on attempt $attempt — resetting to remote and retrying"
+            git fetch origin main
+            git reset --hard origin/main
+            # all_cards_*.db is gitignored/untracked, so `reset --hard` above
+            # doesn't touch it — no need to re-download it here.
+          done
+
+          echo "Could not push after 3 attempts" >&2
+          exit 1
 
       - name: Upload updated all-cards database
         env:

@@ -1,7 +1,10 @@
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "tcg_prices.db"
+# Overridable so tests can point at a throwaway file instead of the real
+# production database (must be set before this module is first imported).
+DB_PATH = Path(os.environ.get("TCG_DB_PATH", Path(__file__).parent / "tcg_prices.db"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS watchlist (
@@ -313,3 +316,19 @@ def set_state(key, value):
         conn.commit()
     finally:
         conn.close()
+
+
+def already_ran_today(key):
+    """True if mark_ran_today(key) was already called today — lets a
+    once-daily action (like sending Telegram alerts) stay safe to re-run
+    if a CI retry replays the whole pipeline after a git conflict, without
+    sending duplicate notifications."""
+    from datetime import date
+
+    return get_state(key) == date.today().isoformat()
+
+
+def mark_ran_today(key):
+    from datetime import date
+
+    set_state(key, date.today().isoformat())

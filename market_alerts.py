@@ -26,6 +26,9 @@ SOURCES = [
 
 
 def send_market_alerts():
+    if db.already_ran_today("market_alerts_sent"):
+        logger.info("Market alerts already sent today — skipping (safe to re-run the pipeline)")
+        return
     if not MOVERS_FILE.exists():
         logger.info("No movers.json yet — nothing to alert on")
         return
@@ -65,6 +68,7 @@ def send_market_alerts():
                 db.set_recommendation_telegram_info(rec_id, chat_id, message_id)
             sent_count += 1
 
+    db.mark_ran_today("market_alerts_sent")
     if sent_count:
         logger.info("Sent %d market alert(s)", sent_count)
     else:
