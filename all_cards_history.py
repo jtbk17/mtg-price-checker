@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
     mtgjson_uuid TEXT UNIQUE NOT NULL,
     name TEXT,
-    set_code TEXT
+    set_code TEXT,
+    is_token INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -58,9 +59,9 @@ def _get_connection(db_path):
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
     existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)")}
-    for column in ("name", "set_code"):
+    for column, coltype in (("name", "TEXT"), ("set_code", "TEXT"), ("is_token", "INTEGER")):
         if column not in existing_columns:
-            conn.execute(f"ALTER TABLE cards ADD COLUMN {column} TEXT")
+            conn.execute(f"ALTER TABLE cards ADD COLUMN {column} {coltype}")
     return conn
 
 
@@ -141,45 +142,53 @@ def backfill_88_days(db_path=None):
 
 
 def backfill_names(db_path):
-    """Fill in name/set_code for any card uuids we've snapshotted but don't
-    yet have a label for, by streaming MTGJSON's AllIdentifiers.json (full
-    card database, ~2-3GB uncompressed) and picking out just the uuids we
-    need. Only runs when there's actually something missing, since this is
-    an expensive fetch — new labels are only needed when a new set's cards
-    show up in a nightly snapshot for the first time."""
+    """Fill in name/set_code/is_token for any card uuids missing a label
+    (either brand new, or — the first time this runs after is_token was
+    added — every existing card needing that one field caught up), by
+    streaming MTGJSON's AllIdentifiers.json (full card database, ~2-3GB
+    uncompressed) and picking out just the uuids we need. Only runs when
+    there's actually something missing, since this is an expensive fetch."""
     import ijson
 
     conn = _get_connection(db_path)
-    needed = {row[0] for row in conn.execute("SELECT mtgjson_uuid FROM cards WHERE name IS NULL")}
+    needed = {
+        row[0] for row in conn.execute("SELECT mtgjson_uuid FROM cards WHERE name IS NULL OR is_token IS NULL")
+    }
     if not needed:
         conn.close()
         return
 
-    logger.info("Fetching names for %d card(s) from MTGJSON AllIdentifiers.json...", len(needed))
+    logger.info("Fetching labels for %d card(s) from MTGJSON AllIdentifiers.json...", len(needed))
     req = urllib.request.Request(ALLIDENTIFIERS_URL, headers={"User-Agent": "tcg-price-checker/1.0"})
     updates = []
     with urllib.request.urlopen(req, timeout=600) as resp:
         with gzip.GzipFile(fileobj=resp) as stream:
             for uuid, entry in ijson.kvitems(stream, "data"):
                 if uuid in needed:
-                    updates.append((entry.get("name"), entry.get("setCode"), uuid))
+                    is_token = 1 if entry.get("layout") == "token" else 0
+                    updates.append((entry.get("name"), entry.get("setCode"), is_token, uuid))
                     needed.discard(uuid)
                     if not needed:
                         break
 
-    conn.executemany("UPDATE cards SET name = ?, set_code = ? WHERE mtgjson_uuid = ?", updates)
+    conn.executemany(
+        "UPDATE cards SET name = ?, set_code = ?, is_token = ? WHERE mtgjson_uuid = ?", updates
+    )
     conn.commit()
     conn.close()
-    logger.info("Updated names for %d card(s)", len(updates))
+    logger.info("Updated labels for %d card(s)", len(updates))
 
 
-def compute_movers(db_path, top_n=15, min_price_cents=100):
+def compute_movers(db_path, top_n=15):
     """Biggest day-over-day and week-over-week movers across every card
     Card Kingdom prices, using the history this module has been
-    collecting. Filters out cards priced under $1 (bulk tokens/commons
-    otherwise dominate with noisy swings on tiny absolute price changes)
-    and cards with no actual change (padding a short real-movers list with
-    0% entries isn't useful)."""
+    collecting. No price floor — a cheap card doubling in price is exactly
+    the kind of move worth surfacing. Excludes tokens specifically
+    (layout == "token" in MTGJSON), since those are the actual source of
+    meaningless noise (e.g. a generic Soldier token blipping between
+    $0.35 and $0.99), not low price alone. Also excludes cards with no
+    actual change (padding a short real-movers list with 0% entries isn't
+    useful)."""
     conn = _get_connection(db_path)
     today_day = _day_number(date.today())
 
@@ -190,10 +199,10 @@ def compute_movers(db_path, top_n=15, min_price_cents=100):
             FROM price_history t
             JOIN price_history p ON p.card_id = t.card_id AND p.day = ?
             JOIN cards c ON c.id = t.card_id
-            WHERE t.day = ? AND p.price_cents >= ? AND c.name IS NOT NULL
+            WHERE t.day = ? AND c.name IS NOT NULL AND c.is_token = 0
                 AND t.price_cents != p.price_cents
             """,
-            (today_day - days_back, today_day, min_price_cents),
+            (today_day - days_back, today_day),
         ).fetchall()
         movers = [
             {
