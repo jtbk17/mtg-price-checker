@@ -128,6 +128,17 @@
             <tbody id="weekly-losers"></tbody>
           </table>
         </div>
+        <div>
+          <h3>88-day trend</h3>
+          <table class="movers">
+            <thead><tr><th>Gainers</th><th></th></tr></thead>
+            <tbody id="trend-gainers"></tbody>
+          </table>
+          <table class="movers" style="margin-top:12px">
+            <thead><tr><th>Losers</th><th></th></tr></thead>
+            <tbody id="trend-losers"></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
@@ -212,6 +223,8 @@
         renderMoversTable("daily-losers", data.daily_losers || []);
         renderMoversTable("weekly-gainers", data.weekly_gainers || []);
         renderMoversTable("weekly-losers", data.weekly_losers || []);
+        renderMoversTable("trend-gainers", data.trend_gainers || []);
+        renderMoversTable("trend-losers", data.trend_losers || []);
       } catch (err) {
         document.getElementById("movers-sub").textContent = `Couldn't load movers: ${err.message}`;
       }

@@ -19,43 +19,56 @@ logger = logging.getLogger("tcg-price-checker")
 MOVERS_FILE = Path(__file__).parent / "docs" / "movers.json"
 
 
+SOURCES = [
+    ("daily_gainers", "today"),
+    ("trend_gainers", "88-day trend"),
+]
+
+
 def send_market_alerts():
     if not MOVERS_FILE.exists():
         logger.info("No movers.json yet — nothing to alert on")
         return
 
     data = json.loads(MOVERS_FILE.read_text())
-    gainers = data.get("daily_gainers", [])
-    if not gainers:
-        logger.info("No general-market movers today")
-        return
-
     model = recommender.train()
 
-    for mover in gainers:
-        rec_id = db.record_recommendation(
-            card_name=mover["name"],
-            set_name=mover["set"],
-            price_before=mover["price_before"],
-            price_now=mover["price_now"],
-            pct_change=mover["pct_change"],
-        )
+    sent_count = 0
+    seen = set()  # dedupe a card that qualifies as both a daily and trend gainer tonight
+    for key, label in SOURCES:
+        for mover in data.get(key, []):
+            dedupe_key = (mover["name"], mover["set"], mover["price_now"])
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
 
-        confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
-        confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
+            rec_id = db.record_recommendation(
+                card_name=mover["name"],
+                set_name=mover["set"],
+                price_before=mover["price_before"],
+                price_now=mover["price_now"],
+                pct_change=mover["pct_change"],
+            )
 
-        text = (
-            f"<b>Market mover</b>\n"
-            f"{mover['name']} ({mover['set']}): ${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
-            f"(+{mover['pct_change']}%){confidence_line}"
-        )
-        buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
-        sent = telegram_notify.send_message_with_buttons(text, buttons)
-        if sent:
-            chat_id, message_id = sent
-            db.set_recommendation_telegram_info(rec_id, chat_id, message_id)
+            confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
+            confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
 
-    logger.info("Sent %d market alert(s)", len(gainers))
+            text = (
+                f"<b>Market mover ({label})</b>\n"
+                f"{mover['name']} ({mover['set']}): ${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
+                f"(+{mover['pct_change']}%){confidence_line}"
+            )
+            buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
+            sent = telegram_notify.send_message_with_buttons(text, buttons)
+            if sent:
+                chat_id, message_id = sent
+                db.set_recommendation_telegram_info(rec_id, chat_id, message_id)
+            sent_count += 1
+
+    if sent_count:
+        logger.info("Sent %d market alert(s)", sent_count)
+    else:
+        logger.info("No general-market movers today")
 
 
 if __name__ == "__main__":
