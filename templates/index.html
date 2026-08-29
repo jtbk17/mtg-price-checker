@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MTG Price Checker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>MTG Price Checker</h1>
+    <p class="subtitle">Magic: The Gathering &mdash; Card Kingdom market &amp; buylist prices</p>
+  </header>
+
+  <main>
+    <section class="panel" id="search-panel">
+      <h2>Search</h2>
+      <form id="search-form">
+        <input type="text" id="search-input" placeholder="Card name, e.g. Lightning Bolt" required>
+        <button type="submit">Search</button>
+      </form>
+      <div id="search-error" class="error" hidden></div>
+      <div id="search-results" class="card-grid"></div>
+    </section>
+
+    <section class="panel" id="watchlist-panel">
+      <div class="panel-header">
+        <h2>Watchlist</h2>
+        <button id="refresh-btn" type="button">Refresh prices</button>
+      </div>
+      <div id="watchlist-error" class="error" hidden></div>
+      <div id="watchlist" class="card-grid"></div>
+    </section>
+  </main>
+
+  <dialog id="history-dialog">
+    <h3 id="history-title"></h3>
+    <canvas id="history-chart" width="480" height="220"></canvas>
+    <button id="close-history" type="button">Close</button>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

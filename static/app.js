@@ -1,0 +1,284 @@
+const searchForm = document.getElementById("search-form");
+const searchInput = document.getElementById("search-input");
+const searchResults = document.getElementById("search-results");
+const searchError = document.getElementById("search-error");
+const watchlistEl = document.getElementById("watchlist");
+const watchlistError = document.getElementById("watchlist-error");
+const refreshBtn = document.getElementById("refresh-btn");
+const historyDialog = document.getElementById("history-dialog");
+const historyTitle = document.getElementById("history-title");
+const historyCanvas = document.getElementById("history-chart");
+const closeHistoryBtn = document.getElementById("close-history");
+
+function showError(el, message) {
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+function formatPrice(price) {
+  if (price === null || price === undefined) return "—";
+  return `$${Number(price).toFixed(2)}`;
+}
+
+function pickDefaultVariant(variants) {
+  return variants.find((v) => v.printing === "Normal") || variants[0];
+}
+
+function priceSectionHtml(variant) {
+  return `
+    <div class="price">${formatPrice(variant.cardKingdomPrice)}</div>
+    <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(variant.cardKingdomBuylist)}</div>
+  `;
+}
+
+function cardMeta(card) {
+  return card.setName || card.set || "";
+}
+
+async function fetchJSON(url, options) {
+  const resp = await fetch(url, options);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data.error || `Request failed (${resp.status})`);
+  }
+  return data;
+}
+
+async function runSearch(event) {
+  event.preventDefault();
+  showError(searchError, "");
+  searchResults.innerHTML = "<p class=\"empty\">Searching…</p>";
+
+  const q = searchInput.value.trim();
+  const params = new URLSearchParams({ q });
+
+  try {
+    const cards = await fetchJSON(`/api/search?${params.toString()}`);
+    renderSearchResults(cards);
+  } catch (err) {
+    searchResults.innerHTML = "";
+    showError(searchError, err.message);
+  }
+}
+
+function renderSearchResults(cards) {
+  searchResults.innerHTML = "";
+  if (!cards.length) {
+    searchResults.innerHTML = "<p class=\"empty\">No cards found.</p>";
+    return;
+  }
+
+  cards.forEach((card) => {
+    const variants = card.variants;
+    let selected = pickDefaultVariant(variants);
+
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      ${card.imageUrl ? `<img class="card-image" src="${escapeHtml(card.imageUrl)}" alt="${escapeHtml(card.name || "")}">` : ""}
+      <div class="name">${escapeHtml(card.name || "Unknown card")}</div>
+      <div class="meta">${escapeHtml(cardMeta(card))}</div>
+      ${
+        variants.length > 1
+          ? `<select class="variant-select"></select>`
+          : `<div class="meta">${escapeHtml(selected.printing)}</div>`
+      }
+      <div class="price-section"></div>
+      <div class="actions">
+        <button type="button" data-action="track">Track</button>
+      </div>
+    `;
+
+    const priceSection = el.querySelector(".price-section");
+    const renderPrice = () => {
+      priceSection.innerHTML = priceSectionHtml(selected);
+    };
+    renderPrice();
+
+    if (variants.length > 1) {
+      const select = el.querySelector(".variant-select");
+      variants.forEach((v, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = v.printing;
+        if (v === selected) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.addEventListener("change", () => {
+        selected = variants[Number(select.value)];
+        renderPrice();
+      });
+    }
+
+    el.querySelector('[data-action="track"]').addEventListener("click", () => trackCard(card, selected));
+    searchResults.appendChild(el);
+  });
+}
+
+async function trackCard(card, variant) {
+  if (!variant.variantId) {
+    showError(searchError, "This card is missing a variant id and can't be tracked.");
+    return;
+  }
+  try {
+    await fetchJSON("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        variantId: variant.variantId,
+        cardId: card.scryfallId,
+        name: card.name,
+        setName: card.setName,
+        printing: variant.printing,
+        tcgplayerId: card.tcgplayerId,
+        imageUrl: card.imageUrl,
+        mtgjsonId: card.mtgjsonId,
+        cardKingdomPrice: variant.cardKingdomPrice,
+        cardKingdomBuylist: variant.cardKingdomBuylist,
+      }),
+    });
+    await loadWatchlist();
+  } catch (err) {
+    showError(searchError, err.message);
+  }
+}
+
+async function loadWatchlist() {
+  showError(watchlistError, "");
+  try {
+    const items = await fetchJSON("/api/watchlist");
+    renderWatchlist(items);
+  } catch (err) {
+    showError(watchlistError, err.message);
+  }
+}
+
+function renderWatchlist(items) {
+  watchlistEl.innerHTML = "";
+  if (!items.length) {
+    watchlistEl.innerHTML = "<p class=\"empty\">Nothing tracked yet — search above and hit Track.</p>";
+    return;
+  }
+
+  items.forEach((item) => {
+    const delta = deltaInfo(item.latest_price, item.previous_price);
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
+      <div class="name">${escapeHtml(item.name)}</div>
+      <div class="meta">${escapeHtml(item.set_name || "")}</div>
+      <div class="meta">${escapeHtml(item.printing || "")}</div>
+      <div class="price">${formatPrice(item.latest_price)}</div>
+      ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
+      <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+      <div class="actions">
+        <button type="button" data-action="history">History</button>
+        <button type="button" class="secondary" data-action="remove">Remove</button>
+      </div>
+    `;
+    el.querySelector('[data-action="history"]').addEventListener("click", () =>
+      showHistory(item)
+    );
+    el.querySelector('[data-action="remove"]').addEventListener("click", () =>
+      removeCard(item.id)
+    );
+    watchlistEl.appendChild(el);
+  });
+}
+
+function deltaInfo(latest, previous) {
+  if (latest === null || latest === undefined || previous === null || previous === undefined) {
+    return null;
+  }
+  const diff = latest - previous;
+  if (Math.abs(diff) < 0.005) return null;
+  const pct = (diff / previous) * 100;
+  const direction = diff > 0 ? "up" : "down";
+  const sign = diff > 0 ? "+" : "";
+  return { direction, text: `${sign}${diff.toFixed(2)} (${sign}${pct.toFixed(1)}%)` };
+}
+
+async function removeCard(id) {
+  try {
+    await fetchJSON(`/api/watchlist/${id}`, { method: "DELETE" });
+    await loadWatchlist();
+  } catch (err) {
+    showError(watchlistError, err.message);
+  }
+}
+
+async function refreshPrices() {
+  refreshBtn.disabled = true;
+  refreshBtn.textContent = "Refreshing…";
+  try {
+    const items = await fetchJSON("/api/refresh", { method: "POST" });
+    renderWatchlist(items);
+  } catch (err) {
+    showError(watchlistError, err.message);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = "Refresh prices";
+  }
+}
+
+async function showHistory(item) {
+  try {
+    const history = await fetchJSON(`/api/watchlist/${item.id}/history`);
+    historyTitle.textContent = `${item.name} — ${item.printing || ""}`;
+    drawSparkline(history);
+    historyDialog.showModal();
+  } catch (err) {
+    showError(watchlistError, err.message);
+  }
+}
+
+function drawSparkline(history) {
+  const ctx = historyCanvas.getContext("2d");
+  const { width, height } = historyCanvas;
+  ctx.clearRect(0, 0, width, height);
+
+  if (history.length < 2) {
+    ctx.fillStyle = "#9096a3";
+    ctx.font = "14px sans-serif";
+    ctx.fillText("Not enough data yet — check back after another refresh.", 12, height / 2);
+    return;
+  }
+
+  const prices = history.map((h) => h.price).filter((p) => p !== null && p !== undefined);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const pad = 24;
+  const range = max - min || 1;
+
+  ctx.strokeStyle = "#5b8cff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  history.forEach((point, i) => {
+    const x = pad + (i / (history.length - 1)) * (width - pad * 2);
+    const y = height - pad - ((point.price - min) / range) * (height - pad * 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#9096a3";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(`$${min.toFixed(2)}`, 4, height - 6);
+  ctx.fillText(`$${max.toFixed(2)}`, 4, 14);
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+searchForm.addEventListener("submit", runSearch);
+refreshBtn.addEventListener("click", refreshPrices);
+closeHistoryBtn.addEventListener("click", () => historyDialog.close());
+
+loadWatchlist();

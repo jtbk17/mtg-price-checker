@@ -1,0 +1,143 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1115;
+  --panel: #171a21;
+  --border: #2a2e38;
+  --text: #e8e9ec;
+  --muted: #9096a3;
+  --accent: #5b8cff;
+  --up: #4caf6d;
+  --down: #e5534b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  padding: 24px 32px 8px;
+}
+
+header h1 { margin: 0 0 4px; }
+.subtitle { color: var(--muted); margin: 0; }
+
+main {
+  padding: 16px 32px 48px;
+  display: grid;
+  gap: 24px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#search-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+select, input[type="text"] {
+  background: #0f1115;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+input[type="text"] { flex: 1; min-width: 200px; }
+
+button {
+  background: var(--accent);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover { opacity: 0.9; }
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #12141a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card .card-image {
+  width: 100%;
+  border-radius: 6px;
+  display: block;
+}
+
+.card .name { font-weight: 700; }
+.card .meta { color: var(--muted); font-size: 0.85em; }
+.card .ck-buylist { color: #d4a24c; }
+.card .variant-select {
+  width: 100%;
+  font-size: 0.85em;
+  padding: 4px 6px;
+}
+.card .price { font-size: 1.3em; font-weight: 700; }
+.card .delta.up { color: var(--up); }
+.card .delta.down { color: var(--down); }
+.card .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 6px; }
+.card .actions button { flex: 1; font-size: 0.85em; padding: 6px 8px; }
+
+.error {
+  background: #3a1d1d;
+  border: 1px solid var(--down);
+  color: #ffb4ae;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.empty {
+  color: var(--muted);
+  grid-column: 1 / -1;
+}
+
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
