@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-29T13:40:38.532532+00:00",
+  "generated_at": "2026-08-29T15:02:40.206743+00:00",
   "daily_gainers": [
     {
       "name": "Franklin Richards, Ascendant",
@@ -293,6 +293,220 @@
       "price_now": 15.99,
       "price_before": 20.99,
       "pct_change": -23.8
+    }
+  ],
+  "trend_gainers": [
+    {
+      "name": "Charix, the Raging Isle",
+      "set": "ZNR",
+      "price_now": 4.99,
+      "price_before": 0.49,
+      "pct_change": 918.4
+    },
+    {
+      "name": "Doctor Octopus, Master Planner",
+      "set": "SPM",
+      "price_now": 7.99,
+      "price_before": 0.99,
+      "pct_change": 707.1
+    },
+    {
+      "name": "Battle of Wits",
+      "set": "SLD",
+      "price_now": 23.99,
+      "price_before": 2.99,
+      "pct_change": 702.3
+    },
+    {
+      "name": "Tember City",
+      "set": "OPCA",
+      "price_now": 5.49,
+      "price_before": 0.69,
+      "pct_change": 695.7
+    },
+    {
+      "name": "Hazel's Brewmaster",
+      "set": "BLC",
+      "price_now": 5.49,
+      "price_before": 0.69,
+      "pct_change": 695.7
+    },
+    {
+      "name": "Scurry of Squirrels",
+      "set": "BLC",
+      "price_now": 4.49,
+      "price_before": 0.59,
+      "pct_change": 661.0
+    },
+    {
+      "name": "Mountain",
+      "set": "WC97",
+      "price_now": 7.49,
+      "price_before": 0.99,
+      "pct_change": 656.6
+    },
+    {
+      "name": "Prime Speaker Vannifar",
+      "set": "RNA",
+      "price_now": 14.99,
+      "price_before": 2.29,
+      "pct_change": 554.6
+    },
+    {
+      "name": "Ink-Treader Nephilim",
+      "set": "GPT",
+      "price_now": 4.99,
+      "price_before": 0.79,
+      "pct_change": 531.6
+    },
+    {
+      "name": "Mastermind Plum",
+      "set": "CLU",
+      "price_now": 7.99,
+      "price_before": 1.29,
+      "pct_change": 519.4
+    },
+    {
+      "name": "Green Goblin, Nemesis",
+      "set": "SPE",
+      "price_now": 15.99,
+      "price_before": 2.79,
+      "pct_change": 473.1
+    },
+    {
+      "name": "Practiced Offense",
+      "set": "SOS",
+      "price_now": 2.79,
+      "price_before": 0.49,
+      "pct_change": 469.4
+    },
+    {
+      "name": "Serum Visions",
+      "set": "WC04",
+      "price_now": 2.79,
+      "price_before": 0.49,
+      "pct_change": 469.4
+    },
+    {
+      "name": "Last Laugh",
+      "set": "TOR",
+      "price_now": 13.99,
+      "price_before": 2.49,
+      "pct_change": 461.8
+    },
+    {
+      "name": "Seeker of Skybreak",
+      "set": "TMP",
+      "price_now": 5.49,
+      "price_before": 0.99,
+      "pct_change": 454.5
+    }
+  ],
+  "trend_losers": [
+    {
+      "name": "Ancient Stirrings",
+      "set": "SLP",
+      "price_now": 2.79,
+      "price_before": 19.99,
+      "pct_change": -86.0
+    },
+    {
+      "name": "Salvage",
+      "set": "P02",
+      "price_now": 0.35,
+      "price_before": 1.99,
+      "pct_change": -82.4
+    },
+    {
+      "name": "Silverquill, the Disputant",
+      "set": "PSOS",
+      "price_now": 1.49,
+      "price_before": 6.99,
+      "pct_change": -78.7
+    },
+    {
+      "name": "Molten-Core Maestro",
+      "set": "PSOS",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Hymn to Tourach",
+      "set": "PTC",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Briber's Purse",
+      "set": "UGIN",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Mountain",
+      "set": "BRB",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Telling Time",
+      "set": "SLD",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Condescend",
+      "set": "JVC",
+      "price_now": 0.49,
+      "price_before": 2.29,
+      "pct_change": -78.6
+    },
+    {
+      "name": "Maro's Gone Nuts",
+      "set": "CMB1",
+      "price_now": 0.39,
+      "price_before": 1.79,
+      "pct_change": -78.2
+    },
+    {
+      "name": "Accelerate",
+      "set": "TOR",
+      "price_now": 0.39,
+      "price_before": 1.79,
+      "pct_change": -78.2
+    },
+    {
+      "name": "Angelsong",
+      "set": "DDC",
+      "price_now": 0.39,
+      "price_before": 1.79,
+      "pct_change": -78.2
+    },
+    {
+      "name": "Lab Rats",
+      "set": "STH",
+      "price_now": 0.35,
+      "price_before": 1.49,
+      "pct_change": -76.5
+    },
+    {
+      "name": "Revitalize",
+      "set": "STA",
+      "price_now": 0.35,
+      "price_before": 1.49,
+      "pct_change": -76.5
+    },
+    {
+      "name": "Retraction Helix",
+      "set": "PLST",
+      "price_now": 0.35,
+      "price_before": 1.49,
+      "pct_change": -76.5
     }
   ]
 }
