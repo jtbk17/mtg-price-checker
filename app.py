@@ -27,9 +27,6 @@ def _git_sync(message):
     watchlist change itself already succeeded locally regardless."""
     try:
         subprocess.run(
-            ["git", "pull", "--rebase"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True
-        )
-        subprocess.run(
             ["git", "add", "tcg_prices.db"], cwd=PROJECT_DIR, capture_output=True, timeout=10, check=True
         )
         commit = subprocess.run(
@@ -40,10 +37,24 @@ def _git_sync(message):
                 return
             logger.warning("git commit failed: %s", commit.stdout.decode(errors="replace"))
             return
-        subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True)
-        logger.info("Synced to git: %s", message)
     except Exception as exc:
-        logger.warning("Could not sync watchlist to git (%s) — you may need to push manually", exc)
+        logger.warning("Could not commit watchlist change to git (%s)", exc)
+        return
+
+    # `git commit` (no -a) only ever touched the staged file above, so any
+    # *other* dirty files in the working tree are harmless here — but they
+    # can still make `pull --rebase` refuse to run at all. Don't let that
+    # block the push: a plain push succeeds in the common case where the
+    # remote hasn't moved, and if it has, we just log it for manual fixup.
+    subprocess.run(["git", "pull", "--rebase"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
+    push = subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
+    if push.returncode != 0:
+        logger.warning(
+            "Committed locally but could not push (%s) — run `git push` manually",
+            push.stderr.decode(errors="replace").strip(),
+        )
+    else:
+        logger.info("Synced to git: %s", message)
 
 
 def _is_foil(finish):
