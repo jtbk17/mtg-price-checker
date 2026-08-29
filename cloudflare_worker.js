@@ -42,10 +42,26 @@ export default {
     const originalText = callback.message?.text || "";
     const mark = feedback === "good" ? "✅ Marked: good pick" : "❌ Marked: false positive";
 
+    console.log("TELEGRAM_BOT_TOKEN present:", !!env.TELEGRAM_BOT_TOKEN, "length:", (env.TELEGRAM_BOT_TOKEN || "").length);
+    console.log("GITHUB_TOKEN present:", !!env.GITHUB_TOKEN, "GITHUB_REPO:", env.GITHUB_REPO);
+    console.log("chatId:", chatId, "messageId:", messageId, "recId:", recId, "feedback:", feedback);
+
     const telegramApi = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
+    async function loggedFetch(label, url, options) {
+      try {
+        const resp = await fetch(url, options);
+        const bodyText = await resp.text();
+        console.log(`${label} -> status ${resp.status}: ${bodyText.slice(0, 300)}`);
+        return resp;
+      } catch (err) {
+        console.log(`${label} -> threw error: ${err.message}`);
+        throw err;
+      }
+    }
+
     const tasks = [
-      fetch(`${telegramApi}/answerCallbackQuery`, {
+      loggedFetch("answerCallbackQuery", `${telegramApi}/answerCallbackQuery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -53,7 +69,7 @@ export default {
           text: feedback === "good" ? "Thanks — noted!" : "Thanks — marked as false positive",
         }),
       }),
-      fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
+      loggedFetch("githubDispatch", `https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -70,7 +86,7 @@ export default {
 
     if (chatId && messageId) {
       tasks.push(
-        fetch(`${telegramApi}/editMessageText`, {
+        loggedFetch("editMessageText", `${telegramApi}/editMessageText`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -82,9 +98,11 @@ export default {
           }),
         })
       );
+    } else {
+      console.log("Skipping editMessageText: missing chatId or messageId");
     }
 
-    await Promise.all(tasks);
+    await Promise.allSettled(tasks);
     return new Response("OK");
   },
 };
