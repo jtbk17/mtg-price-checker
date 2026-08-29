@@ -9,8 +9,9 @@ GitHub's infrastructure, not your machine.
 
 1. **Local app** (`app.py`) — search for cards and add them to your watchlist.
    Only needed when you want to add a *new* card to track.
-2. **GitHub Actions** (`.github/workflows/nightly-refresh.yml`) — runs nightly
-   at 2am SGT, with no laptop required:
+2. **GitHub Actions** (`.github/workflows/nightly-refresh.yml`) — runs daily
+   at 3pm SGT (07:00 UTC — shortly after MTGJSON's price feed refreshes for
+   the day, ~06:00-06:10 UTC), with no laptop required:
    - refreshes prices for every watchlist card
    - snapshots today's market price for **every** Card Kingdom-priced card
      (~85,000+), building indefinite price history over time
