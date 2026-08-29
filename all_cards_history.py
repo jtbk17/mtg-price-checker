@@ -25,14 +25,18 @@ logger = logging.getLogger("tcg-price-checker")
 
 ALLPRICES_URL = "https://mtgjson.com/api/v5/AllPrices.json.gz"
 ALLIDENTIFIERS_URL = "https://mtgjson.com/api/v5/AllIdentifiers.json.gz"
+SETLIST_URL = "https://mtgjson.com/api/v5/SetList.json"
 DB_DIR = Path(__file__).parent
 DOCS_DIR = DB_DIR / "docs"
+SET_NAMES_CACHE = DB_DIR / "set_names_cache.json"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
     mtgjson_uuid TEXT UNIQUE NOT NULL,
     name TEXT,
     set_code TEXT,
+    set_name TEXT,
+    scryfall_id TEXT,
     is_token INTEGER
 );
 
@@ -59,7 +63,13 @@ def _get_connection(db_path):
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
     existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)")}
-    for column, coltype in (("name", "TEXT"), ("set_code", "TEXT"), ("is_token", "INTEGER")):
+    for column, coltype in (
+        ("name", "TEXT"),
+        ("set_code", "TEXT"),
+        ("set_name", "TEXT"),
+        ("scryfall_id", "TEXT"),
+        ("is_token", "INTEGER"),
+    ):
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE cards ADD COLUMN {column} {coltype}")
     return conn
@@ -141,22 +151,46 @@ def backfill_88_days(db_path=None):
     logger.info("Backfilled %d price points into %s", len(rows), db_path)
 
 
+def _load_set_names():
+    """{set_code: full set name}, e.g. "SLD" -> "Secret Lair Drop". Cached
+    indefinitely (set names essentially never change) rather than on the
+    usual TTL pattern — refetch by deleting set_names_cache.json if MTGJSON
+    ever renames a set."""
+    if SET_NAMES_CACHE.exists():
+        return json.loads(SET_NAMES_CACHE.read_text())
+
+    logger.info("Fetching set names from MTGJSON SetList.json...")
+    req = urllib.request.Request(SETLIST_URL, headers={"User-Agent": "tcg-price-checker/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+
+    names = {s["code"]: s["name"] for s in data.get("data", [])}
+    SET_NAMES_CACHE.write_text(json.dumps(names))
+    return names
+
+
 def backfill_names(db_path):
-    """Fill in name/set_code/is_token for any card uuids missing a label
-    (either brand new, or — the first time this runs after is_token was
-    added — every existing card needing that one field caught up), by
-    streaming MTGJSON's AllIdentifiers.json (full card database, ~2-3GB
-    uncompressed) and picking out just the uuids we need. Only runs when
-    there's actually something missing, since this is an expensive fetch."""
+    """Fill in name/set_code/set_name/scryfall_id/is_token for any card
+    uuids missing a label (either brand new, or — the first time this runs
+    after a new field was added — every existing card needing just that
+    one field caught up), by streaming MTGJSON's AllIdentifiers.json (full
+    card database, ~2-3GB uncompressed) and picking out just the uuids we
+    need. Only runs when there's actually something missing, since this is
+    an expensive fetch."""
     import ijson
 
     conn = _get_connection(db_path)
     needed = {
-        row[0] for row in conn.execute("SELECT mtgjson_uuid FROM cards WHERE name IS NULL OR is_token IS NULL")
+        row[0]
+        for row in conn.execute(
+            "SELECT mtgjson_uuid FROM cards WHERE name IS NULL OR is_token IS NULL OR set_name IS NULL"
+        )
     }
     if not needed:
         conn.close()
         return
+
+    set_names = _load_set_names()
 
     logger.info("Fetching labels for %d card(s) from MTGJSON AllIdentifiers.json...", len(needed))
     req = urllib.request.Request(ALLIDENTIFIERS_URL, headers={"User-Agent": "tcg-price-checker/1.0"})
@@ -166,13 +200,19 @@ def backfill_names(db_path):
             for uuid, entry in ijson.kvitems(stream, "data"):
                 if uuid in needed:
                     is_token = 1 if entry.get("layout") == "token" else 0
-                    updates.append((entry.get("name"), entry.get("setCode"), is_token, uuid))
+                    set_code = entry.get("setCode")
+                    scryfall_id = entry.get("identifiers", {}).get("scryfallId")
+                    updates.append(
+                        (entry.get("name"), set_code, set_names.get(set_code, set_code), scryfall_id, is_token, uuid)
+                    )
                     needed.discard(uuid)
                     if not needed:
                         break
 
     conn.executemany(
-        "UPDATE cards SET name = ?, set_code = ?, is_token = ? WHERE mtgjson_uuid = ?", updates
+        "UPDATE cards SET name = ?, set_code = ?, set_name = ?, scryfall_id = ?, is_token = ? "
+        "WHERE mtgjson_uuid = ?",
+        updates,
     )
     conn.commit()
     conn.close()
@@ -202,7 +242,7 @@ def compute_movers(db_path, top_n=15):
     def top_movers(days_back):
         rows = conn.execute(
             """
-            SELECT c.name, c.set_code, t.price_cents, p.price_cents
+            SELECT c.name, c.set_code, c.set_name, c.scryfall_id, t.price_cents, p.price_cents
             FROM price_history t
             JOIN price_history p ON p.card_id = t.card_id AND p.day = ?
             JOIN cards c ON c.id = t.card_id
@@ -215,11 +255,16 @@ def compute_movers(db_path, top_n=15):
             {
                 "name": name,
                 "set": set_code,
+                "set_full_name": set_name or set_code,
+                "scryfall_id": scryfall_id,
+                "image_url": f"https://api.scryfall.com/cards/{scryfall_id}?format=image&version=normal"
+                if scryfall_id
+                else None,
                 "price_now": now_cents / 100,
                 "price_before": before_cents / 100,
                 "pct_change": round((now_cents - before_cents) / before_cents * 100, 1),
             }
-            for name, set_code, now_cents, before_cents in rows
+            for name, set_code, set_name, scryfall_id, now_cents, before_cents in rows
         ]
         gainers = sorted(
             (m for m in movers if m["pct_change"] > 0), key=lambda m: m["pct_change"], reverse=True

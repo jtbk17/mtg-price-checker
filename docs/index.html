@@ -63,6 +63,8 @@
     table.movers th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
     table.movers td.pct.up { color: var(--up); font-weight: 700; }
     table.movers td.pct.down { color: var(--down); font-weight: 700; }
+    .mover-name { display: flex; align-items: center; gap: 8px; }
+    .mover-thumb { width: 32px; border-radius: 4px; flex-shrink: 0; }
     #alerts-section {
       border: 1px solid var(--up);
       background: #142016;
@@ -213,7 +215,12 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
           const sign = m.pct_change >= 0 ? "+" : "";
           return `
             <tr>
-              <td>${escapeHtml(m.name)} <span class="meta">(${escapeHtml(m.set || "")})</span></td>
+              <td>
+                <div class="mover-name">
+                  ${m.image_url ? `<img class="mover-thumb" src="${escapeHtml(m.image_url)}" alt="">` : ""}
+                  <span>${escapeHtml(m.name)} <span class="meta">(${escapeHtml(m.set_full_name || m.set || "")})</span></span>
+                </div>
+              </td>
               <td class="pct ${direction}">${sign}${m.pct_change}% <span class="meta">${formatPrice(m.price_before)} → ${formatPrice(m.price_now)}</span></td>
             </tr>
           `;

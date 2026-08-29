@@ -47,7 +47,7 @@ def send_market_alerts():
 
             rec_id = db.record_recommendation(
                 card_name=mover["name"],
-                set_name=mover["set"],
+                set_name=mover.get("set_full_name", mover["set"]),
                 price_before=mover["price_before"],
                 price_now=mover["price_now"],
                 pct_change=mover["pct_change"],
@@ -58,11 +58,12 @@ def send_market_alerts():
 
             text = (
                 f"<b>Market mover ({label})</b>\n"
-                f"{mover['name']} ({mover['set']}): ${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
+                f"{mover['name']} ({mover.get('set_full_name', mover['set'])}): "
+                f"${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
                 f"(+{mover['pct_change']}%){confidence_line}"
             )
             buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
-            sent = telegram_notify.send_message_with_buttons(text, buttons)
+            sent = telegram_notify.send_photo_with_buttons(mover.get("image_url"), text, buttons)
             if sent:
                 chat_id, message_id = sent
                 db.set_recommendation_telegram_info(rec_id, chat_id, message_id)

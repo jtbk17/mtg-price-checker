@@ -45,6 +45,40 @@ def send_message(text):
         logger.warning("Telegram send error: %s", exc)
 
 
+def send_photo_with_buttons(photo_url, caption, buttons):
+    """Like send_message_with_buttons, but sends the card's image with the
+    text as a caption underneath — this is the whole point of including a
+    photo, so you can visually confirm which printing an alert is about.
+    Falls back to a plain text message if the photo send fails (e.g. no
+    scryfall_id was available, or Scryfall is briefly unreachable)."""
+    if not _configured():
+        logger.info("Telegram not configured — skipping notification")
+        return None
+
+    reply_markup = {"inline_keyboard": [[{"text": label, "callback_data": data} for label, data in buttons]]}
+    if photo_url:
+        try:
+            resp = requests.post(
+                API_URL.format(token=_token(), method="sendPhoto"),
+                json={
+                    "chat_id": os.environ["TELEGRAM_CHAT_ID"],
+                    "photo": photo_url,
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                    "reply_markup": reply_markup,
+                },
+                timeout=15,
+            )
+            if resp.ok:
+                result = resp.json()["result"]
+                return result["chat"]["id"], result["message_id"]
+            logger.warning("Telegram sendPhoto failed (%s): %s — falling back to text", resp.status_code, resp.text[:300])
+        except requests.RequestException as exc:
+            logger.warning("Telegram sendPhoto error: %s — falling back to text", exc)
+
+    return send_message_with_buttons(caption, buttons)
+
+
 def send_message_with_buttons(text, buttons):
     """buttons: list of (label, callback_data) tuples, shown as one row of
     inline buttons. Returns (chat_id, message_id) of the sent message, or

@@ -39,7 +39,12 @@ export default {
 
     const chatId = callback.message?.chat?.id;
     const messageId = callback.message?.message_id;
-    const originalText = callback.message?.text || "";
+    // Market alerts are sent as photos (image + caption) so you can see
+    // which printing is trending; a photo message can only be edited via
+    // editMessageCaption, never editMessageText, and vice versa for a
+    // plain text message — pick based on which one Telegram sent back.
+    const isPhoto = callback.message?.caption !== undefined;
+    const originalBody = isPhoto ? callback.message?.caption : callback.message?.text || "";
     const mark = feedback === "good" ? "✅ Marked: good pick" : "❌ Marked: false positive";
 
     const telegramApi = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
@@ -69,17 +74,20 @@ export default {
     ];
 
     if (chatId && messageId) {
+      const editMethod = isPhoto ? "editMessageCaption" : "editMessageText";
+      const editBody = {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [] },
+      };
+      editBody[isPhoto ? "caption" : "text"] = `${originalBody}\n\n${mark}`;
+
       tasks.push(
-        fetch(`${telegramApi}/editMessageText`, {
+        fetch(`${telegramApi}/${editMethod}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: messageId,
-            text: `${originalText}\n\n${mark}`,
-            parse_mode: "HTML",
-            reply_markup: { inline_keyboard: [] },
-          }),
+          body: JSON.stringify(editBody),
         })
       );
     }
