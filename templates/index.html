@@ -26,8 +26,17 @@
     <section class="panel" id="watchlist-panel">
       <div class="panel-header">
         <h2>Watchlist</h2>
-        <button id="refresh-btn" type="button">Refresh prices</button>
+        <div class="panel-actions">
+          <form id="import-form">
+            <label class="file-btn">
+              Import ManaBox CSV
+              <input type="file" id="import-input" accept=".csv" hidden>
+            </label>
+          </form>
+          <button id="refresh-btn" type="button">Refresh prices</button>
+        </div>
       </div>
+      <div id="import-status" class="error" hidden></div>
       <div id="watchlist-error" class="error" hidden></div>
       <div id="watchlist" class="card-grid"></div>
     </section>

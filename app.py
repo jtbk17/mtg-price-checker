@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 
 import cardkingdom
 import db
+import manabox_import
 import mtgjson_crosswalk
 import scryfall
 from refresh_job import export_snapshot, refresh_watchlist_prices
@@ -142,6 +143,24 @@ def api_watchlist_add():
     item = db.add_to_watchlist(card)
     _git_sync(f"Track {item['name']} ({item['set_name']})")
     return jsonify(item), 201
+
+
+@app.route("/api/watchlist/import", methods=["POST"])
+def api_watchlist_import():
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
+    try:
+        rows = manabox_import.parse_csv(file.read())
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except UnicodeDecodeError:
+        return jsonify({"error": "Could not read file as text — is this a CSV file?"}), 400
+
+    result = manabox_import.import_rows(rows)
+    if result["imported"]:
+        _git_sync(f"Import {result['imported']} card(s) from ManaBox CSV")
+    return jsonify(result), 201
 
 
 @app.route("/api/watchlist/<int:watchlist_id>", methods=["DELETE"])

@@ -5,6 +5,8 @@ const searchError = document.getElementById("search-error");
 const watchlistEl = document.getElementById("watchlist");
 const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
+const importInput = document.getElementById("import-input");
+const importStatus = document.getElementById("import-status");
 const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
 const historyCanvas = document.getElementById("history-chart");
@@ -222,6 +224,25 @@ async function refreshPrices() {
   }
 }
 
+async function importCsv(file) {
+  importStatus.hidden = false;
+  importStatus.className = "status-info";
+  importStatus.textContent = `Importing ${file.name}… this can take a minute for large collections.`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const result = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
+    importStatus.className = "status-info";
+    importStatus.textContent = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
+    await loadWatchlist();
+  } catch (err) {
+    importStatus.className = "error";
+    importStatus.textContent = err.message;
+  }
+}
+
 async function showHistory(item) {
   try {
     const history = await fetchJSON(`/api/watchlist/${item.id}/history`);
@@ -280,5 +301,11 @@ function escapeHtml(str) {
 searchForm.addEventListener("submit", runSearch);
 refreshBtn.addEventListener("click", refreshPrices);
 closeHistoryBtn.addEventListener("click", () => historyDialog.close());
+importInput.addEventListener("change", () => {
+  if (importInput.files.length) {
+    importCsv(importInput.files[0]);
+    importInput.value = "";
+  }
+});
 
 loadWatchlist();
