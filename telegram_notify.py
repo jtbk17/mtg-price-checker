@@ -3,6 +3,12 @@
 learn from. Configured with the TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 environment variables — if either is unset, every function here is a
 silent no-op, so this module is always safe to call.
+
+Button taps are handled by a Cloudflare Worker webhook (see
+cloudflare_worker.js), not by anything in this Python codebase — Telegram
+delivers a tap to at most one place (a webhook, if registered, otherwise
+long-polling), so once a webhook is set there's nothing left for this
+process to poll.
 """
 
 import logging
@@ -67,52 +73,3 @@ def send_message_with_buttons(text, buttons):
     except requests.RequestException as exc:
         logger.warning("Telegram send error: %s", exc)
         return None
-
-
-def get_updates(offset=None):
-    if not _token():
-        return []
-    params = {"timeout": 0}
-    if offset is not None:
-        params["offset"] = offset
-    try:
-        resp = requests.get(API_URL.format(token=_token(), method="getUpdates"), params=params, timeout=15)
-        resp.raise_for_status()
-        return resp.json().get("result", [])
-    except requests.RequestException as exc:
-        logger.warning("Telegram getUpdates error: %s", exc)
-        return []
-
-
-def answer_callback_query(callback_query_id, text=""):
-    if not _token():
-        return
-    try:
-        requests.post(
-            API_URL.format(token=_token(), method="answerCallbackQuery"),
-            json={"callback_query_id": callback_query_id, "text": text},
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        logger.warning("Telegram answerCallbackQuery error: %s", exc)
-
-
-def edit_message_text(chat_id, message_id, text):
-    """Replaces a message's text and clears its buttons (so a tap can't
-    be registered twice)."""
-    if not _token():
-        return
-    try:
-        requests.post(
-            API_URL.format(token=_token(), method="editMessageText"),
-            json={
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "reply_markup": {"inline_keyboard": []},
-            },
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        logger.warning("Telegram editMessageText error: %s", exc)

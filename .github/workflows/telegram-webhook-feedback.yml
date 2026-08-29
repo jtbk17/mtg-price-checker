@@ -1,19 +1,14 @@
-name: Poll Telegram feedback
+name: Record Telegram feedback
 
 on:
-  schedule:
-    - cron: "*/20 * * * *"
-  workflow_dispatch: {}
+  repository_dispatch:
+    types: [telegram_feedback]
 
 permissions:
   contents: write
 
-concurrency:
-  group: telegram-feedback
-  cancel-in-progress: false
-
 jobs:
-  poll:
+  record:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -22,15 +17,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install requests
+      - name: Record feedback
+        run: python record_feedback.py "${{ github.event.client_payload.rec_id }}" "${{ github.event.client_payload.verdict }}"
 
-      - name: Poll for feedback button taps
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python poll_telegram_feedback.py
-
-      - name: Commit any recorded feedback
+      - name: Commit feedback
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
