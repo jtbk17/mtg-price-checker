@@ -50,6 +50,19 @@
     .card .ck-buylist { color: var(--ck); }
     .empty { color: var(--muted); }
     canvas { width: 100%; height: 60px; margin-top: 4px; }
+    section { margin-bottom: 36px; }
+    section h2 { margin: 0 0 4px; font-size: 1.1em; }
+    section .section-sub { color: var(--muted); font-size: 0.85em; margin: 0 0 12px; }
+    .movers-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    table.movers { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    table.movers th, table.movers td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    table.movers th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
+    table.movers td.pct.up { color: var(--up); font-weight: 700; }
+    table.movers td.pct.down { color: var(--down); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -58,7 +71,39 @@
     <p class="subtitle" id="subtitle">Card Kingdom market &amp; buylist prices, refreshed nightly</p>
   </header>
   <main>
-    <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
+    <section>
+      <h2>Watchlist</h2>
+      <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section>
+      <h2>Market movers</h2>
+      <p class="section-sub" id="movers-sub">Across every Card Kingdom-priced card, updated nightly</p>
+      <div class="movers-columns">
+        <div>
+          <h3>Today</h3>
+          <table class="movers">
+            <thead><tr><th>Gainers</th><th></th></tr></thead>
+            <tbody id="daily-gainers"></tbody>
+          </table>
+          <table class="movers" style="margin-top:12px">
+            <thead><tr><th>Losers</th><th></th></tr></thead>
+            <tbody id="daily-losers"></tbody>
+          </table>
+        </div>
+        <div>
+          <h3>This week</h3>
+          <table class="movers">
+            <thead><tr><th>Gainers</th><th></th></tr></thead>
+            <tbody id="weekly-gainers"></tbody>
+          </table>
+          <table class="movers" style="margin-top:12px">
+            <thead><tr><th>Losers</th><th></th></tr></thead>
+            <tbody id="weekly-losers"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -109,6 +154,43 @@
       ctx.stroke();
     }
 
+    function renderMoversTable(tbodyId, movers) {
+      const tbody = document.getElementById(tbodyId);
+      if (!movers.length) {
+        tbody.innerHTML = '<tr><td colspan="2" class="empty">No data yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = movers
+        .map((m) => {
+          const direction = m.pct_change >= 0 ? "up" : "down";
+          const sign = m.pct_change >= 0 ? "+" : "";
+          return `
+            <tr>
+              <td>${escapeHtml(m.name)} <span class="meta">(${escapeHtml(m.set || "")})</span></td>
+              <td class="pct ${direction}">${sign}${m.pct_change}% <span class="meta">${formatPrice(m.price_before)} → ${formatPrice(m.price_now)}</span></td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    async function loadMovers() {
+      try {
+        const resp = await fetch("movers.json", { cache: "no-store" });
+        const data = await resp.json();
+        if (data.generated_at) {
+          document.getElementById("movers-sub").textContent =
+            `Across every Card Kingdom-priced card — last updated ${new Date(data.generated_at).toLocaleString()}`;
+        }
+        renderMoversTable("daily-gainers", data.daily_gainers || []);
+        renderMoversTable("daily-losers", data.daily_losers || []);
+        renderMoversTable("weekly-gainers", data.weekly_gainers || []);
+        renderMoversTable("weekly-losers", data.weekly_losers || []);
+      } catch (err) {
+        document.getElementById("movers-sub").textContent = `Couldn't load movers: ${err.message}`;
+      }
+    }
+
     async function load() {
       const container = document.getElementById("watchlist");
       try {
@@ -152,6 +234,7 @@
     }
 
     load();
+    loadMovers();
   </script>
 </body>
 </html>

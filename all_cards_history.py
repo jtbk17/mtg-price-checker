@@ -24,11 +24,15 @@ from pathlib import Path
 logger = logging.getLogger("tcg-price-checker")
 
 ALLPRICES_URL = "https://mtgjson.com/api/v5/AllPrices.json.gz"
+ALLIDENTIFIERS_URL = "https://mtgjson.com/api/v5/AllIdentifiers.json.gz"
 DB_DIR = Path(__file__).parent
+DOCS_DIR = DB_DIR / "docs"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
-    mtgjson_uuid TEXT UNIQUE NOT NULL
+    mtgjson_uuid TEXT UNIQUE NOT NULL,
+    name TEXT,
+    set_code TEXT
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -53,6 +57,10 @@ def _day_number(d):
 def _get_connection(db_path):
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)")}
+    for column in ("name", "set_code"):
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE cards ADD COLUMN {column} TEXT")
     return conn
 
 
@@ -132,6 +140,101 @@ def backfill_88_days(db_path=None):
     logger.info("Backfilled %d price points into %s", len(rows), db_path)
 
 
+def backfill_names(db_path):
+    """Fill in name/set_code for any card uuids we've snapshotted but don't
+    yet have a label for, by streaming MTGJSON's AllIdentifiers.json (full
+    card database, ~2-3GB uncompressed) and picking out just the uuids we
+    need. Only runs when there's actually something missing, since this is
+    an expensive fetch — new labels are only needed when a new set's cards
+    show up in a nightly snapshot for the first time."""
+    import ijson
+
+    conn = _get_connection(db_path)
+    needed = {row[0] for row in conn.execute("SELECT mtgjson_uuid FROM cards WHERE name IS NULL")}
+    if not needed:
+        conn.close()
+        return
+
+    logger.info("Fetching names for %d card(s) from MTGJSON AllIdentifiers.json...", len(needed))
+    req = urllib.request.Request(ALLIDENTIFIERS_URL, headers={"User-Agent": "tcg-price-checker/1.0"})
+    updates = []
+    with urllib.request.urlopen(req, timeout=600) as resp:
+        with gzip.GzipFile(fileobj=resp) as stream:
+            for uuid, entry in ijson.kvitems(stream, "data"):
+                if uuid in needed:
+                    updates.append((entry.get("name"), entry.get("setCode"), uuid))
+                    needed.discard(uuid)
+                    if not needed:
+                        break
+
+    conn.executemany("UPDATE cards SET name = ?, set_code = ? WHERE mtgjson_uuid = ?", updates)
+    conn.commit()
+    conn.close()
+    logger.info("Updated names for %d card(s)", len(updates))
+
+
+def compute_movers(db_path, top_n=15, min_price_cents=100):
+    """Biggest day-over-day and week-over-week movers across every card
+    Card Kingdom prices, using the history this module has been
+    collecting. Filters out cards priced under $1 (bulk tokens/commons
+    otherwise dominate with noisy swings on tiny absolute price changes)
+    and cards with no actual change (padding a short real-movers list with
+    0% entries isn't useful)."""
+    conn = _get_connection(db_path)
+    today_day = _day_number(date.today())
+
+    def top_movers(days_back):
+        rows = conn.execute(
+            """
+            SELECT c.name, c.set_code, t.price_cents, p.price_cents
+            FROM price_history t
+            JOIN price_history p ON p.card_id = t.card_id AND p.day = ?
+            JOIN cards c ON c.id = t.card_id
+            WHERE t.day = ? AND p.price_cents >= ? AND c.name IS NOT NULL
+                AND t.price_cents != p.price_cents
+            """,
+            (today_day - days_back, today_day, min_price_cents),
+        ).fetchall()
+        movers = [
+            {
+                "name": name,
+                "set": set_code,
+                "price_now": now_cents / 100,
+                "price_before": before_cents / 100,
+                "pct_change": round((now_cents - before_cents) / before_cents * 100, 1),
+            }
+            for name, set_code, now_cents, before_cents in rows
+        ]
+        gainers = sorted(
+            (m for m in movers if m["pct_change"] > 0), key=lambda m: m["pct_change"], reverse=True
+        )[:top_n]
+        losers = sorted((m for m in movers if m["pct_change"] < 0), key=lambda m: m["pct_change"])[:top_n]
+        return gainers, losers
+
+    daily_gainers, daily_losers = top_movers(1)
+    weekly_gainers, weekly_losers = top_movers(7)
+    conn.close()
+    return {
+        "daily_gainers": daily_gainers,
+        "daily_losers": daily_losers,
+        "weekly_gainers": weekly_gainers,
+        "weekly_losers": weekly_losers,
+    }
+
+
+def export_movers(db_path):
+    movers = compute_movers(db_path)
+    DOCS_DIR.mkdir(exist_ok=True)
+    (DOCS_DIR / "movers.json").write_text(
+        json.dumps({"generated_at": datetime.now(timezone.utc).isoformat(), **movers}, indent=2)
+    )
+    logger.info(
+        "Wrote movers.json (%d daily gainers, %d daily losers)",
+        len(movers["daily_gainers"]),
+        len(movers["daily_losers"]),
+    )
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     year_db = db_path_for_year(date.today().year)
@@ -139,3 +242,5 @@ if __name__ == "__main__":
         logger.info("No database for %s yet — seeding with an 88-day backfill first", date.today().year)
         backfill_88_days(year_db)
     snapshot_today(year_db)
+    backfill_names(year_db)
+    export_movers(year_db)

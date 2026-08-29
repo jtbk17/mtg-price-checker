@@ -1,0 +1,326 @@
+{
+  "generated_at": "2026-08-29T09:54:02.407240+00:00",
+  "daily_gainers": [
+    {
+      "name": "Technodrome",
+      "set": "TMT",
+      "price_now": 4.49,
+      "price_before": 2.99,
+      "pct_change": 50.2
+    },
+    {
+      "name": "Culling Ritual",
+      "set": "PW25",
+      "price_now": 4.49,
+      "price_before": 3.99,
+      "pct_change": 12.5
+    }
+  ],
+  "daily_losers": [
+    {
+      "name": "Wild Growth",
+      "set": "CEI",
+      "price_now": 0.99,
+      "price_before": 8.99,
+      "pct_change": -89.0
+    },
+    {
+      "name": "Fish",
+      "set": "TA25",
+      "price_now": 0.49,
+      "price_before": 2.99,
+      "pct_change": -83.6
+    },
+    {
+      "name": "Zack Fair",
+      "set": "FIN",
+      "price_now": 0.35,
+      "price_before": 1.79,
+      "pct_change": -80.4
+    },
+    {
+      "name": "Myr",
+      "set": "TBRC",
+      "price_now": 0.35,
+      "price_before": 1.29,
+      "pct_change": -72.9
+    },
+    {
+      "name": "Circle of Protection: White",
+      "set": "CED",
+      "price_now": 0.99,
+      "price_before": 3.49,
+      "pct_change": -71.6
+    },
+    {
+      "name": "Cat",
+      "set": "PLST",
+      "price_now": 0.49,
+      "price_before": 1.29,
+      "pct_change": -62.0
+    },
+    {
+      "name": "Grazilaxx, Illithid Scholar",
+      "set": "CLB",
+      "price_now": 2.29,
+      "price_before": 5.99,
+      "pct_change": -61.8
+    },
+    {
+      "name": "Robot",
+      "set": "TPIP",
+      "price_now": 0.79,
+      "price_before": 1.79,
+      "pct_change": -55.9
+    },
+    {
+      "name": "Plains",
+      "set": "PTC",
+      "price_now": 1.29,
+      "price_before": 2.79,
+      "pct_change": -53.8
+    },
+    {
+      "name": "Copy",
+      "set": "TECC",
+      "price_now": 0.79,
+      "price_before": 1.29,
+      "pct_change": -38.8
+    },
+    {
+      "name": "Samurai",
+      "set": "TONE",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Psychic Frog",
+      "set": "MH3",
+      "price_now": 12.99,
+      "price_before": 15.99,
+      "pct_change": -18.8
+    },
+    {
+      "name": "Mongrel Pack",
+      "set": "TMP",
+      "price_now": 1.99,
+      "price_before": 2.29,
+      "pct_change": -13.1
+    }
+  ],
+  "weekly_gainers": [
+    {
+      "name": "Great Goblin, Foul-Hearted",
+      "set": "HOC",
+      "price_now": 29.99,
+      "price_before": 17.99,
+      "pct_change": 66.7
+    },
+    {
+      "name": "Thorin, King of Durin's Folk",
+      "set": "HOC",
+      "price_now": 13.99,
+      "price_before": 8.99,
+      "pct_change": 55.6
+    },
+    {
+      "name": "Skyshroud Claim",
+      "set": "NEM",
+      "price_now": 2.49,
+      "price_before": 1.79,
+      "pct_change": 39.1
+    },
+    {
+      "name": "Abrade",
+      "set": "SOA",
+      "price_now": 1.79,
+      "price_before": 1.29,
+      "pct_change": 38.8
+    },
+    {
+      "name": "Mountain",
+      "set": "HOB",
+      "price_now": 1.79,
+      "price_before": 1.29,
+      "pct_change": 38.8
+    },
+    {
+      "name": "Plains",
+      "set": "LTR",
+      "price_now": 1.79,
+      "price_before": 1.29,
+      "pct_change": 38.8
+    },
+    {
+      "name": "Jori En, Ruin Diver",
+      "set": "OGW",
+      "price_now": 1.79,
+      "price_before": 1.29,
+      "pct_change": 38.8
+    },
+    {
+      "name": "Pestilence",
+      "set": "5ED",
+      "price_now": 1.79,
+      "price_before": 1.29,
+      "pct_change": 38.8
+    },
+    {
+      "name": "Jarad, Golgari Lich Lord",
+      "set": "RTR",
+      "price_now": 5.49,
+      "price_before": 3.99,
+      "pct_change": 37.6
+    },
+    {
+      "name": "Somberwald Sage",
+      "set": "AVR",
+      "price_now": 1.99,
+      "price_before": 1.49,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Goblin Chirurgeon",
+      "set": "FEM",
+      "price_now": 1.99,
+      "price_before": 1.49,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Bloatfly Swarm",
+      "set": "PIP",
+      "price_now": 1.99,
+      "price_before": 1.49,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Goblin Chirurgeon",
+      "set": "FEM",
+      "price_now": 1.99,
+      "price_before": 1.49,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Faerie Harbinger",
+      "set": "PLST",
+      "price_now": 3.99,
+      "price_before": 2.99,
+      "pct_change": 33.4
+    },
+    {
+      "name": "Captain Lannery Storm",
+      "set": "SLD",
+      "price_now": 7.99,
+      "price_before": 5.99,
+      "pct_change": 33.4
+    }
+  ],
+  "weekly_losers": [
+    {
+      "name": "Zack Fair",
+      "set": "FIN",
+      "price_now": 0.35,
+      "price_before": 1.79,
+      "pct_change": -80.4
+    },
+    {
+      "name": "Circle of Protection: White",
+      "set": "CED",
+      "price_now": 0.99,
+      "price_before": 3.49,
+      "pct_change": -71.6
+    },
+    {
+      "name": "Restoration Angel",
+      "set": "INR",
+      "price_now": 0.69,
+      "price_before": 1.99,
+      "pct_change": -65.3
+    },
+    {
+      "name": "Supper for Spiders",
+      "set": "HOB",
+      "price_now": 0.99,
+      "price_before": 1.99,
+      "pct_change": -50.3
+    },
+    {
+      "name": "Thranduil, the Elvenking",
+      "set": "HOB",
+      "price_now": 0.79,
+      "price_before": 1.29,
+      "pct_change": -38.8
+    },
+    {
+      "name": "Tom, Bert, and William",
+      "set": "HOB",
+      "price_now": 0.99,
+      "price_before": 1.49,
+      "pct_change": -33.6
+    },
+    {
+      "name": "Gandalf, Party Guest",
+      "set": "HOC",
+      "price_now": 3.99,
+      "price_before": 5.49,
+      "pct_change": -27.3
+    },
+    {
+      "name": "Madame Hydra, Reanimated",
+      "set": "MSC",
+      "price_now": 1.49,
+      "price_before": 1.99,
+      "pct_change": -25.1
+    },
+    {
+      "name": "Dockside Extortionist",
+      "set": "PLST",
+      "price_now": 14.99,
+      "price_before": 19.99,
+      "pct_change": -25.0
+    },
+    {
+      "name": "Bilbo, Thief in the Night",
+      "set": "HOB",
+      "price_now": 24.99,
+      "price_before": 32.99,
+      "pct_change": -24.2
+    },
+    {
+      "name": "Ellie and Alan, Paleontologists",
+      "set": "REX",
+      "price_now": 15.99,
+      "price_before": 20.99,
+      "pct_change": -23.8
+    },
+    {
+      "name": "Grave Titan",
+      "set": "DRC",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Talisman of Hierarchy",
+      "set": "FIC",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Gwaihir the Windlord",
+      "set": "LTR",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Vela the Night-Clad",
+      "set": "PCA",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    }
+  ]
+}

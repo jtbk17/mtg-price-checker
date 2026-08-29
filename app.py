@@ -1,5 +1,7 @@
 import logging
 import os
+import subprocess
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
@@ -14,6 +16,34 @@ logger = logging.getLogger("tcg-price-checker")
 
 app = Flask(__name__)
 db.init_db()
+
+PROJECT_DIR = Path(__file__).parent
+
+
+def _git_sync(message):
+    """Best-effort: commit and push tcg_prices.db so the nightly job and
+    dashboard pick up watchlist changes without a manual git step. Failures
+    (offline, no remote, merge conflict) are logged, not raised — the
+    watchlist change itself already succeeded locally regardless."""
+    try:
+        subprocess.run(
+            ["git", "pull", "--rebase"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True
+        )
+        subprocess.run(
+            ["git", "add", "tcg_prices.db"], cwd=PROJECT_DIR, capture_output=True, timeout=10, check=True
+        )
+        commit = subprocess.run(
+            ["git", "commit", "-m", message], cwd=PROJECT_DIR, capture_output=True, timeout=10
+        )
+        if commit.returncode != 0:
+            if b"nothing to commit" in commit.stdout:
+                return
+            logger.warning("git commit failed: %s", commit.stdout.decode(errors="replace"))
+            return
+        subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True)
+        logger.info("Synced to git: %s", message)
+    except Exception as exc:
+        logger.warning("Could not sync watchlist to git (%s) — you may need to push manually", exc)
 
 
 def _is_foil(finish):
@@ -99,12 +129,16 @@ def api_watchlist_add():
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
     }
     item = db.add_to_watchlist(card)
+    _git_sync(f"Track {item['name']} ({item['set_name']})")
     return jsonify(item), 201
 
 
 @app.route("/api/watchlist/<int:watchlist_id>", methods=["DELETE"])
 def api_watchlist_remove(watchlist_id):
+    item = db.get_watchlist_item(watchlist_id)
     db.remove_from_watchlist(watchlist_id)
+    if item:
+        _git_sync(f"Untrack {item['name']} ({item['set_name']})")
     return "", 204
 
 
