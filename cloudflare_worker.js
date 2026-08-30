@@ -8,14 +8,34 @@
 // Deploy via the Cloudflare dashboard (Workers & Pages -> Create -> paste
 // this file's contents into the editor). Required secrets/vars, set under
 // the Worker's Settings -> Variables:
-//   TELEGRAM_BOT_TOKEN  (secret) - same bot token used elsewhere
-//   GITHUB_TOKEN        (secret) - a GitHub token with Contents: write on this repo
-//   GITHUB_REPO         (var)    - "owner/repo", e.g. "jtbk17/mtg-price-checker"
+//   TELEGRAM_BOT_TOKEN     (secret) - same bot token used elsewhere
+//   TELEGRAM_WEBHOOK_SECRET(secret) - random string of your choosing; also
+//                                     pass it as secret_token when calling
+//                                     setWebhook (see below) so Telegram
+//                                     echoes it back on every real update
+//   GITHUB_TOKEN           (secret) - a GitHub token with Contents: write on this repo
+//   GITHUB_REPO            (var)    - "owner/repo", e.g. "jtbk17/mtg-price-checker"
+//
+// Register the webhook with the matching secret_token (one-time, from a
+// shell — replace <bot-token> and <secret>):
+//   curl "https://api.telegram.org/bot<bot-token>/setWebhook" \
+//     -d "url=https://<your-worker>.workers.dev" \
+//     -d "secret_token=<secret>"
+//
+// Without this, anyone who finds the Worker's URL can forge a Telegram
+// callback payload and trigger a repository_dispatch (which runs Actions
+// and commits to the repo) or spoof feedback — Telegram signs every real
+// webhook call by echoing secret_token back in a header, so checking it
+// below is what actually verifies the request's origin.
 
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
       return new Response("OK");
+    }
+
+    if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response("Forbidden", { status: 403 });
     }
 
     let update;
