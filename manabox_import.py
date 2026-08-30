@@ -37,6 +37,34 @@ def _finish_and_label(foil_value):
     return "foil", "Foil"
 
 
+# ManaBox tracks a finer 7-tier condition scale than the app's 5-tier one
+# (confirmed against ManaBox's own CSV format: mint, near_mint, excellent,
+# good, light_played, played, poor — all lowercase with underscores).
+# Mapped by name/meaning rather than even ordinal spread — "light_played"
+# means the same thing as our "Lightly Played" tier, so it (and the two
+# tiers just above it) collapses there instead of landing on "Moderately
+# Played" just because it happens to be the 5th-best of 7.
+_CONDITION_MAP = {
+    "mint": "Near Mint",
+    "near_mint": "Near Mint",
+    "excellent": "Lightly Played",
+    "good": "Lightly Played",
+    "light_played": "Lightly Played",
+    "played": "Moderately Played",
+    "poor": "Damaged",
+}
+
+
+def _normalize_condition(raw_value):
+    key = (raw_value or "").strip().lower().replace(" ", "_")
+    if key in _CONDITION_MAP:
+        return _CONDITION_MAP[key]
+    # Unrecognized value (a ManaBox format change, or a hand-edited CSV) —
+    # title-case whatever's there rather than silently mislabeling it as a
+    # fixed default.
+    return key.replace("_", " ").title() if key else "Near Mint"
+
+
 def _image_url(card):
     image_uris = card.get("image_uris")
     if not image_uris and card.get("card_faces"):
@@ -73,7 +101,7 @@ def parse_csv(file_bytes):
 
 def _parse_quantity(value):
     try:
-        return max(1, int(value))
+        return int(value)
     except (TypeError, ValueError):
         return 1
 
@@ -81,10 +109,11 @@ def _parse_quantity(value):
 def import_rows(rows, owner=None):
     scryfall_cards = _fetch_scryfall_cards(row.get("Scryfall ID") for row in rows)
 
-    # ManaBox splits the same card+finish across multiple rows when you
-    # own copies in different conditions (e.g. 2 Near Mint + 1 Lightly
-    # Played) — our watchlist doesn't track condition separately, so sum
-    # quantities for any rows that collapse to the same variant here,
+    # ManaBox splits the same card+finish across multiple rows when you own
+    # copies in different conditions (e.g. 2 Near Mint + 1 Lightly Played)
+    # — condition is part of variant_id (see db.condition_slug), so those
+    # stay as separate grouped entries; only rows that are fully identical
+    # (same printing *and* condition) get their quantities summed here,
     # rather than letting the last one silently overwrite the others.
     grouped = {}
     skipped = 0
@@ -97,9 +126,13 @@ def import_rows(rows, owner=None):
             errors.append(f"{row.get('Name', '?')}: not found on Scryfall")
             continue
 
-        finish, printing = _finish_and_label(row.get("Foil"))
-        variant_id = f"{scryfall_id}:{finish}"
         quantity = _parse_quantity(row.get("Quantity"))
+        if quantity <= 0:
+            continue  # e.g. a sold/removed card ManaBox kept a zero-row for
+
+        finish, printing = _finish_and_label(row.get("Foil"))
+        condition = _normalize_condition(row.get("Condition"))
+        variant_id = f"{scryfall_id}:{finish}:{db.condition_slug(condition)}"
 
         if variant_id in grouped:
             grouped[variant_id]["quantity"] += quantity
@@ -110,6 +143,7 @@ def import_rows(rows, owner=None):
                 "row": row,
                 "finish": finish,
                 "printing": printing,
+                "condition": condition,
                 "quantity": quantity,
             }
 
@@ -126,7 +160,7 @@ def import_rows(rows, owner=None):
             "game": "Magic: The Gathering",
             "name": card.get("name") or row.get("Name"),
             "set_name": card.get("set_name") or row.get("Set name"),
-            "condition": "Near Mint",
+            "condition": g["condition"],
             "printing": g["printing"],
             "tcgplayer_id": card.get("tcgplayer_id"),
             "image_url": _image_url(card),

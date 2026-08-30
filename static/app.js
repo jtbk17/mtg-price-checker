@@ -60,6 +60,16 @@ async function loadOwners() {
   }
 }
 
+let conditionOptions = ["Near Mint"];
+
+async function loadConditions() {
+  try {
+    conditionOptions = await fetchJSON("/api/conditions");
+  } catch (err) {
+    // Non-critical — falls back to just "Near Mint".
+  }
+}
+
 async function fetchJSON(url, options) {
   const resp = await fetch(url, options);
   const data = await resp.json().catch(() => ({}));
@@ -202,6 +212,9 @@ function renderSearchResults(cards) {
       }
       <div class="price-section"></div>
       <div class="actions">
+        <select class="condition-select" title="Condition">
+          ${conditionOptions.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}
+        </select>
         <input type="number" class="qty-input" min="1" value="1" title="Quantity owned">
         <button type="button" data-action="track">Track</button>
         ${card.mtgjsonId ? `<button type="button" class="secondary" data-action="history">History</button>` : ""}
@@ -230,8 +243,9 @@ function renderSearchResults(cards) {
     }
 
     const qtyInput = el.querySelector(".qty-input");
+    const conditionSelect = el.querySelector(".condition-select");
     el.querySelector('[data-action="track"]').addEventListener("click", () =>
-      trackCard(card, selected, Number(qtyInput.value) || 1)
+      trackCard(card, selected, Number(qtyInput.value) || 1, conditionSelect.value)
     );
     const historyBtn = el.querySelector('[data-action="history"]');
     if (historyBtn) {
@@ -241,7 +255,7 @@ function renderSearchResults(cards) {
   });
 }
 
-async function trackCard(card, variant, quantity) {
+async function trackCard(card, variant, quantity, condition) {
   if (!variant.variantId) {
     showError(searchError, "This card is missing a variant id and can't be tracked.");
     return;
@@ -256,6 +270,7 @@ async function trackCard(card, variant, quantity) {
         name: card.name,
         setName: card.setName,
         printing: variant.printing,
+        condition: condition || "Near Mint",
         tcgplayerId: card.tcgplayerId,
         imageUrl: card.imageUrl,
         mtgjsonId: card.mtgjsonId,
@@ -299,7 +314,7 @@ function renderWatchlist(items) {
       ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
       <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
       <div class="meta">${escapeHtml(item.set_name || "")}</div>
-      <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
+      <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
       <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
@@ -373,8 +388,13 @@ async function importCsv(file) {
 
   try {
     const result = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
-    importStatus.className = "status-info";
-    importStatus.textContent = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
+    importStatus.className = result.skipped ? "error" : "status-info";
+    const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
+    const errorList =
+      result.errors && result.errors.length
+        ? `<ul class="import-errors">${result.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`
+        : "";
+    importStatus.innerHTML = `${escapeHtml(summary)}${errorList}`;
     await Promise.all([loadWatchlist(), loadOwners()]);
   } catch (err) {
     importStatus.className = "error";
@@ -519,4 +539,5 @@ currentOwnerInput.addEventListener("change", () => {
 });
 
 loadOwners();
+loadConditions();
 loadWatchlist();

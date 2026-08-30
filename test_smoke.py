@@ -12,6 +12,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_db.close()
@@ -216,6 +217,9 @@ class AllCardsHistoryTests(unittest.TestCase):
 
 
 class ManaboxImportTests(unittest.TestCase):
+    def setUp(self):
+        db.init_db()
+
     def test_parse_csv_rejects_non_manabox_file(self):
         with self.assertRaises(ValueError):
             manabox_import.parse_csv(b"Name,Foo\nLightning Bolt,bar\n")
@@ -230,6 +234,94 @@ class ManaboxImportTests(unittest.TestCase):
         self.assertEqual(manabox_import._finish_and_label("normal"), ("nonfoil", "Normal"))
         self.assertEqual(manabox_import._finish_and_label("foil"), ("foil", "Foil"))
         self.assertEqual(manabox_import._finish_and_label("etched"), ("etched", "Etched Foil"))
+
+    def test_normalize_condition_maps_all_manabox_tiers(self):
+        self.assertEqual(manabox_import._normalize_condition("mint"), "Near Mint")
+        self.assertEqual(manabox_import._normalize_condition("near_mint"), "Near Mint")
+        self.assertEqual(manabox_import._normalize_condition("excellent"), "Lightly Played")
+        self.assertEqual(manabox_import._normalize_condition("good"), "Lightly Played")
+        self.assertEqual(manabox_import._normalize_condition("light_played"), "Lightly Played")
+        self.assertEqual(manabox_import._normalize_condition("played"), "Moderately Played")
+        self.assertEqual(manabox_import._normalize_condition("poor"), "Damaged")
+        # Unrecognized value: title-cased rather than silently defaulted.
+        self.assertEqual(manabox_import._normalize_condition("weird_value"), "Weird Value")
+        self.assertEqual(manabox_import._normalize_condition(""), "Near Mint")
+
+    def test_parse_quantity_does_not_clamp_zero(self):
+        self.assertEqual(manabox_import._parse_quantity("0"), 0)
+        self.assertEqual(manabox_import._parse_quantity("-2"), -2)
+        self.assertEqual(manabox_import._parse_quantity("3"), 3)
+        self.assertEqual(manabox_import._parse_quantity("not a number"), 1)
+
+    def test_import_rows_end_to_end(self):
+        fake_card = {
+            "id": "abc-123",
+            "name": "Fake Card",
+            "set": "tst",
+            "set_name": "Test Set",
+            "tcgplayer_id": 999,
+            "image_uris": {"normal": "https://example.com/fake.jpg"},
+        }
+        rows = [
+            # Same card+finish, different condition — must NOT merge.
+            {
+                "Scryfall ID": "abc-123",
+                "Name": "Fake Card",
+                "Set code": "tst",
+                "Foil": "foil",
+                "Condition": "near_mint",
+                "Quantity": "2",
+            },
+            {
+                "Scryfall ID": "abc-123",
+                "Name": "Fake Card",
+                "Set code": "tst",
+                "Foil": "foil",
+                "Condition": "light_played",
+                "Quantity": "1",
+            },
+            # Zero quantity — must be skipped entirely, not imported as 1.
+            {
+                "Scryfall ID": "abc-123",
+                "Name": "Fake Card",
+                "Set code": "tst",
+                "Foil": "foil",
+                "Condition": "near_mint",
+                "Quantity": "0",
+            },
+            # Not resolvable on Scryfall — must be skipped with an error.
+            {
+                "Scryfall ID": "does-not-exist",
+                "Name": "Ghost Card",
+                "Set code": "tst",
+                "Foil": "normal",
+                "Condition": "near_mint",
+                "Quantity": "1",
+            },
+        ]
+
+        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"abc-123": fake_card}), \
+             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value="fake-uuid"), \
+             patch.object(
+                 manabox_import.cardkingdom,
+                 "get_prices",
+                 return_value={"market": 3.50, "buylist": 1.25},
+             ):
+            result = manabox_import.import_rows(rows, owner="TestImporter")
+
+        self.assertEqual(result["imported"], 2)  # near_mint and light_played, kept separate
+        self.assertEqual(result["skipped"], 1)
+        self.assertIn("Ghost Card", result["errors"][0])
+
+        items = {i["condition"]: i for i in db.list_watchlist(owner="TestImporter")}
+        self.assertEqual(set(items), {"Near Mint", "Lightly Played"})
+        self.assertEqual(items["Near Mint"]["quantity"], 2)  # the 0-qty row didn't add a phantom 3rd
+        self.assertEqual(items["Lightly Played"]["quantity"], 1)
+        self.assertTrue(items["Near Mint"]["variant_id"].endswith(":near-mint"))
+        self.assertTrue(items["Lightly Played"]["variant_id"].endswith(":lightly-played"))
+
+        for item in items.values():
+            db.remove_from_watchlist(item["id"])
 
 
 class ImportsTests(unittest.TestCase):

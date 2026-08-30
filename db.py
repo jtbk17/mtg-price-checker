@@ -6,6 +6,14 @@ from pathlib import Path
 # production database (must be set before this module is first imported).
 DB_PATH = Path(os.environ.get("TCG_DB_PATH", Path(__file__).parent / "tcg_prices.db"))
 
+# The canonical 5-tier condition scale used app-wide (search tracking,
+# ManaBox import normalization, and the condition picker in the UI).
+CONDITIONS = ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"]
+
+
+def condition_slug(condition):
+    return (condition or "Near Mint").strip().lower().replace(" ", "-")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS watchlist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +108,26 @@ def init_db():
         # add_to_watchlist() for why NULL doesn't work as the "no owner"
         # sentinel with a UNIQUE(variant_id, owner) constraint.
         conn.execute("UPDATE watchlist SET owner = '' WHERE owner IS NULL")
+
+        # Condition used to be a display-only label (always "Near Mint",
+        # never actually used to distinguish anything) — variant_id was
+        # just "<scryfall_id>:<finish>". Now that condition is part of a
+        # card's tracked identity (so e.g. a Near Mint and a Lightly Played
+        # copy of the same printing can be tracked as separate entries),
+        # rewrite any old 2-segment variant_id into the new 3-segment
+        # "<scryfall_id>:<finish>:<condition-slug>" form, carrying its
+        # price_history along by the same rename. Already-migrated (or
+        # non-Scryfall-shaped) variant_ids are left alone.
+        for row in conn.execute("SELECT id, variant_id, condition FROM watchlist").fetchall():
+            old_variant_id = row["variant_id"]
+            if old_variant_id.count(":") != 1:
+                continue
+            new_variant_id = f"{old_variant_id}:{condition_slug(row['condition'])}"
+            conn.execute("UPDATE watchlist SET variant_id = ? WHERE id = ?", (new_variant_id, row["id"]))
+            conn.execute(
+                "UPDATE price_history SET variant_id = ? WHERE variant_id = ?",
+                (new_variant_id, old_variant_id),
+            )
 
         table_sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='watchlist'"

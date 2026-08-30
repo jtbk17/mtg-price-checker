@@ -156,6 +156,11 @@ def api_owners():
     return jsonify(db.list_owners())
 
 
+@app.route("/api/conditions")
+def api_conditions():
+    return jsonify(db.CONDITIONS)
+
+
 @app.route("/api/watchlist", methods=["GET"])
 def api_watchlist_list():
     return jsonify(db.list_watchlist(owner=request.args.get("owner") or None))
@@ -174,13 +179,16 @@ def api_watchlist_add():
         quantity = max(1, int(payload.get("quantity") or 1))
     except (TypeError, ValueError):
         quantity = 1
+    condition = payload.get("condition") or "Near Mint"
+    if condition not in db.CONDITIONS:
+        condition = "Near Mint"
     card = {
-        "variant_id": payload["variantId"],
+        "variant_id": f"{payload['variantId']}:{db.condition_slug(condition)}",
         "card_id": payload.get("cardId"),
         "game": "Magic: The Gathering",
         "name": payload.get("name"),
         "set_name": payload.get("setName"),
-        "condition": "Near Mint",
+        "condition": condition,
         "printing": payload.get("printing"),
         "tcgplayer_id": payload.get("tcgplayerId"),
         "image_url": payload.get("imageUrl"),

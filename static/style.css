@@ -57,6 +57,11 @@ header h1 { margin: 0 0 4px; }
   border-radius: 8px;
 }
 
+.condition-select {
+  font-size: 0.85em;
+  padding: 6px 8px;
+}
+
 main {
   padding: 16px 32px 48px;
   display: grid;
@@ -232,6 +237,14 @@ button.secondary {
 .empty {
   color: var(--muted);
   grid-column: 1 / -1;
+}
+
+.import-errors {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 0.85em;
 }
 
 dialog {
