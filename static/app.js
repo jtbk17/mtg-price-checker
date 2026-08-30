@@ -1,5 +1,6 @@
 const searchForm = document.getElementById("search-form");
 const searchInput = document.getElementById("search-input");
+const searchSuggestions = document.getElementById("search-suggestions");
 const searchResults = document.getElementById("search-results");
 const searchError = document.getElementById("search-error");
 const watchlistEl = document.getElementById("watchlist");
@@ -68,21 +69,113 @@ async function fetchJSON(url, options) {
   return data;
 }
 
-async function runSearch(event) {
-  event.preventDefault();
+let autocompleteTimer = null;
+let autocompleteRequestId = 0;
+let activeSuggestionIndex = -1;
+
+function hideSuggestions() {
+  searchSuggestions.hidden = true;
+  searchSuggestions.innerHTML = "";
+  activeSuggestionIndex = -1;
+}
+
+function scheduleAutocomplete() {
+  clearTimeout(autocompleteTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) {
+    hideSuggestions();
+    return;
+  }
+  // A native <datalist> doesn't reliably re-render its dropdown while the
+  // user is still typing — it only seems to pick up fresh options after a
+  // pause, which reads as "waits for a whole word." A hand-rolled dropdown
+  // re-renders synchronously on every fetch, so suggestions actually track
+  // each keystroke instead of just the finished word.
+  autocompleteTimer = setTimeout(() => fetchAutocomplete(q), 150);
+}
+
+async function fetchAutocomplete(q) {
+  const requestId = ++autocompleteRequestId;
+  try {
+    const names = await fetchJSON(`/api/autocomplete?q=${encodeURIComponent(q)}`);
+    if (requestId !== autocompleteRequestId) return; // a newer keystroke already superseded this
+    renderSuggestions(names);
+  } catch (err) {
+    // Non-critical — suggestions just stay as they were.
+  }
+}
+
+function renderSuggestions(names) {
+  activeSuggestionIndex = -1;
+  if (!names.length) {
+    hideSuggestions();
+    return;
+  }
+  searchSuggestions.innerHTML = names.map((n) => `<div class="item">${escapeHtml(n)}</div>`).join("");
+  searchSuggestions.hidden = false;
+  searchSuggestions.querySelectorAll(".item").forEach((el, i) => {
+    // mousedown (not click) + preventDefault stops the input from blurring
+    // before the click registers, so selecting a suggestion doesn't race
+    // against the blur handler that closes this dropdown.
+    el.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      selectSuggestion(names[i]);
+    });
+  });
+}
+
+function selectSuggestion(name) {
+  searchInput.value = name;
+  hideSuggestions();
+  searchInput.focus();
+  // Suggestions come from Scryfall's own name list, so we already know the
+  // exact name — search for exactly that card (Scryfall's !"..." syntax)
+  // instead of the plain-text search, which does a broad fuzzy/oracle-text
+  // match and would pull in dozens of loosely related cards.
+  performSearch(`!"${name.replace(/"/g, '\\"')}"`);
+}
+
+function moveActiveSuggestion(delta) {
+  const items = searchSuggestions.querySelectorAll(".item");
+  if (!items.length) return;
+  activeSuggestionIndex = (activeSuggestionIndex + delta + items.length) % items.length;
+  items.forEach((el, i) => el.classList.toggle("active", i === activeSuggestionIndex));
+  items[activeSuggestionIndex].scrollIntoView({ block: "nearest" });
+}
+
+function handleSearchInputKeydown(event) {
+  const items = searchSuggestions.querySelectorAll(".item");
+  if (searchSuggestions.hidden || !items.length) return;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveActiveSuggestion(1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveActiveSuggestion(-1);
+  } else if (event.key === "Enter" && activeSuggestionIndex >= 0) {
+    event.preventDefault();
+    selectSuggestion(items[activeSuggestionIndex].textContent);
+  } else if (event.key === "Escape") {
+    hideSuggestions();
+  }
+}
+
+async function performSearch(query) {
   showError(searchError, "");
   searchResults.innerHTML = "<p class=\"empty\">Searching…</p>";
-
-  const q = searchInput.value.trim();
-  const params = new URLSearchParams({ q });
-
   try {
-    const cards = await fetchJSON(`/api/search?${params.toString()}`);
+    const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
     renderSearchResults(cards);
   } catch (err) {
     searchResults.innerHTML = "";
     showError(searchError, err.message);
   }
+}
+
+async function runSearch(event) {
+  event.preventDefault();
+  hideSuggestions();
+  await performSearch(searchInput.value.trim());
 }
 
 function renderSearchResults(cards) {
@@ -307,6 +400,16 @@ async function showHistory(item) {
   }
 }
 
+function pointDate(point) {
+  return point.date || point.recorded_at;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function drawSparkline(canvas, series) {
   const ctx = canvas.getContext("2d");
   const { width, height } = canvas;
@@ -323,7 +426,11 @@ function drawSparkline(canvas, series) {
   const allPrices = usable.flatMap((s) => s.data.map((h) => h.price)).filter((p) => p != null);
   const min = Math.min(...allPrices);
   const max = Math.max(...allPrices);
-  const pad = 24;
+  const padLeft = 12;
+  const padRight = 12;
+  const padTop = 16;
+  const padBottom = 22;
+  const chartHeight = height - padTop - padBottom;
   const range = max - min || 1;
 
   usable.forEach(({ data, color }) => {
@@ -331,8 +438,8 @@ function drawSparkline(canvas, series) {
     ctx.lineWidth = 2;
     ctx.beginPath();
     data.forEach((point, i) => {
-      const x = pad + (i / (data.length - 1)) * (width - pad * 2);
-      const y = height - pad - ((point.price - min) / range) * (height - pad * 2);
+      const x = padLeft + (i / (data.length - 1)) * (width - padLeft - padRight);
+      const y = padTop + chartHeight - ((point.price - min) / range) * chartHeight;
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -341,8 +448,26 @@ function drawSparkline(canvas, series) {
 
   ctx.fillStyle = "#9096a3";
   ctx.font = "12px sans-serif";
-  ctx.fillText(`$${min.toFixed(2)}`, 4, height - 6);
-  ctx.fillText(`$${max.toFixed(2)}`, 4, 14);
+  ctx.textAlign = "left";
+  ctx.fillText(`$${min.toFixed(2)}`, 4, padTop + chartHeight);
+  ctx.fillText(`$${max.toFixed(2)}`, 4, padTop);
+
+  // Date ticks along the x-axis, positioned using whichever series has the
+  // most points — series can differ slightly in length (e.g. a night with
+  // no buylist price recorded), so the longest one is the closest proxy
+  // for the chart's actual date range.
+  const reference = usable.reduce((a, b) => (b.data.length > a.data.length ? b : a));
+  const dates = reference.data.map(pointDate);
+  const tickCount = Math.min(4, dates.length);
+  for (let t = 0; t < tickCount; t++) {
+    const idx = tickCount === 1 ? 0 : Math.round((t / (tickCount - 1)) * (dates.length - 1));
+    const x = padLeft + (idx / (dates.length - 1 || 1)) * (width - padLeft - padRight);
+    // Left/right-align the end ticks instead of centering, so the label
+    // text stays inside the canvas instead of clipping past its edges.
+    ctx.textAlign = t === 0 ? "left" : t === tickCount - 1 ? "right" : "center";
+    ctx.fillText(formatDate(dates[idx]), x, height - 4);
+  }
+  ctx.textAlign = "left";
 }
 
 async function showCardHistory(card) {
@@ -367,6 +492,9 @@ function escapeHtml(str) {
 }
 
 searchForm.addEventListener("submit", runSearch);
+searchInput.addEventListener("input", scheduleAutocomplete);
+searchInput.addEventListener("keydown", handleSearchInputKeydown);
+searchInput.addEventListener("blur", hideSuggestions);
 refreshBtn.addEventListener("click", refreshPrices);
 closeHistoryBtn.addEventListener("click", () => historyDialog.close());
 importInput.addEventListener("change", () => {

@@ -10,6 +10,7 @@ import requests
 logger = logging.getLogger("tcg-price-checker")
 
 SEARCH_URL = "https://api.scryfall.com/cards/search"
+AUTOCOMPLETE_URL = "https://api.scryfall.com/cards/autocomplete"
 HEADERS = {
     "User-Agent": "tcg-price-checker/1.0 (local personal project)",
     "Accept": "application/json",
@@ -33,6 +34,20 @@ def search_cards(query):
     if not resp.ok:
         raise ScryfallError(f"Scryfall search failed ({resp.status_code}): {resp.text[:300]}")
     return resp.json().get("data", [])[:RESULT_LIMIT]
+
+
+def autocomplete(query):
+    """Card name suggestions for the given partial query, using Scryfall's
+    dedicated typeahead endpoint (much faster and cheaper than running the
+    full search on every keystroke). Fails soft (empty list) rather than
+    raising, since a broken suggestion list shouldn't block searching."""
+    try:
+        resp = requests.get(AUTOCOMPLETE_URL, headers=HEADERS, params={"q": query}, timeout=10)
+        resp.raise_for_status()
+        return resp.json().get("data", [])
+    except requests.RequestException as exc:
+        logger.warning("Scryfall autocomplete failed: %s", exc)
+        return []
 
 
 def extract_image(card):

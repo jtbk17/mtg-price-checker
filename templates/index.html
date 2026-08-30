@@ -21,7 +21,10 @@
     <section class="panel" id="search-panel">
       <h2>Search</h2>
       <form id="search-form">
-        <input type="text" id="search-input" placeholder="Card name, e.g. Lightning Bolt" required>
+        <div class="search-input-wrap">
+          <input type="text" id="search-input" placeholder="Card name, e.g. Lightning Bolt" autocomplete="off" required>
+          <div id="search-suggestions" class="suggestions" hidden></div>
+        </div>
         <button type="submit">Search</button>
       </form>
       <div id="search-error" class="error" hidden></div>

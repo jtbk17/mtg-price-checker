@@ -131,6 +131,14 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/autocomplete")
+def api_autocomplete():
+    q = request.args.get("q")
+    if not q:
+        return jsonify([])
+    return jsonify(scryfall.autocomplete(q))
+
+
 @app.route("/api/search")
 def api_search():
     q = request.args.get("q")
