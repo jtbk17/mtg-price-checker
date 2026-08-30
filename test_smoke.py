@@ -176,7 +176,7 @@ class AllCardsHistoryTests(unittest.TestCase):
         conn = ach._get_connection(self.db_path)
         conn.close()
         movers = ach.compute_movers(self.db_path)
-        for key in ("daily_gainers", "daily_losers", "weekly_gainers", "weekly_losers", "trend_gainers", "trend_losers"):
+        for key in ("daily_gainers", "daily_losers", "weekly_gainers", "weekly_losers"):
             self.assertEqual(movers[key], [])
 
     def test_compute_movers_excludes_tokens_and_zero_change(self):

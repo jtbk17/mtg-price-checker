@@ -220,22 +220,16 @@ def backfill_names(db_path):
 
 
 def compute_movers(db_path, top_n=15):
-    """Biggest day-over-day, week-over-week, and 88-day-trend movers
-    across every card Card Kingdom prices, using the history this module
-    has been collecting (the 88-day window relies on the initial
-    backfill_88_days() seed plus however many nightly snapshots have
-    accumulated since). No price floor — a cheap card doubling in price
-    is exactly the kind of move worth surfacing. Excludes tokens
-    specifically (layout == "token" in MTGJSON), since those are the
-    actual source of meaningless noise (e.g. a generic Soldier token
-    blipping between $0.35 and $0.99), not low price alone. Also excludes
-    cards with no actual change (padding a short real-movers list with 0%
-    entries isn't useful).
-
-    Note: unlike the 1-day/7-day windows, a card that clears the 88-day
-    trend threshold will typically keep clearing it night after night
-    until the trend actually reverses — market_alerts.py alerts on it
-    every time regardless, by design (no de-duplication)."""
+    """Biggest day-over-day and week-over-week movers across every card
+    Card Kingdom prices, using the history this module has been
+    collecting (the 7-day window relies on the initial backfill_88_days()
+    seed plus however many nightly snapshots have accumulated since). No
+    price floor — a cheap card doubling in price is exactly the kind of
+    move worth surfacing. Excludes tokens specifically (layout == "token"
+    in MTGJSON), since those are the actual source of meaningless noise
+    (e.g. a generic Soldier token blipping between $0.35 and $0.99), not
+    low price alone. Also excludes cards with no actual change (padding a
+    short real-movers list with 0% entries isn't useful)."""
     conn = _get_connection(db_path)
     today_day = _day_number(date.today())
 
@@ -274,15 +268,12 @@ def compute_movers(db_path, top_n=15):
 
     daily_gainers, daily_losers = top_movers(1)
     weekly_gainers, weekly_losers = top_movers(7)
-    trend_gainers, trend_losers = top_movers(88)
     conn.close()
     return {
         "daily_gainers": daily_gainers,
         "daily_losers": daily_losers,
         "weekly_gainers": weekly_gainers,
         "weekly_losers": weekly_losers,
-        "trend_gainers": trend_gainers,
-        "trend_losers": trend_losers,
     }
 
 

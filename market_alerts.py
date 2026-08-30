@@ -21,7 +21,7 @@ MOVERS_FILE = Path(__file__).parent / "docs" / "movers.json"
 
 SOURCES = [
     ("daily_gainers", "today"),
-    ("trend_gainers", "88-day trend"),
+    ("weekly_gainers", "7-day trend"),
 ]
 
 
