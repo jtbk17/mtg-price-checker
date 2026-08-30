@@ -63,6 +63,25 @@
     <button id="close-history" type="button">Close</button>
   </dialog>
 
+  <dialog id="add-copies-dialog">
+    <h3 id="add-copies-title">Add more copies</h3>
+    <form id="add-copies-form" class="dialog-form">
+      <label>
+        Quantity to add
+        <input type="number" id="add-copies-qty" min="1" value="1" required>
+      </label>
+      <label>
+        Cost per card (optional)
+        <input type="number" id="add-copies-cost" min="0" step="0.01" placeholder="What you paid">
+      </label>
+      <div id="add-copies-error" class="error" hidden></div>
+      <div class="actions">
+        <button type="submit">Add</button>
+        <button type="button" id="close-add-copies" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -268,3 +268,32 @@ dialog {
 dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
 }
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.dialog-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+.dialog-form input {
+  color: var(--text);
+}
+
+.dialog-form .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialog-form .actions button {
+  flex: 1;
+}

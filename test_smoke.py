@@ -111,6 +111,37 @@ class DbTests(unittest.TestCase):
 
         db.remove_from_watchlist(item["id"])
 
+    def test_add_copies_blends_weighted_average_cost(self):
+        card = {
+            "variant_id": "add-copies-test:nonfoil",
+            "card_id": "add-copies-test",
+            "game": "Magic: The Gathering",
+            "name": "Add Copies Card",
+            "set_name": "Test Set",
+            "condition": "Near Mint",
+            "printing": "Normal",
+            "owner": None,
+            "quantity": 2,
+            "purchase_price": 3.00,
+        }
+        item = db.add_to_watchlist(card)
+
+        # 2 @ $3 + 1 @ $6 -> 3 copies averaging $4.
+        updated = db.add_copies(item["id"], added_quantity=1, added_purchase_price=6.00)
+        self.assertEqual(updated["quantity"], 3)
+        self.assertAlmostEqual(updated["purchase_price"], 4.00)
+
+        # Adding more with no price given contributes nothing to the
+        # average (not treated as $0) — 3 @ $4 + 2 @ unknown still
+        # averages to $4 over the priced copies, quantity still grows.
+        updated = db.add_copies(item["id"], added_quantity=2, added_purchase_price=None)
+        self.assertEqual(updated["quantity"], 5)
+        self.assertAlmostEqual(updated["purchase_price"], 4.00)
+
+        self.assertIsNone(db.add_copies(999999, 1, 1.0))  # unknown id
+
+        db.remove_from_watchlist(item["id"])
+
     def test_market_and_buylist_history_are_independent(self):
         # record_price()'s recorded_at defaults to CURRENT_TIMESTAMP, which
         # only has second-level granularity, so inserting explicit

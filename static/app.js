@@ -16,6 +16,14 @@ const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
 const historyCanvas = document.getElementById("history-chart");
 const closeHistoryBtn = document.getElementById("close-history");
+const addCopiesDialog = document.getElementById("add-copies-dialog");
+const addCopiesForm = document.getElementById("add-copies-form");
+const addCopiesTitle = document.getElementById("add-copies-title");
+const addCopiesQty = document.getElementById("add-copies-qty");
+const addCopiesCost = document.getElementById("add-copies-cost");
+const addCopiesError = document.getElementById("add-copies-error");
+const closeAddCopiesBtn = document.getElementById("close-add-copies");
+let addCopiesTargetId = null;
 
 function showError(el, message) {
   el.textContent = message;
@@ -324,10 +332,14 @@ function renderWatchlist(items) {
       ${gainLoss ? `<div class="delta ${gainLoss.direction}">${gainLoss.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
       <div class="actions">
+        <button type="button" data-action="add-copies">Add more</button>
         <button type="button" data-action="history">History</button>
         <button type="button" class="secondary" data-action="remove">Remove</button>
       </div>
     `;
+    el.querySelector('[data-action="add-copies"]').addEventListener("click", () =>
+      openAddCopiesDialog(item)
+    );
     el.querySelector('[data-action="history"]').addEventListener("click", () =>
       showHistory(item)
     );
@@ -401,6 +413,35 @@ async function removeCard(id) {
     await loadWatchlist();
   } catch (err) {
     showError(watchlistError, err.message);
+  }
+}
+
+function openAddCopiesDialog(item) {
+  addCopiesTargetId = item.id;
+  addCopiesTitle.textContent = `Add more copies — ${item.name} (${item.condition || "Near Mint"})`;
+  addCopiesQty.value = "1";
+  addCopiesCost.value = "";
+  showError(addCopiesError, "");
+  addCopiesDialog.showModal();
+}
+
+async function submitAddCopies(event) {
+  event.preventDefault();
+  const quantity = Number(addCopiesQty.value) || 0;
+  const cost = addCopiesCost.value;
+  try {
+    await fetchJSON(`/api/watchlist/${addCopiesTargetId}/add-copies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quantity,
+        purchasePrice: cost === "" ? null : Number(cost),
+      }),
+    });
+    addCopiesDialog.close();
+    await loadWatchlist();
+  } catch (err) {
+    showError(addCopiesError, err.message);
   }
 }
 
@@ -558,6 +599,8 @@ searchInput.addEventListener("keydown", handleSearchInputKeydown);
 searchInput.addEventListener("blur", hideSuggestions);
 refreshBtn.addEventListener("click", refreshPrices);
 closeHistoryBtn.addEventListener("click", () => historyDialog.close());
+addCopiesForm.addEventListener("submit", submitAddCopies);
+closeAddCopiesBtn.addEventListener("click", () => addCopiesDialog.close());
 importInput.addEventListener("change", () => {
   if (importInput.files.length) {
     importCsv(importInput.files[0]);

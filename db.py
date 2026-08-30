@@ -238,6 +238,43 @@ def add_to_watchlist(card):
         conn.close()
 
 
+def add_copies(watchlist_id, added_quantity, added_purchase_price):
+    """Add more copies of an already-tracked card, blending the new
+    purchase price into a weighted-average cost rather than replacing it
+    — unlike add_to_watchlist's re-track path, which intentionally
+    overwrites quantity/cost outright (needed for ManaBox re-imports to
+    stay idempotent). A row with no price yet contributes nothing to the
+    average (rather than as $0), same convention as manabox_import's
+    merge logic."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM watchlist WHERE id = ?", (watchlist_id,)).fetchone()
+        if not row:
+            return None
+
+        existing_qty = row["quantity"] or 1
+        existing_price = row["purchase_price"]
+
+        total_cost = 0.0
+        total_weight = 0
+        if existing_price is not None:
+            total_cost += existing_price * existing_qty
+            total_weight += existing_qty
+        if added_purchase_price is not None:
+            total_cost += added_purchase_price * added_quantity
+            total_weight += added_quantity
+        new_price = total_cost / total_weight if total_weight else None
+
+        conn.execute(
+            "UPDATE watchlist SET quantity = ?, purchase_price = ? WHERE id = ?",
+            (existing_qty + added_quantity, new_price, watchlist_id),
+        )
+        conn.commit()
+        return dict(conn.execute("SELECT * FROM watchlist WHERE id = ?", (watchlist_id,)).fetchone())
+    finally:
+        conn.close()
+
+
 def remove_from_watchlist(watchlist_id):
     conn = get_connection()
     try:

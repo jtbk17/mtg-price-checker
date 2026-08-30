@@ -236,6 +236,32 @@ def api_watchlist_import():
     return jsonify(result), 201
 
 
+@app.route("/api/watchlist/<int:watchlist_id>/add-copies", methods=["POST"])
+def api_watchlist_add_copies(watchlist_id):
+    item = db.get_watchlist_item(watchlist_id)
+    if not item:
+        return jsonify({"error": "Not found"}), 404
+
+    payload = request.get_json(force=True)
+    try:
+        quantity = int(payload.get("quantity") or 0)
+    except (TypeError, ValueError):
+        quantity = 0
+    if quantity <= 0:
+        return jsonify({"error": "Quantity must be a positive number."}), 400
+    try:
+        purchase_price = float(payload["purchasePrice"]) if payload.get("purchasePrice") not in (None, "") else None
+    except (TypeError, ValueError):
+        purchase_price = None
+
+    owner_tag = f" for {item['owner']}" if item.get("owner") else ""
+    updated = _git_sync(
+        lambda: db.add_copies(watchlist_id, quantity, purchase_price),
+        lambda _: f"Add {quantity} more {item['name']} ({item['set_name']}){owner_tag}",
+    )
+    return jsonify(updated), 200
+
+
 @app.route("/api/watchlist/<int:watchlist_id>", methods=["DELETE"])
 def api_watchlist_remove(watchlist_id):
     item = db.get_watchlist_item(watchlist_id)
