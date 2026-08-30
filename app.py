@@ -118,12 +118,12 @@ def _serialize_card(card):
     }
 
 
-@app.route("/api/lookup")
-def api_lookup():
-    name = request.args.get("name")
-    if not name:
-        return jsonify({"error": "Query parameter 'name' is required."}), 400
-    return jsonify(all_cards_lookup.search(name))
+@app.route("/api/lookup/<mtgjson_id>")
+def api_lookup(mtgjson_id):
+    card = all_cards_lookup.get_by_uuid(mtgjson_id)
+    if not card:
+        return jsonify({"error": "No price history found for this card yet."}), 404
+    return jsonify(card)
 
 
 @app.route("/")

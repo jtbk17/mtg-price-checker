@@ -1,8 +1,10 @@
 """Look up any card's full price history from the all-cards database —
-not just cards on your watchlist. The database itself lives as a public
-GitHub Release asset (see all_cards_history.py), so it's downloaded here
-over plain HTTPS with no authentication needed, and cached locally for a
-few hours so every lookup doesn't re-fetch a multi-MB file.
+not just cards on your watchlist (used by the search results' "History"
+button, keyed by the card's exact MTGJSON uuid). The database itself
+lives as a public GitHub Release asset (see all_cards_history.py), so
+it's downloaded here over plain HTTPS with no authentication needed, and
+cached locally for a few hours so every lookup doesn't re-fetch a
+multi-MB file.
 """
 
 import logging
@@ -47,48 +49,42 @@ def _ensure_cached(year):
     return dest
 
 
-def search(name, limit=15):
-    """Return up to `limit` cards whose name matches `name` (case-
-    insensitive substring), each with its full price history, most
-    recent snapshots first within a card's own history. Returns an empty
-    list (rather than raising) if the all-cards database isn't published
-    yet — e.g. before the nightly job has ever run."""
+def get_by_uuid(mtgjson_uuid):
+    """Return one card's full price history by its exact MTGJSON uuid, or
+    None if it isn't in the all-cards database (e.g. Card Kingdom doesn't
+    price it, or the nightly snapshot hasn't picked it up yet)."""
     year = date.today().year
     try:
         db_path = _ensure_cached(year)
     except requests.RequestException as exc:
         logger.warning("All-cards database not available yet (%s)", exc)
-        return []
+        return None
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        cards = conn.execute(
-            "SELECT id, mtgjson_uuid, name, set_code FROM cards "
-            "WHERE name LIKE ? AND is_token = 0 ORDER BY name LIMIT ?",
-            (f"%{name}%", limit),
-        ).fetchall()
+        card = conn.execute(
+            "SELECT id, mtgjson_uuid, name, set_code FROM cards WHERE mtgjson_uuid = ?",
+            (mtgjson_uuid,),
+        ).fetchone()
+        if not card:
+            return None
 
-        results = []
-        for card in cards:
-            history = conn.execute(
-                "SELECT day, price_cents FROM price_history WHERE card_id = ? ORDER BY day ASC",
-                (card["id"],),
-            ).fetchall()
-            results.append(
+        history = conn.execute(
+            "SELECT day, price_cents FROM price_history WHERE card_id = ? ORDER BY day ASC",
+            (card["id"],),
+        ).fetchall()
+        return {
+            "name": card["name"],
+            "set": card["set_code"],
+            "mtgjsonId": card["mtgjson_uuid"],
+            "history": [
                 {
-                    "name": card["name"],
-                    "set": card["set_code"],
-                    "mtgjsonId": card["mtgjson_uuid"],
-                    "history": [
-                        {
-                            "date": date.fromordinal(EPOCH.toordinal() + h["day"]).isoformat(),
-                            "price": h["price_cents"] / 100,
-                        }
-                        for h in history
-                    ],
+                    "date": date.fromordinal(EPOCH.toordinal() + h["day"]).isoformat(),
+                    "price": h["price_cents"] / 100,
                 }
-            )
-        return results
+                for h in history
+            ],
+        }
     finally:
         conn.close()

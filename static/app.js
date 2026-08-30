@@ -15,10 +15,6 @@ const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
 const historyCanvas = document.getElementById("history-chart");
 const closeHistoryBtn = document.getElementById("close-history");
-const lookupForm = document.getElementById("lookup-form");
-const lookupInput = document.getElementById("lookup-input");
-const lookupResults = document.getElementById("lookup-results");
-const lookupError = document.getElementById("lookup-error");
 
 function showError(el, message) {
   el.textContent = message;
@@ -115,6 +111,7 @@ function renderSearchResults(cards) {
       <div class="actions">
         <input type="number" class="qty-input" min="1" value="1" title="Quantity owned">
         <button type="button" data-action="track">Track</button>
+        ${card.mtgjsonId ? `<button type="button" class="secondary" data-action="history">History</button>` : ""}
       </div>
     `;
 
@@ -143,6 +140,10 @@ function renderSearchResults(cards) {
     el.querySelector('[data-action="track"]').addEventListener("click", () =>
       trackCard(card, selected, Number(qtyInput.value) || 1)
     );
+    const historyBtn = el.querySelector('[data-action="history"]');
+    if (historyBtn) {
+      historyBtn.addEventListener("click", () => showCardHistory(card));
+    }
     searchResults.appendChild(el);
   });
 }
@@ -344,44 +345,16 @@ function drawSparkline(canvas, series) {
   ctx.fillText(`$${max.toFixed(2)}`, 4, 14);
 }
 
-async function runLookup(event) {
-  event.preventDefault();
-  showError(lookupError, "");
-  lookupResults.innerHTML = "<p class=\"empty\">Searching…</p>";
-
-  const name = lookupInput.value.trim();
+async function showCardHistory(card) {
   try {
-    const cards = await fetchJSON(`/api/lookup?name=${encodeURIComponent(name)}`);
-    renderLookupResults(cards);
+    const data = await fetchJSON(`/api/lookup/${encodeURIComponent(card.mtgjsonId)}`);
+    historyTitle.innerHTML = `${escapeHtml(data.name)} — ${escapeHtml(data.set || "")}
+      <span class="meta"><span style="color:#5b8cff">■</span> Market</span>`;
+    drawSparkline(historyCanvas, [{ data: data.history, color: "#5b8cff" }]);
+    historyDialog.showModal();
   } catch (err) {
-    lookupResults.innerHTML = "";
-    showError(lookupError, err.message);
+    showError(searchError, err.message);
   }
-}
-
-function renderLookupResults(cards) {
-  lookupResults.innerHTML = "";
-  if (!cards.length) {
-    lookupResults.innerHTML = '<p class="empty">No matches found.</p>';
-    return;
-  }
-
-  cards.forEach((card) => {
-    const prices = card.history.map((h) => h.price);
-    const latest = prices.length ? prices[prices.length - 1] : null;
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML = `
-      <div class="name">${escapeHtml(card.name)}</div>
-      <div class="meta">${escapeHtml(card.set || "")}</div>
-      <div class="price">${formatPrice(latest)}</div>
-      <canvas width="240" height="60"></canvas>
-    `;
-    lookupResults.appendChild(el);
-    if (card.history.length > 1) {
-      drawSparkline(el.querySelector("canvas"), [{ data: card.history, color: "#5b8cff" }]);
-    }
-  });
 }
 
 function escapeHtml(str) {
@@ -403,7 +376,6 @@ importInput.addEventListener("change", () => {
   }
 });
 ownerFilter.addEventListener("change", loadWatchlist);
-lookupForm.addEventListener("submit", runLookup);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";
