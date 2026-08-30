@@ -428,6 +428,63 @@ class ManaboxImportTests(unittest.TestCase):
         item = db.list_watchlist(owner="ProgressTest")[0]
         db.remove_from_watchlist(item["id"])
 
+    def test_import_syncs_removals_but_spares_ambiguous_matches(self):
+        # Pre-existing state for this owner, as if from an earlier import.
+        sold_item = db.add_to_watchlist(
+            {
+                "variant_id": "sold-card-id:nonfoil:near-mint",
+                "card_id": "sold-card-id",
+                "game": "Magic: The Gathering",
+                "name": "Sold Card",
+                "set_name": "Test Set",
+                "condition": "Near Mint",
+                "printing": "Normal",
+                "owner": "SyncTest",
+                "quantity": 1,
+            }
+        )
+        ambiguous_item = db.add_to_watchlist(
+            {
+                "variant_id": "ambiguous-id:nonfoil:near-mint",
+                "card_id": "ambiguous-id",
+                "game": "Magic: The Gathering",
+                "name": "Ambiguous Card",
+                "set_name": "Test Set",
+                "condition": "Near Mint",
+                "printing": "Normal",
+                "owner": "SyncTest",
+                "quantity": 1,
+            }
+        )
+
+        new_card = {"id": "new-card-id", "name": "New Card", "set": "tst", "set_name": "Test Set"}
+        rows = [
+            {"Scryfall ID": "new-card-id", "Name": "New Card", "Set code": "tst", "Foil": "normal", "Quantity": "1"},
+            # "ambiguous-id" is present in the CSV but fails to resolve on
+            # Scryfall this time (not in the mocked return dict below) — the
+            # previously-tracked card for it must be spared, not treated as
+            # absent, since we can't confirm it's actually gone.
+            {"Scryfall ID": "ambiguous-id", "Name": "Ambiguous Card", "Set code": "tst", "Foil": "normal", "Quantity": "1"},
+        ]
+
+        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"new-card-id": new_card}), \
+             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
+             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
+             patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
+            result = manabox_import.import_rows(rows, owner="SyncTest")
+
+        self.assertEqual(result["imported"], 1)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["removed"], 1)
+
+        remaining = {i["variant_id"] for i in db.list_watchlist(owner="SyncTest")}
+        self.assertNotIn("sold-card-id:nonfoil:near-mint", remaining)  # genuinely absent -> removed
+        self.assertIn("ambiguous-id:nonfoil:near-mint", remaining)  # present but unresolved -> spared
+        self.assertIn("new-card-id:nonfoil:near-mint", remaining)  # newly imported
+
+        for item in db.list_watchlist(owner="SyncTest"):
+            db.remove_from_watchlist(item["id"])
+
 
 class MtgjsonCrosswalkTests(unittest.TestCase):
     def test_prefetch_sets_dedupes_and_skips_cached(self):

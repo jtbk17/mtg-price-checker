@@ -9,6 +9,12 @@ Scryfall ID is used as the join key here rather than trusting the CSV's
 own Name/Set columns, since it's an unambiguous reference to the exact
 printing — the CSV's text fields are only used as a fallback if a card
 can't be found on Scryfall for some reason.
+
+Each import fully syncs the given owner's watchlist to this CSV: cards
+present get added/updated, and cards previously tracked for that owner
+but genuinely absent from this CSV (e.g. sold and no longer in the real
+collection) get automatically untracked — see the `removed` handling
+near the end of import_rows() for exactly what counts as "absent".
 """
 
 import csv
@@ -222,4 +228,24 @@ def import_rows(rows, owner=None, on_progress=None):
         if on_progress:
             on_progress("Saving to your watchlist", i, total_variants)
 
-    return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
+    removed = 0
+    if owner:
+        # Treat this CSV as the source of truth for the owner's collection:
+        # anything previously tracked for them that's genuinely absent here
+        # (e.g. a sold card) gets untracked automatically. Scoped by owner
+        # so this never touches anyone else's cards, and — since this is a
+        # destructive, unconfirmed action — deliberately conservative about
+        # what counts as "absent": a card whose Scryfall ID appears
+        # *anywhere* in this CSV (even under a finish/condition combo that
+        # didn't end up in `grouped`, e.g. a transient per-row lookup
+        # failure) is left alone rather than risk deleting a real card over
+        # an ambiguous partial match.
+        csv_scryfall_ids = {row.get("Scryfall ID") for row in rows if row.get("Scryfall ID")}
+        present_variant_ids = set(grouped.keys())
+        for item in db.list_watchlist(owner=owner):
+            if item["variant_id"] in present_variant_ids or item["card_id"] in csv_scryfall_ids:
+                continue
+            db.remove_from_watchlist(item["id"])
+            removed += 1
+
+    return {"imported": imported, "skipped": skipped, "removed": removed, "errors": errors[:20]}

@@ -520,7 +520,7 @@ async function pollImportJob(jobId) {
       } else {
         const result = job.result;
         importStatus.className = result.skipped ? "error" : "status-info";
-        const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
+        const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}${result.removed ? `, removed ${result.removed} no longer in this CSV` : ""}.`;
         const errorList =
           result.errors && result.errors.length
             ? `<ul class="import-errors">${result.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`
