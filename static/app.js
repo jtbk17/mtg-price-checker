@@ -460,6 +460,14 @@ async function refreshPrices() {
 }
 
 async function importCsv(file) {
+  if (!currentOwner()) {
+    importStatus.hidden = false;
+    importStatus.className = "error";
+    importStatus.textContent = 'Enter your name in "Tracking as" above before importing, so this collection is tagged as yours.';
+    currentOwnerInput.focus();
+    return;
+  }
+
   importStatus.hidden = false;
   importStatus.className = "status-info";
   importStatus.textContent = `Importing ${file.name}… this can take a minute for large collections.`;
