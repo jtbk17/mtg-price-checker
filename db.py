@@ -299,27 +299,45 @@ def record_price(variant_id, price, kind="market"):
         conn.close()
 
 
-def list_watchlist(owner=None):
+# Fixed, hardcoded SQL fragments only — `sort` is used purely as a dict key
+# to pick one of these, never concatenated into the query itself, so this
+# stays injection-safe despite building the ORDER BY with an f-string.
+_WATCHLIST_SORTS = {
+    "name": "w.name COLLATE NOCASE ASC",
+    "price": "latest_price DESC NULLS LAST",
+    "value": "(latest_price * w.quantity) DESC NULLS LAST",
+    "gain": "((latest_price - w.purchase_price) / w.purchase_price) DESC NULLS LAST",
+}
+
+
+def list_watchlist(owner=None, sort=None):
     conn = get_connection()
     try:
-        if owner:
-            rows = conn.execute(
-                "SELECT * FROM watchlist WHERE owner = ? ORDER BY created_at DESC", (owner,)
-            ).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM watchlist ORDER BY created_at DESC").fetchall()
-        result = []
-        for row in rows:
-            item = dict(row)
-            history = conn.execute(
-                "SELECT price, recorded_at FROM price_history WHERE variant_id = ? AND kind = 'market' "
-                "ORDER BY recorded_at DESC LIMIT 2",
-                (item["variant_id"],),
-            ).fetchall()
-            item["latest_price"] = history[0]["price"] if len(history) > 0 else None
-            item["previous_price"] = history[1]["price"] if len(history) > 1 else None
-            result.append(item)
-        return result
+        # latest/previous market price used to live behind a query-per-row
+        # loop here — fine at dozens of rows, not at thousands (a 9,478-
+        # card watchlist made that 9,478 separate round trips). Correlated
+        # subqueries fold it into one query, and the existing
+        # (variant_id, kind, recorded_at) index keeps each one an index
+        # range scan rather than a table scan.
+        where = "WHERE w.owner = ?" if owner else ""
+        params = (owner,) if owner else ()
+        order_by = _WATCHLIST_SORTS.get(sort, "w.created_at DESC")
+        rows = conn.execute(
+            f"""
+            SELECT w.*,
+                (SELECT price FROM price_history
+                 WHERE variant_id = w.variant_id AND kind = 'market'
+                 ORDER BY recorded_at DESC LIMIT 1) AS latest_price,
+                (SELECT price FROM price_history
+                 WHERE variant_id = w.variant_id AND kind = 'market'
+                 ORDER BY recorded_at DESC LIMIT 1 OFFSET 1) AS previous_price
+            FROM watchlist w
+            {where}
+            ORDER BY {order_by}
+            """,
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

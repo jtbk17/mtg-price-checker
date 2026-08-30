@@ -172,7 +172,9 @@ def api_conditions():
 
 @app.route("/api/watchlist", methods=["GET"])
 def api_watchlist_list():
-    return jsonify(db.list_watchlist(owner=request.args.get("owner") or None))
+    return jsonify(
+        db.list_watchlist(owner=request.args.get("owner") or None, sort=request.args.get("sort"))
+    )
 
 
 @app.route("/api/watchlist", methods=["POST"])

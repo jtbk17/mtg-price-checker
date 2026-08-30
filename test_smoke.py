@@ -58,6 +58,50 @@ class DbTests(unittest.TestCase):
         db.remove_from_watchlist(item["id"])
         self.assertEqual(db.list_watchlist(owner="TestOwner"), [])
 
+    def test_list_watchlist_sort_options(self):
+        def make(variant_id, name, price, quantity=1, purchase_price=None):
+            item = db.add_to_watchlist(
+                {
+                    "variant_id": variant_id,
+                    "card_id": variant_id,
+                    "game": "Magic: The Gathering",
+                    "name": name,
+                    "set_name": "Test Set",
+                    "condition": "Near Mint",
+                    "printing": "Normal",
+                    "owner": "SortTest",
+                    "quantity": quantity,
+                    "purchase_price": purchase_price,
+                }
+            )
+            db.record_price(variant_id, price, kind="market")
+            return item
+
+        # Zebra: cheap but high quantity (biggest total value); no cost basis.
+        # Apple: mid price, halved by a loss (worst gain).
+        # Mango: pricier and doubled (best gain).
+        make("sort-zebra:nonfoil", "Zebra Card", price=2.0, quantity=100)
+        make("sort-apple:nonfoil", "Apple Card", price=5.0, purchase_price=10.0)
+        make("sort-mango:nonfoil", "Mango Card", price=20.0, purchase_price=10.0)
+
+        try:
+            by_name = [i["name"] for i in db.list_watchlist(owner="SortTest", sort="name")]
+            self.assertEqual(by_name, ["Apple Card", "Mango Card", "Zebra Card"])
+
+            by_price = [i["name"] for i in db.list_watchlist(owner="SortTest", sort="price")]
+            self.assertEqual(by_price, ["Mango Card", "Apple Card", "Zebra Card"])
+
+            by_value = [i["name"] for i in db.list_watchlist(owner="SortTest", sort="value")]
+            self.assertEqual(by_value, ["Zebra Card", "Mango Card", "Apple Card"])  # 100*2=200 tops both
+
+            by_gain = [i["name"] for i in db.list_watchlist(owner="SortTest", sort="gain")]
+            # Mango doubled (+100%), Apple halved (-50%); Zebra has no cost
+            # basis, so its gain is undefined (NULL) and sinks to the end.
+            self.assertEqual(by_gain, ["Mango Card", "Apple Card", "Zebra Card"])
+        finally:
+            for item in db.list_watchlist(owner="SortTest"):
+                db.remove_from_watchlist(item["id"])
+
     def test_quantity_defaults_and_updates_on_retrack(self):
         card = {
             "variant_id": "qty-test:nonfoil",

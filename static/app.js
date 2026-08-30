@@ -14,6 +14,7 @@ const importProgressBar = document.getElementById("import-progress-bar");
 const currentOwnerInput = document.getElementById("current-owner");
 const knownOwnersList = document.getElementById("known-owners");
 const ownerFilter = document.getElementById("owner-filter");
+const sortSelect = document.getElementById("sort-select");
 const portfolioValueEl = document.getElementById("portfolio-value");
 const historyDialog = document.getElementById("history-dialog");
 const historyTitle = document.getElementById("history-title");
@@ -310,8 +311,11 @@ async function trackCard(card, variant, quantity, condition, cost) {
 async function loadWatchlist() {
   showError(watchlistError, "");
   try {
-    const params = ownerFilter.value ? `?owner=${encodeURIComponent(ownerFilter.value)}` : "";
-    const items = await fetchJSON(`/api/watchlist${params}`);
+    const params = new URLSearchParams();
+    if (ownerFilter.value) params.set("owner", ownerFilter.value);
+    if (sortSelect.value) params.set("sort", sortSelect.value);
+    const query = params.toString();
+    const items = await fetchJSON(`/api/watchlist${query ? `?${query}` : ""}`);
     renderWatchlist(items);
   } catch (err) {
     showError(watchlistError, err.message);
@@ -658,6 +662,7 @@ importInput.addEventListener("change", () => {
   }
 });
 ownerFilter.addEventListener("change", loadWatchlist);
+sortSelect.addEventListener("change", loadWatchlist);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";
