@@ -181,6 +181,13 @@ function handleSearchInputKeydown(event) {
 async function performSearch(query) {
   showError(searchError, "");
   searchResults.innerHTML = "<p class=\"empty\">Searching…</p>";
+  // Guards against rendering result cards before conditionOptions has
+  // loaded (fired at startup, essentially always resolved by the time a
+  // human finishes typing a query — but without this, a fast enough
+  // search would freeze that batch of cards' condition dropdowns to just
+  // "Near Mint" forever, since they're baked into the HTML at render time
+  // and never re-rendered once loadConditions() actually resolves).
+  await conditionsLoaded;
   try {
     const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
     renderSearchResults(cards);
@@ -631,5 +638,5 @@ currentOwnerInput.addEventListener("change", () => {
 });
 
 loadOwners();
-loadConditions();
+const conditionsLoaded = loadConditions();
 loadWatchlist();

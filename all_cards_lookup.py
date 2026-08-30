@@ -8,6 +8,7 @@ multi-MB file.
 """
 
 import logging
+import os
 import sqlite3
 import time
 from datetime import date
@@ -17,7 +18,9 @@ import requests
 
 logger = logging.getLogger("tcg-price-checker")
 
-REPO = "jtbk17/mtg-price-checker"
+# Overridable so a fork/renamed repo doesn't have to edit source to point
+# lookups at its own GitHub Release asset.
+REPO = os.environ.get("MTG_PRICE_CHECKER_REPO", "jtbk17/mtg-price-checker")
 CACHE_DIR = Path(__file__).parent
 CACHE_TTL_SECONDS = 4 * 3600
 EPOCH = date(2020, 1, 1)
