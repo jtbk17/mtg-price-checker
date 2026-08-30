@@ -1,6 +1,8 @@
 import logging
 import os
 import subprocess
+import threading
+import uuid
 from pathlib import Path
 
 import requests
@@ -218,6 +220,38 @@ def api_watchlist_add():
     return jsonify(item), 201
 
 
+_import_jobs = {}
+_import_jobs_lock = threading.Lock()
+
+
+def _run_import_job(job_id, rows, owner):
+    def on_progress(phase, done, total):
+        with _import_jobs_lock:
+            job = _import_jobs.get(job_id)
+            if job is not None:
+                job.update(phase=phase, done=done, total=total)
+
+    try:
+        result = _git_sync(
+            lambda: manabox_import.import_rows(rows, owner=owner, on_progress=on_progress),
+            lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
+        )
+        with _import_jobs_lock:
+            _import_jobs[job_id].update(finished=True, result=result, error=None)
+    except requests.RequestException as exc:
+        logger.warning("ManaBox import failed due to a network error: %s", exc)
+        with _import_jobs_lock:
+            _import_jobs[job_id].update(
+                finished=True,
+                result=None,
+                error="Scryfall was unreachable during import — try again in a moment.",
+            )
+    except Exception as exc:  # a failure here must still reach the poller, not vanish in a background thread
+        logger.exception("ManaBox import job failed")
+        with _import_jobs_lock:
+            _import_jobs[job_id].update(finished=True, result=None, error=str(exc))
+
+
 @app.route("/api/watchlist/import", methods=["POST"])
 def api_watchlist_import():
     file = request.files.get("file")
@@ -231,15 +265,32 @@ def api_watchlist_import():
     except UnicodeDecodeError:
         return jsonify({"error": "Could not read file as text — is this a CSV file?"}), 400
 
-    try:
-        result = _git_sync(
-            lambda: manabox_import.import_rows(rows, owner=owner),
-            lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
-        )
-    except requests.RequestException as exc:
-        logger.warning("ManaBox import failed due to a network error: %s", exc)
-        return jsonify({"error": "Scryfall was unreachable during import — try again in a moment."}), 502
-    return jsonify(result), 201
+    job_id = str(uuid.uuid4())
+    with _import_jobs_lock:
+        # Large imports are rare on this app, but prune finished jobs on
+        # every new start anyway so a long-running server doesn't slowly
+        # accumulate stale entries.
+        for stale_id in [j for j, v in _import_jobs.items() if v.get("finished")]:
+            del _import_jobs[stale_id]
+        _import_jobs[job_id] = {
+            "phase": "Starting…",
+            "done": 0,
+            "total": len(rows),
+            "finished": False,
+            "result": None,
+            "error": None,
+        }
+    threading.Thread(target=_run_import_job, args=(job_id, rows, owner), daemon=True).start()
+    return jsonify({"jobId": job_id}), 202
+
+
+@app.route("/api/watchlist/import/<job_id>/status")
+def api_watchlist_import_status(job_id):
+    with _import_jobs_lock:
+        job = _import_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Unknown import job"}), 404
+    return jsonify(job)
 
 
 @app.route("/api/watchlist/<int:watchlist_id>/add-copies", methods=["POST"])
@@ -301,4 +352,9 @@ def api_refresh():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="127.0.0.1", port=port, debug=True, use_reloader=False)
+    # threaded=True is required, not just nice-to-have: ManaBox import now
+    # runs in a background thread while the browser polls a status
+    # endpoint, and Werkzeug's dev server is single-threaded by default —
+    # without this, the status poll would just queue behind the import
+    # instead of getting a live answer.
+    app.run(host="127.0.0.1", port=port, debug=True, use_reloader=False, threaded=True)

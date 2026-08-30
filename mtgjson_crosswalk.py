@@ -9,7 +9,7 @@ identifiers dump up front.
 import json
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -71,20 +71,32 @@ def _fetch_set(set_code):
         _save()
 
 
-def prefetch_sets(set_codes, max_workers=25):
+def prefetch_sets(set_codes, max_workers=25, on_progress=None):
     """Fetch multiple not-yet-cached sets concurrently. A search spanning
     many printings can touch dozens of sets never seen before — fetched
     sequentially (the old behavior) that's dozens of ~0.3-1.5s round trips
     added up serially (measured: 84s for one 69-printing search on a cold
-    cache); fetched concurrently it's however long the slowest one takes."""
+    cache); fetched concurrently it's however long the slowest one takes.
+    on_progress(phase, done, total), if given, is called as each set
+    finishes (order not guaranteed, since they run concurrently)."""
     cache = _load()
     with _lock:
         already_fetched = set(cache["fetched_sets"])
     codes = {c.upper() for c in set_codes if c} - already_fetched
     if not codes:
         return
+    total = len(codes)
+    completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        list(executor.map(_fetch_set, codes))
+        futures = [executor.submit(_fetch_set, code) for code in codes]
+        for future in as_completed(futures):
+            try:
+                future.result()  # _fetch_set already handles RequestException; this only catches a genuine bug
+            except Exception as exc:
+                logger.warning("Unexpected error prefetching a set: %s", exc)
+            completed += 1
+            if on_progress:
+                on_progress("Looking up Card Kingdom prices", completed, total)
 
 
 def get_uuid(scryfall_id, set_code):

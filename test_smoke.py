@@ -400,6 +400,34 @@ class ManaboxImportTests(unittest.TestCase):
         for item in items.values():
             db.remove_from_watchlist(item["id"])
 
+    def test_import_rows_reports_progress_through_all_three_phases(self):
+        fake_card = {"id": "abc-123", "name": "Fake Card", "set": "tst", "set_name": "Test Set"}
+        rows = [{"Scryfall ID": "abc-123", "Name": "Fake Card", "Set code": "tst", "Foil": "normal", "Quantity": "1"}]
+        calls = []
+
+        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"abc-123": fake_card}), \
+             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value="fake-uuid"), \
+             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets") as mock_prefetch, \
+             patch.object(manabox_import.cardkingdom, "get_prices", return_value={"market": 1.0, "buylist": 0.5}):
+            # The two lower-level pieces (_fetch_scryfall_cards, prefetch_sets)
+            # are mocked above for the rest of this test suite's purposes, but
+            # here we want to confirm import_rows actually *passes* on_progress
+            # through to them rather than dropping it, plus exercises its own
+            # (real, unmocked) third-phase reporting.
+            mock_prefetch.side_effect = lambda codes, on_progress=None: on_progress and on_progress(
+                "Looking up Card Kingdom prices", 1, 1
+            )
+            manabox_import.import_rows(rows, owner="ProgressTest", on_progress=lambda *a: calls.append(a))
+
+        phases = [c[0] for c in calls]
+        self.assertIn("Looking up Card Kingdom prices", phases)
+        self.assertIn("Saving to your watchlist", phases)
+        save_calls = [c for c in calls if c[0] == "Saving to your watchlist"]
+        self.assertEqual(save_calls[-1][1:], (1, 1))  # done == total on the last call
+
+        item = db.list_watchlist(owner="ProgressTest")[0]
+        db.remove_from_watchlist(item["id"])
+
 
 class MtgjsonCrosswalkTests(unittest.TestCase):
     def test_prefetch_sets_dedupes_and_skips_cached(self):
@@ -413,6 +441,30 @@ class MtgjsonCrosswalkTests(unittest.TestCase):
                 mc.prefetch_sets(["m10", "M10", "already", "m11", None, ""])
             # Case-insensitive dedupe, already-cached set skipped, blanks ignored.
             self.assertEqual(sorted(calls), ["M10", "M11"])
+        finally:
+            mc._cache = original_cache
+
+    def test_prefetch_sets_reports_progress_and_survives_a_bad_set(self):
+        import mtgjson_crosswalk as mc
+
+        original_cache = mc._cache
+        mc._cache = {"fetched_sets": [], "map": {}}
+        try:
+            progress_calls = []
+
+            def fake_fetch(code):
+                if code == "BAD":
+                    raise RuntimeError("boom")  # simulates an unexpected bug, not a normal RequestException
+
+            with patch.object(mc, "_fetch_set", side_effect=fake_fetch):
+                mc.prefetch_sets(
+                    ["m10", "bad"], on_progress=lambda phase, done, total: progress_calls.append((phase, done, total))
+                )
+            # Both sets get counted as "done" even though one raised —
+            # a bad set shouldn't stall progress reporting for the rest.
+            self.assertEqual(len(progress_calls), 2)
+            self.assertEqual(progress_calls[-1][1:], (2, 2))
+            self.assertTrue(all(c[0] == "Looking up Card Kingdom prices" for c in progress_calls))
         finally:
             mc._cache = original_cache
 
@@ -460,6 +512,10 @@ class AppRouteTests(unittest.TestCase):
     def test_index_page_renders(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
+
+    def test_unknown_import_job_status_404s(self):
+        resp = self.client.get("/api/watchlist/import/not-a-real-job-id/status")
+        self.assertEqual(resp.status_code, 404)
 
     def test_watchlist_add_requires_fields(self):
         resp = self.client.post("/api/watchlist", json={})

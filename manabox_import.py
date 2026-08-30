@@ -76,11 +76,13 @@ def _image_url(card):
 REQUEST_PACING_SECONDS = 0.1  # Scryfall asks for ~50-100ms between requests
 
 
-def _fetch_scryfall_cards(scryfall_ids):
+def _fetch_scryfall_cards(scryfall_ids, on_progress=None):
     """Return {scryfall_id: card_object} via Scryfall's bulk collection
-    endpoint (up to 75 ids per request)."""
+    endpoint (up to 75 ids per request). on_progress(phase, done, total),
+    if given, is called after each chunk for progress reporting."""
     result = {}
     ids = list(dict.fromkeys(i for i in scryfall_ids if i))
+    total = len(ids)
     for start in range(0, len(ids), CHUNK_SIZE):
         if start > 0:
             time.sleep(REQUEST_PACING_SECONDS)
@@ -94,6 +96,8 @@ def _fetch_scryfall_cards(scryfall_ids):
         resp.raise_for_status()
         for card in resp.json().get("data", []):
             result[card["id"]] = card
+        if on_progress:
+            on_progress("Fetching card data from Scryfall", min(start + CHUNK_SIZE, total), total)
     return result
 
 
@@ -119,8 +123,14 @@ def _parse_price(value):
         return None
 
 
-def import_rows(rows, owner=None):
-    scryfall_cards = _fetch_scryfall_cards(row.get("Scryfall ID") for row in rows)
+def import_rows(rows, owner=None, on_progress=None):
+    """on_progress(phase, done, total), if given, is called periodically
+    across the import's three phases (Scryfall lookup, Card Kingdom price
+    lookup, saving to the watchlist) — purely for UI feedback, safe to
+    omit. Each phase has its own done/total (they aren't the same count),
+    so a caller rendering a single progress bar should reset it on every
+    phase change rather than treating this as one continuous 0-100%."""
+    scryfall_cards = _fetch_scryfall_cards((row.get("Scryfall ID") for row in rows), on_progress=on_progress)
 
     # ManaBox splits the same card+finish across multiple rows when you own
     # copies in different conditions (e.g. 2 Near Mint + 1 Lightly Played)
@@ -176,11 +186,13 @@ def import_rows(rows, owner=None):
     # per grouped variant (measured at 84s for a single 69-set search
     # before this fix; a large collection could be far worse).
     mtgjson_crosswalk.prefetch_sets(
-        g["card"].get("set") or g["row"].get("Set code") for g in grouped.values()
+        (g["card"].get("set") or g["row"].get("Set code") for g in grouped.values()),
+        on_progress=on_progress,
     )
 
     imported = 0
-    for variant_id, g in grouped.items():
+    total_variants = len(grouped)
+    for i, (variant_id, g) in enumerate(grouped.items(), start=1):
         card, row = g["card"], g["row"]
         set_code = card.get("set") or row.get("Set code")
         uuid = mtgjson_crosswalk.get_uuid(g["scryfall_id"], set_code)
@@ -207,5 +219,7 @@ def import_rows(rows, owner=None):
         }
         db.add_to_watchlist(watchlist_card)
         imported += 1
+        if on_progress:
+            on_progress("Saving to your watchlist", i, total_variants)
 
     return {"imported": imported, "skipped": skipped, "errors": errors[:20]}

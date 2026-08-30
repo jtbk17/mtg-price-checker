@@ -8,6 +8,9 @@ const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
 const importInput = document.getElementById("import-input");
 const importStatus = document.getElementById("import-status");
+const importProgress = document.getElementById("import-progress");
+const importProgressLabel = document.getElementById("import-progress-label");
+const importProgressBar = document.getElementById("import-progress-bar");
 const currentOwnerInput = document.getElementById("current-owner");
 const knownOwnersList = document.getElementById("known-owners");
 const ownerFilter = document.getElementById("owner-filter");
@@ -475,27 +478,59 @@ async function importCsv(file) {
     return;
   }
 
-  importStatus.hidden = false;
-  importStatus.className = "status-info";
-  importStatus.textContent = `Importing ${file.name}… this can take a minute for large collections.`;
+  importStatus.hidden = true;
+  importProgress.hidden = false;
+  importProgressLabel.textContent = `Uploading ${file.name}…`;
+  importProgressBar.value = 0;
+  importProgressBar.max = 1;
 
   const formData = new FormData();
   formData.append("file", file);
   formData.append("owner", currentOwner());
 
   try {
-    const result = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
-    importStatus.className = result.skipped ? "error" : "status-info";
-    const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
-    const errorList =
-      result.errors && result.errors.length
-        ? `<ul class="import-errors">${result.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`
-        : "";
-    importStatus.innerHTML = `${escapeHtml(summary)}${errorList}`;
-    await Promise.all([loadWatchlist(), loadOwners()]);
+    const { jobId } = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
+    await pollImportJob(jobId);
   } catch (err) {
+    importProgress.hidden = true;
+    importStatus.hidden = false;
     importStatus.className = "error";
     importStatus.textContent = err.message;
+  }
+}
+
+async function pollImportJob(jobId) {
+  // Each phase (Scryfall lookup, Card Kingdom price lookup, saving to the
+  // watchlist) has its own done/total, not one continuous 0-100% — the
+  // bar resets between phases, with the label naming which one is active,
+  // rather than faking a single unified percentage across very different
+  // step counts.
+  for (;;) {
+    const job = await fetchJSON(`/api/watchlist/import/${jobId}/status`);
+    importProgressLabel.textContent = `${job.phase} (${job.done}/${job.total})`;
+    importProgressBar.max = job.total || 1;
+    importProgressBar.value = job.done || 0;
+
+    if (job.finished) {
+      importProgress.hidden = true;
+      importStatus.hidden = false;
+      if (job.error) {
+        importStatus.className = "error";
+        importStatus.textContent = job.error;
+      } else {
+        const result = job.result;
+        importStatus.className = result.skipped ? "error" : "status-info";
+        const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}.`;
+        const errorList =
+          result.errors && result.errors.length
+            ? `<ul class="import-errors">${result.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`
+            : "";
+        importStatus.innerHTML = `${escapeHtml(summary)}${errorList}`;
+      }
+      await Promise.all([loadWatchlist(), loadOwners()]);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700));
   }
 }
 
