@@ -171,6 +171,14 @@ def import_rows(rows, owner=None):
                 "_cost_qty": quantity if purchase_price is not None else 0,
             }
 
+    # A diverse collection can span dozens of sets never seen before —
+    # warm them all concurrently first rather than one blocking request
+    # per grouped variant (measured at 84s for a single 69-set search
+    # before this fix; a large collection could be far worse).
+    mtgjson_crosswalk.prefetch_sets(
+        g["card"].get("set") or g["row"].get("Set code") for g in grouped.values()
+    )
+
     imported = 0
     for variant_id, g in grouped.items():
         card, row = g["card"], g["row"]

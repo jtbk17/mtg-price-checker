@@ -147,6 +147,12 @@ def api_search():
         return jsonify({"error": "Query parameter 'q' is required."}), 400
     try:
         cards = scryfall.search_cards(q)
+        # Warm the crosswalk cache for every set this result touches in
+        # parallel before serializing — a broad, heavily-reprinted search
+        # can span dozens of sets never seen before, and fetching those
+        # sequentially inside _serialize_card (the old behavior) measured
+        # at 84s for one such search.
+        mtgjson_crosswalk.prefetch_sets(c.get("set") for c in cards)
         return jsonify([_serialize_card(c) for c in cards])
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc)}), 400

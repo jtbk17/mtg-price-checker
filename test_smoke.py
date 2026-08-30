@@ -376,6 +376,7 @@ class ManaboxImportTests(unittest.TestCase):
 
         with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"abc-123": fake_card}), \
              patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value="fake-uuid"), \
+             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
              patch.object(
                  manabox_import.cardkingdom,
                  "get_prices",
@@ -398,6 +399,22 @@ class ManaboxImportTests(unittest.TestCase):
 
         for item in items.values():
             db.remove_from_watchlist(item["id"])
+
+
+class MtgjsonCrosswalkTests(unittest.TestCase):
+    def test_prefetch_sets_dedupes_and_skips_cached(self):
+        import mtgjson_crosswalk as mc
+
+        original_cache = mc._cache
+        mc._cache = {"fetched_sets": ["ALREADY"], "map": {}}
+        try:
+            calls = []
+            with patch.object(mc, "_fetch_set", side_effect=lambda code: calls.append(code)):
+                mc.prefetch_sets(["m10", "M10", "already", "m11", None, ""])
+            # Case-insensitive dedupe, already-cached set skipped, blanks ignored.
+            self.assertEqual(sorted(calls), ["M10", "M11"])
+        finally:
+            mc._cache = original_cache
 
 
 class ImportsTests(unittest.TestCase):
