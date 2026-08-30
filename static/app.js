@@ -216,6 +216,7 @@ function renderSearchResults(cards) {
           ${conditionOptions.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}
         </select>
         <input type="number" class="qty-input" min="1" value="1" title="Quantity owned">
+        <input type="number" class="cost-input" min="0" step="0.01" placeholder="Cost (optional)" title="What you paid per card">
         <button type="button" data-action="track">Track</button>
         ${card.mtgjsonId ? `<button type="button" class="secondary" data-action="history">History</button>` : ""}
       </div>
@@ -244,8 +245,9 @@ function renderSearchResults(cards) {
 
     const qtyInput = el.querySelector(".qty-input");
     const conditionSelect = el.querySelector(".condition-select");
+    const costInput = el.querySelector(".cost-input");
     el.querySelector('[data-action="track"]').addEventListener("click", () =>
-      trackCard(card, selected, Number(qtyInput.value) || 1, conditionSelect.value)
+      trackCard(card, selected, Number(qtyInput.value) || 1, conditionSelect.value, costInput.value)
     );
     const historyBtn = el.querySelector('[data-action="history"]');
     if (historyBtn) {
@@ -255,7 +257,7 @@ function renderSearchResults(cards) {
   });
 }
 
-async function trackCard(card, variant, quantity, condition) {
+async function trackCard(card, variant, quantity, condition, cost) {
   if (!variant.variantId) {
     showError(searchError, "This card is missing a variant id and can't be tracked.");
     return;
@@ -276,6 +278,7 @@ async function trackCard(card, variant, quantity, condition) {
         mtgjsonId: card.mtgjsonId,
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
+        purchasePrice: cost === "" || cost == null ? null : Number(cost),
         owner: currentOwner(),
         quantity: quantity || 1,
       }),
@@ -307,6 +310,7 @@ function renderWatchlist(items) {
 
   items.forEach((item) => {
     const delta = deltaInfo(item.latest_price, item.previous_price);
+    const gainLoss = gainLossInfo(item);
     const qty = item.quantity || 1;
     const el = document.createElement("div");
     el.className = "card";
@@ -317,6 +321,7 @@ function renderWatchlist(items) {
       <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
       <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
+      ${gainLoss ? `<div class="delta ${gainLoss.direction}">${gainLoss.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
       <div class="actions">
         <button type="button" data-action="history">History</button>
@@ -339,7 +344,29 @@ function renderPortfolioValue(items) {
     0
   );
   const totalCards = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-  portfolioValueEl.textContent = `Portfolio value: ${formatPrice(total)} (${totalCards} card${totalCards === 1 ? "" : "s"})`;
+
+  // Only items with *both* a known cost and a current price go into this —
+  // mixing in the full current value of uncosted items would inflate the
+  // apparent gain with value that was never actually compared to a cost.
+  let costBasis = 0;
+  let valueOfCostedItems = 0;
+  let hasCostBasis = false;
+  items.forEach((item) => {
+    if (item.purchase_price != null && item.latest_price != null) {
+      hasCostBasis = true;
+      const qty = item.quantity || 1;
+      costBasis += item.purchase_price * qty;
+      valueOfCostedItems += item.latest_price * qty;
+    }
+  });
+  let gainText = "";
+  if (hasCostBasis) {
+    const gain = valueOfCostedItems - costBasis;
+    const sign = gain > 0 ? "+" : "";
+    gainText = ` — cost ${formatPrice(costBasis)}, ${sign}${gain.toFixed(2)}`;
+  }
+
+  portfolioValueEl.textContent = `Portfolio value: ${formatPrice(total)} (${totalCards} card${totalCards === 1 ? "" : "s"})${gainText}`;
 }
 
 function deltaInfo(latest, previous) {
@@ -352,6 +379,20 @@ function deltaInfo(latest, previous) {
   const direction = diff > 0 ? "up" : "down";
   const sign = diff > 0 ? "+" : "";
   return { direction, text: `${sign}${diff.toFixed(2)} (${sign}${pct.toFixed(1)}%)` };
+}
+
+function gainLossInfo(item) {
+  if (item.purchase_price == null || item.latest_price == null) return null;
+  const qty = item.quantity || 1;
+  const perCardGain = item.latest_price - item.purchase_price;
+  const totalGain = perCardGain * qty;
+  const pct = (perCardGain / item.purchase_price) * 100;
+  const direction = totalGain > 0 ? "up" : totalGain < 0 ? "down" : "";
+  const sign = totalGain > 0 ? "+" : "";
+  return {
+    direction,
+    text: `Cost ${formatPrice(item.purchase_price)}/ea · ${sign}${totalGain.toFixed(2)} (${sign}${pct.toFixed(1)}%)`,
+  };
 }
 
 async function removeCard(id) {

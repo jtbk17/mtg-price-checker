@@ -81,6 +81,36 @@ class DbTests(unittest.TestCase):
 
         db.remove_from_watchlist(item["id"])
 
+    def test_retrack_does_not_wipe_purchase_price(self):
+        card = {
+            "variant_id": "cost-test:nonfoil",
+            "card_id": "cost-test",
+            "game": "Magic: The Gathering",
+            "name": "Cost Card",
+            "set_name": "Test Set",
+            "condition": "Near Mint",
+            "printing": "Normal",
+            "price": 1.0,
+            "cardkingdom_price": 1.0,
+            "cardkingdom_buylist_price": 0.4,
+            "owner": None,
+            "purchase_price": 2.50,
+        }
+        item = db.add_to_watchlist(card)
+        self.assertEqual(item["purchase_price"], 2.50)
+
+        # Re-tracking without a purchase price (e.g. just bumping quantity
+        # from search) must not silently erase the existing cost basis.
+        item = db.add_to_watchlist({**card, "quantity": 3, "purchase_price": None})
+        self.assertEqual(item["quantity"], 3)
+        self.assertEqual(item["purchase_price"], 2.50)
+
+        # Providing a new purchase price does update it.
+        item = db.add_to_watchlist({**card, "purchase_price": 4.00})
+        self.assertEqual(item["purchase_price"], 4.00)
+
+        db.remove_from_watchlist(item["id"])
+
     def test_market_and_buylist_history_are_independent(self):
         # record_price()'s recorded_at defaults to CURRENT_TIMESTAMP, which
         # only has second-level granularity, so inserting explicit
@@ -271,6 +301,18 @@ class ManaboxImportTests(unittest.TestCase):
                 "Foil": "foil",
                 "Condition": "near_mint",
                 "Quantity": "2",
+                "Purchase price": "2.00",
+            },
+            # A second near_mint row for the *same* variant — must merge
+            # with the row above, weight-averaging the cost: (2*2 + 1*5)/3 = 3.
+            {
+                "Scryfall ID": "abc-123",
+                "Name": "Fake Card",
+                "Set code": "tst",
+                "Foil": "foil",
+                "Condition": "near_mint",
+                "Quantity": "1",
+                "Purchase price": "5.00",
             },
             {
                 "Scryfall ID": "abc-123",
@@ -279,6 +321,7 @@ class ManaboxImportTests(unittest.TestCase):
                 "Foil": "foil",
                 "Condition": "light_played",
                 "Quantity": "1",
+                "Purchase price": "1.50",
             },
             # Zero quantity — must be skipped entirely, not imported as 1.
             {
@@ -315,10 +358,12 @@ class ManaboxImportTests(unittest.TestCase):
 
         items = {i["condition"]: i for i in db.list_watchlist(owner="TestImporter")}
         self.assertEqual(set(items), {"Near Mint", "Lightly Played"})
-        self.assertEqual(items["Near Mint"]["quantity"], 2)  # the 0-qty row didn't add a phantom 3rd
+        self.assertEqual(items["Near Mint"]["quantity"], 3)  # 2 + 1 merged; the 0-qty row added nothing
         self.assertEqual(items["Lightly Played"]["quantity"], 1)
         self.assertTrue(items["Near Mint"]["variant_id"].endswith(":near-mint"))
         self.assertTrue(items["Lightly Played"]["variant_id"].endswith(":lightly-played"))
+        self.assertAlmostEqual(items["Near Mint"]["purchase_price"], 3.00)  # (2*2 + 1*5) / 3
+        self.assertAlmostEqual(items["Lightly Played"]["purchase_price"], 1.50)
 
         for item in items.values():
             db.remove_from_watchlist(item["id"])

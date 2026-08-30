@@ -14,6 +14,7 @@ can't be found on Scryfall for some reason.
 import csv
 import io
 import logging
+import time
 
 import requests
 
@@ -72,12 +73,17 @@ def _image_url(card):
     return (image_uris or {}).get("normal")
 
 
+REQUEST_PACING_SECONDS = 0.1  # Scryfall asks for ~50-100ms between requests
+
+
 def _fetch_scryfall_cards(scryfall_ids):
     """Return {scryfall_id: card_object} via Scryfall's bulk collection
     endpoint (up to 75 ids per request)."""
     result = {}
     ids = list(dict.fromkeys(i for i in scryfall_ids if i))
     for start in range(0, len(ids), CHUNK_SIZE):
+        if start > 0:
+            time.sleep(REQUEST_PACING_SECONDS)
         chunk = ids[start : start + CHUNK_SIZE]
         resp = requests.post(
             COLLECTION_URL,
@@ -104,6 +110,13 @@ def _parse_quantity(value):
         return int(value)
     except (TypeError, ValueError):
         return 1
+
+
+def _parse_price(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def import_rows(rows, owner=None):
@@ -133,9 +146,18 @@ def import_rows(rows, owner=None):
         finish, printing = _finish_and_label(row.get("Foil"))
         condition = _normalize_condition(row.get("Condition"))
         variant_id = f"{scryfall_id}:{finish}:{db.condition_slug(condition)}"
+        purchase_price = _parse_price(row.get("Purchase price"))
 
         if variant_id in grouped:
-            grouped[variant_id]["quantity"] += quantity
+            g = grouped[variant_id]
+            g["quantity"] += quantity
+            # Weighted average unit cost across merged rows (e.g. 2 copies
+            # bought at $5 + 1 at $8 should read as ~$6, not just the last
+            # row seen). Rows missing a price are excluded from the
+            # average rather than treated as $0, which would understate it.
+            if purchase_price is not None:
+                g["_cost_total"] += purchase_price * quantity
+                g["_cost_qty"] += quantity
         else:
             grouped[variant_id] = {
                 "scryfall_id": scryfall_id,
@@ -145,6 +167,8 @@ def import_rows(rows, owner=None):
                 "printing": printing,
                 "condition": condition,
                 "quantity": quantity,
+                "_cost_total": purchase_price * quantity if purchase_price is not None else 0,
+                "_cost_qty": quantity if purchase_price is not None else 0,
             }
 
     imported = 0
@@ -153,6 +177,7 @@ def import_rows(rows, owner=None):
         set_code = card.get("set") or row.get("Set code")
         uuid = mtgjson_crosswalk.get_uuid(g["scryfall_id"], set_code)
         ck_prices = cardkingdom.get_prices(uuid, foil=(g["finish"] != "nonfoil")) if uuid else None
+        avg_purchase_price = g["_cost_total"] / g["_cost_qty"] if g["_cost_qty"] else None
 
         watchlist_card = {
             "variant_id": variant_id,
@@ -170,6 +195,7 @@ def import_rows(rows, owner=None):
             "cardkingdom_buylist_price": ck_prices["buylist"] if ck_prices else None,
             "owner": owner,
             "quantity": g["quantity"],
+            "purchase_price": avg_purchase_price,
         }
         db.add_to_watchlist(watchlist_card)
         imported += 1

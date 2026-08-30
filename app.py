@@ -3,6 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import requests
 from flask import Flask, jsonify, render_template, request
 
 import all_cards_lookup
@@ -182,6 +183,10 @@ def api_watchlist_add():
     condition = payload.get("condition") or "Near Mint"
     if condition not in db.CONDITIONS:
         condition = "Near Mint"
+    try:
+        purchase_price = float(payload["purchasePrice"]) if payload.get("purchasePrice") not in (None, "") else None
+    except (TypeError, ValueError):
+        purchase_price = None
     card = {
         "variant_id": f"{payload['variantId']}:{db.condition_slug(condition)}",
         "card_id": payload.get("cardId"),
@@ -196,6 +201,7 @@ def api_watchlist_add():
         "mtgjson_id": payload.get("mtgjsonId"),
         "cardkingdom_price": payload.get("cardKingdomPrice"),
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
+        "purchase_price": purchase_price,
         "owner": owner,
         "quantity": quantity,
     }
@@ -219,10 +225,14 @@ def api_watchlist_import():
     except UnicodeDecodeError:
         return jsonify({"error": "Could not read file as text — is this a CSV file?"}), 400
 
-    result = _git_sync(
-        lambda: manabox_import.import_rows(rows, owner=owner),
-        lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
-    )
+    try:
+        result = _git_sync(
+            lambda: manabox_import.import_rows(rows, owner=owner),
+            lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
+        )
+    except requests.RequestException as exc:
+        logger.warning("ManaBox import failed due to a network error: %s", exc)
+        return jsonify({"error": "Scryfall was unreachable during import — try again in a moment."}), 502
     return jsonify(result), 201
 
 

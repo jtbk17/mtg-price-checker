@@ -15,7 +15,6 @@ HEADERS = {
     "User-Agent": "tcg-price-checker/1.0 (local personal project)",
     "Accept": "application/json",
 }
-RESULT_LIMIT = 20
 
 
 class ScryfallError(Exception):
@@ -33,7 +32,12 @@ def search_cards(query):
         return []  # Scryfall uses 404 to mean "no cards matched"
     if not resp.ok:
         raise ScryfallError(f"Scryfall search failed ({resp.status_code}): {resp.text[:300]}")
-    return resp.json().get("data", [])[:RESULT_LIMIT]
+    # No slicing here: even the most-reprinted staples (e.g. Lightning
+    # Bolt's ~70 printings) fit in a single Scryfall page (up to 175
+    # results), so a name-specific search never needs pagination. Slicing
+    # to an arbitrary cap previously hid older printings behind the
+    # release-date-desc ordering.
+    return resp.json().get("data", [])
 
 
 def autocomplete(query):
