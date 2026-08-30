@@ -622,6 +622,52 @@ class AppRouteTests(unittest.TestCase):
         resp = self.client.post("/api/watchlist", json={})
         self.assertEqual(resp.status_code, 400)
 
+    def test_history_merges_all_cards_backfill_without_writing_to_db(self):
+        import app as flask_app_module
+
+        item = db.add_to_watchlist(
+            {
+                "variant_id": "history-merge-test:nonfoil",
+                "card_id": "history-merge-test",
+                "game": "Magic: The Gathering",
+                "name": "History Merge Card",
+                "set_name": "Test Set",
+                "condition": "Near Mint",
+                "printing": "Normal",
+                "owner": "HistoryMergeTest",
+                "mtgjson_id": "fake-mtgjson-uuid",
+                "price": 5.00,  # seeds one local point "today"
+            }
+        )
+        local_date = db.get_history("history-merge-test:nonfoil", kind="market")[0]["recorded_at"][:10]
+
+        backfill_history = [
+            {"date": "2026-01-01", "price": 1.00},
+            {"date": "2026-01-02", "price": 1.50},
+            {"date": local_date, "price": 999.00},  # same day as the local point — local must win
+        ]
+
+        try:
+            with patch.object(
+                flask_app_module.all_cards_lookup,
+                "get_by_uuid",
+                return_value={"name": "History Merge Card", "set": "tst", "history": backfill_history},
+            ):
+                resp = self.client.get(f"/api/watchlist/{item['id']}/history")
+            self.assertEqual(resp.status_code, 200)
+            history = resp.get_json()
+
+            self.assertEqual([h["price"] for h in history], [1.00, 1.50, 5.00])  # sorted, local wins the overlap
+            self.assertEqual(len(history), 3)
+
+            # The merge must be response-only — nothing gets written back
+            # into tcg_prices.db (that's the whole point of doing this at
+            # read time instead of backfilling the file).
+            raw_local_history = db.get_history("history-merge-test:nonfoil", kind="market")
+            self.assertEqual(len(raw_local_history), 1)
+        finally:
+            db.remove_from_watchlist(item["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

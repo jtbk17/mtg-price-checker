@@ -340,7 +340,27 @@ def api_watchlist_history(watchlist_id):
     if not item:
         return jsonify({"error": "Not found"}), 404
     kind = "buylist" if request.args.get("kind") == "buylist" else "market"
-    return jsonify(db.get_history(item["variant_id"], kind=kind))
+    history = db.get_history(item["variant_id"], kind=kind)
+
+    # Merged in at read time rather than backfilled into tcg_prices.db:
+    # that file is committed straight to git on every track/untrack/import,
+    # and duplicating the all-cards database's ~92-day history into it for
+    # every tracked card was measured at 15MB -> 144MB for a 9,478-card
+    # collection — comfortably over GitHub's 100MB per-file push limit,
+    # which would have broken syncing entirely. No such backfill exists
+    # for buylist (the all-cards database only tracks retail/market).
+    if kind == "market" and item.get("mtgjson_id"):
+        backfill = all_cards_lookup.get_by_uuid(item["mtgjson_id"])
+        if backfill:
+            seen_dates = {h["recorded_at"][:10] for h in history}
+            older_points = [
+                {"price": p["price"], "recorded_at": p["date"]}
+                for p in backfill["history"]
+                if p["date"] not in seen_dates
+            ]
+            history = sorted(older_points + history, key=lambda h: h["recorded_at"])
+
+    return jsonify(history)
 
 
 @app.route("/api/refresh", methods=["POST"])
