@@ -6,14 +6,17 @@ import uuid
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
+
+load_dotenv()  # picks up ANTHROPIC_API_KEY etc. from a local .env for `py app.py`; a no-op if it's absent (e.g. in CI, which sets real env vars instead)
 
 import all_cards_lookup
 import cardkingdom
 import claude_client
+import collection_chat
 import db
 import manabox_import
-import collection_chat
 import mtgjson_crosswalk
 import nl_search
 import scryfall
