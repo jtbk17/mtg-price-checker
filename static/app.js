@@ -30,12 +30,26 @@ const addCopiesCost = document.getElementById("add-copies-cost");
 const addCopiesError = document.getElementById("add-copies-error");
 const closeAddCopiesBtn = document.getElementById("close-add-copies");
 let addCopiesTargetId = null;
+const chatToggleBtn = document.getElementById("chat-toggle");
+const chatOverlay = document.getElementById("chat-overlay");
+const chatCloseBtn = document.getElementById("chat-close");
 const chatLog = document.getElementById("chat-log");
 const chatError = document.getElementById("chat-error");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const chatResetBtn = document.getElementById("chat-reset");
 let chatHistory = null;
+
+function openChat() {
+  chatOverlay.hidden = false;
+  chatToggleBtn.hidden = true;
+  chatInput.focus();
+}
+
+function closeChat() {
+  chatOverlay.hidden = true;
+  chatToggleBtn.hidden = false;
+}
 
 function showError(el, message) {
   el.textContent = message;
@@ -754,6 +768,8 @@ ownerFilter.addEventListener("change", loadWatchlist);
 sortSelect.addEventListener("change", loadWatchlist);
 chatForm.addEventListener("submit", submitChat);
 chatResetBtn.addEventListener("click", resetChat);
+chatToggleBtn.addEventListener("click", openChat);
+chatCloseBtn.addEventListener("click", closeChat);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";

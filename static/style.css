@@ -238,13 +238,59 @@ button.secondary {
 .card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
 .card .actions button { flex: 1; font-size: 0.85em; padding: 6px 8px; }
 
+.chat-toggle {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  border-radius: 999px;
+  padding: 14px 20px;
+  font-size: 0.95em;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.chat-overlay {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 40;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  height: min(70vh, 560px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-overlay-header h3 { margin: 0; }
+
+.chat-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2em;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
 .chat-log {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  margin-bottom: 12px;
+  margin: 10px 0 12px;
 }
 
 .chat-msg {
