@@ -71,6 +71,18 @@
       <div id="watchlist" class="card-grid"></div>
     </section>
 
+    <section class="panel" id="chat-panel">
+      <h2>Ask about your collection</h2>
+      <p class="section-sub">e.g. "what's my most valuable card" or "how has my Sol Ring done" — uses Claude</p>
+      <div id="chat-log" class="chat-log"></div>
+      <div id="chat-error" class="error" hidden></div>
+      <form id="chat-form" class="chat-form">
+        <input type="text" id="chat-input" placeholder="Ask a question…" autocomplete="off" required>
+        <button type="submit">Ask</button>
+        <button type="button" id="chat-reset" class="secondary">Reset</button>
+      </form>
+    </section>
+
   </main>
 
   <dialog id="history-dialog">

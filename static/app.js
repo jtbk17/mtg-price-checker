@@ -30,6 +30,12 @@ const addCopiesCost = document.getElementById("add-copies-cost");
 const addCopiesError = document.getElementById("add-copies-error");
 const closeAddCopiesBtn = document.getElementById("close-add-copies");
 let addCopiesTargetId = null;
+const chatLog = document.getElementById("chat-log");
+const chatError = document.getElementById("chat-error");
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const chatResetBtn = document.getElementById("chat-reset");
+let chatHistory = null;
 
 function showError(el, message) {
   el.textContent = message;
@@ -686,6 +692,50 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function appendChatMessage(role, text) {
+  const el = document.createElement("div");
+  el.className = `chat-msg ${role}`;
+  el.textContent = text;
+  chatLog.appendChild(el);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return el;
+}
+
+async function submitChat(event) {
+  event.preventDefault();
+  const question = chatInput.value.trim();
+  if (!question) return;
+
+  showError(chatError, "");
+  appendChatMessage("user", question);
+  chatInput.value = "";
+  chatInput.disabled = true;
+  const pending = appendChatMessage("assistant pending", "Thinking…");
+
+  try {
+    const { answer, history } = await fetchJSON("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history: chatHistory }),
+    });
+    pending.remove();
+    appendChatMessage("assistant", answer);
+    chatHistory = history;
+  } catch (err) {
+    pending.remove();
+    showError(chatError, err.message);
+  } finally {
+    chatInput.disabled = false;
+    chatInput.focus();
+  }
+}
+
+function resetChat() {
+  chatHistory = null;
+  chatLog.innerHTML = "";
+  showError(chatError, "");
+}
+
 searchForm.addEventListener("submit", runSearch);
 searchInput.addEventListener("input", scheduleAutocomplete);
 searchInput.addEventListener("keydown", handleSearchInputKeydown);
@@ -702,6 +752,8 @@ importInput.addEventListener("change", () => {
 });
 ownerFilter.addEventListener("change", loadWatchlist);
 sortSelect.addEventListener("change", loadWatchlist);
+chatForm.addEventListener("submit", submitChat);
+chatResetBtn.addEventListener("click", resetChat);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";

@@ -13,6 +13,7 @@ import cardkingdom
 import claude_client
 import db
 import manabox_import
+import collection_chat
 import mtgjson_crosswalk
 import nl_search
 import scryfall
@@ -199,6 +200,21 @@ def api_search_nl():
         return jsonify({"translatedQuery": translated, "cards": _prefetch_and_serialize(cards)})
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc), "translatedQuery": translated}), 400
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "A question is required."}), 400
+    if not claude_client.configured():
+        return jsonify({"error": "The collection chat needs ANTHROPIC_API_KEY set to use Claude."}), 503
+
+    answer, history = collection_chat.ask(question, data.get("history"))
+    if answer is None:
+        return jsonify({"error": "Claude couldn't answer that — try rephrasing."}), 502
+    return jsonify({"answer": answer, "history": history})
 
 
 @app.route("/api/owners")

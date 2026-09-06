@@ -238,6 +238,45 @@ button.secondary {
 .card .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
 .card .actions button { flex: 1; font-size: 0.85em; padding: 6px 8px; }
 
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.chat-msg {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: #0f1115;
+  border: 1px solid var(--border);
+}
+
+.chat-msg.pending { color: var(--muted); font-style: italic; }
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-form input[type="text"] { flex: 1; min-width: 200px; }
+
 .error {
   background: #3a1d1d;
   border: 1px solid var(--down);

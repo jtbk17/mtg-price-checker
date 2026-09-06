@@ -656,6 +656,81 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertEqual(len(price_calls), 2)
 
 
+class CollectionChatTests(unittest.TestCase):
+    def setUp(self):
+        db.init_db()
+        item = db.add_to_watchlist(
+            {
+                "variant_id": "chat-test-id:nonfoil:near-mint",
+                "card_id": "chat-test-id",
+                "game": "Magic: The Gathering",
+                "name": "Chat Test Card",
+                "set_name": "Chat Test Set",
+                "condition": "Near Mint",
+                "printing": "Normal",
+                "tcgplayer_id": None,
+                "image_url": None,
+                "price": 10.0,
+                "mtgjson_id": "chat-test-uuid",
+                "cardkingdom_price": 10.0,
+                "cardkingdom_buylist_price": 5.0,
+                "owner": "ChatOwner",
+                "purchase_price": 8.0,
+            }
+        )
+        self.addCleanup(db.remove_from_watchlist, item["id"])
+
+    def test_ask_returns_none_when_not_configured(self):
+        import collection_chat
+
+        with patch.object(collection_chat.claude_client, "configured", return_value=False):
+            answer, history = collection_chat.ask("what's my collection worth?")
+            self.assertIsNone(answer)
+            self.assertIsNone(history)
+
+    def test_query_collection_tool_filters_and_summarizes(self):
+        import collection_chat
+
+        result = collection_chat._tool_query_collection({"owner": "ChatOwner", "name_contains": "chat test"})
+        self.assertEqual(result["total_matches"], 1)
+        card = result["cards"][0]
+        self.assertEqual(card["name"], "Chat Test Card")
+        self.assertEqual(card["total_gain_loss"], 2.0)  # (10.0 - 8.0) * qty 1
+
+    def test_portfolio_summary_tool(self):
+        import collection_chat
+
+        summary = collection_chat._tool_get_portfolio_summary({"owner": "ChatOwner"})
+        self.assertEqual(summary["distinct_cards"], 1)
+        self.assertEqual(summary["total_market_value"], 10.0)
+        self.assertEqual(summary["total_gain_loss"], 2.0)
+
+    def test_ask_runs_tool_loop_and_returns_serializable_history(self):
+        import json
+
+        import collection_chat
+
+        tool_block = type(
+            "Block", (), {"type": "tool_use", "id": "tool1", "name": "get_portfolio_summary", "input": {"owner": "ChatOwner"}}
+        )()
+        tool_response = type("Response", (), {"content": [tool_block], "stop_reason": "tool_use"})()
+
+        text_block = type("Block", (), {"type": "text", "text": "Your collection is worth $10."})()
+        final_response = type("Response", (), {"content": [text_block], "stop_reason": "end_turn"})()
+
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type(
+            "Messages", (), {"create": lambda self, **kw: (tool_response if len(kw["messages"]) == 1 else final_response)}
+        )()
+
+        with patch.object(collection_chat.claude_client, "configured", return_value=True), \
+             patch.object(collection_chat.claude_client, "get_client", return_value=fake_client):
+            answer, history = collection_chat.ask("what's my collection worth?")
+
+        self.assertEqual(answer, "Your collection is worth $10.")
+        json.dumps(history)  # must round-trip through JSON for the /api/chat response
+
+
 class NlSearchTests(unittest.TestCase):
     def test_translate_returns_none_when_not_configured(self):
         import nl_search
@@ -694,6 +769,7 @@ class ImportsTests(unittest.TestCase):
         import all_cards_lookup  # noqa: F401
         import cardkingdom  # noqa: F401
         import claude_client  # noqa: F401
+        import collection_chat  # noqa: F401
         import market_alerts  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401
         import nl_search  # noqa: F401
