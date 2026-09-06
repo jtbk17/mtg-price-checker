@@ -10,9 +10,11 @@ from flask import Flask, jsonify, render_template, request
 
 import all_cards_lookup
 import cardkingdom
+import claude_client
 import db
 import manabox_import
 import mtgjson_crosswalk
+import nl_search
 import scryfall
 import tcgmarketplace
 from refresh_job import export_alerts, export_snapshot, notify_alerts, refresh_watchlist_prices
@@ -150,6 +152,25 @@ def api_autocomplete():
     return jsonify(scryfall.autocomplete(q))
 
 
+def _prefetch_and_serialize(cards):
+    # Warm the crosswalk cache for every set this result touches in
+    # parallel before serializing — a broad, heavily-reprinted search
+    # can span dozens of sets never seen before, and fetching those
+    # sequentially inside _serialize_card (the old behavior) measured
+    # at 84s for one such search.
+    mtgjson_crosswalk.prefetch_sets(c.get("set") for c in cards)
+    # Same reasoning for TheTCGMarketplace, in two passes: resolve
+    # every card's id concurrently (warms find_id's cache), then fetch
+    # every resolved id's price concurrently too (warms get_price's
+    # cache) — both are needed, since id-resolution alone still leaves
+    # _serialize_card doing one sequential product/single call per card.
+    tcgmarketplace.prefetch_ids((c.get("name"), c.get("set_name")) for c in cards)
+    tcgmarketplace.prefetch_prices(
+        tcgmarketplace.find_id(c.get("name"), c.get("set_name")) for c in cards
+    )
+    return [_serialize_card(c) for c in cards]
+
+
 @app.route("/api/search")
 def api_search():
     q = request.args.get("q")
@@ -157,24 +178,27 @@ def api_search():
         return jsonify({"error": "Query parameter 'q' is required."}), 400
     try:
         cards = scryfall.search_cards(q)
-        # Warm the crosswalk cache for every set this result touches in
-        # parallel before serializing — a broad, heavily-reprinted search
-        # can span dozens of sets never seen before, and fetching those
-        # sequentially inside _serialize_card (the old behavior) measured
-        # at 84s for one such search.
-        mtgjson_crosswalk.prefetch_sets(c.get("set") for c in cards)
-        # Same reasoning for TheTCGMarketplace, in two passes: resolve
-        # every card's id concurrently (warms find_id's cache), then fetch
-        # every resolved id's price concurrently too (warms get_price's
-        # cache) — both are needed, since id-resolution alone still leaves
-        # _serialize_card doing one sequential product/single call per card.
-        tcgmarketplace.prefetch_ids((c.get("name"), c.get("set_name")) for c in cards)
-        tcgmarketplace.prefetch_prices(
-            tcgmarketplace.find_id(c.get("name"), c.get("set_name")) for c in cards
-        )
-        return jsonify([_serialize_card(c) for c in cards])
+        return jsonify(_prefetch_and_serialize(cards))
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/search/nl")
+def api_search_nl():
+    q = request.args.get("q")
+    if not q:
+        return jsonify({"error": "Query parameter 'q' is required."}), 400
+    if not claude_client.configured():
+        return jsonify({"error": "Natural language search needs ANTHROPIC_API_KEY set to use Claude."}), 503
+
+    translated = nl_search.translate(q)
+    if not translated:
+        return jsonify({"error": "Claude couldn't translate that search — try rephrasing, or use the regular search."}), 502
+    try:
+        cards = scryfall.search_cards(translated)
+        return jsonify({"translatedQuery": translated, "cards": _prefetch_and_serialize(cards)})
+    except scryfall.ScryfallError as exc:
+        return jsonify({"error": str(exc), "translatedQuery": translated}), 400
 
 
 @app.route("/api/owners")

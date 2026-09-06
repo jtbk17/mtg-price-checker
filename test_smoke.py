@@ -656,6 +656,36 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertEqual(len(price_calls), 2)
 
 
+class NlSearchTests(unittest.TestCase):
+    def test_translate_returns_none_when_not_configured(self):
+        import nl_search
+
+        with patch.object(nl_search.claude_client, "configured", return_value=False):
+            self.assertIsNone(nl_search.translate("cheap red removal"))
+
+    def test_translate_returns_claude_text(self):
+        import nl_search
+
+        fake_block = type("Block", (), {"type": "text", "text": "c:r usd<5"})()
+        fake_response = type("Response", (), {"content": [fake_block]})()
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type("Messages", (), {"create": lambda self, **kw: fake_response})()
+
+        with patch.object(nl_search.claude_client, "configured", return_value=True), \
+             patch.object(nl_search.claude_client, "get_client", return_value=fake_client):
+            self.assertEqual(nl_search.translate("cheap red removal"), "c:r usd<5")
+
+    def test_translate_fails_soft_on_api_error(self):
+        import nl_search
+
+        def raise_error():
+            raise RuntimeError("boom")
+
+        with patch.object(nl_search.claude_client, "configured", return_value=True), \
+             patch.object(nl_search.claude_client, "get_client", side_effect=raise_error):
+            self.assertIsNone(nl_search.translate("cheap red removal"))
+
+
 class ImportsTests(unittest.TestCase):
     """Every module should at least import cleanly — catches syntax errors
     and top-level exceptions before they reach the nightly job."""
@@ -663,8 +693,10 @@ class ImportsTests(unittest.TestCase):
     def test_all_modules_import(self):
         import all_cards_lookup  # noqa: F401
         import cardkingdom  # noqa: F401
+        import claude_client  # noqa: F401
         import market_alerts  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401
+        import nl_search  # noqa: F401
         import record_feedback  # noqa: F401
         import refresh_job  # noqa: F401
         import scryfall  # noqa: F401

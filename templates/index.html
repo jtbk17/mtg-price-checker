@@ -27,7 +27,12 @@
         </div>
         <button type="submit">Search</button>
       </form>
+      <label class="nl-toggle">
+        <input type="checkbox" id="nl-search-toggle">
+        Describe it in plain English instead (e.g. "cheap red removal under $5") — uses Claude
+      </label>
       <div id="search-error" class="error" hidden></div>
+      <p id="search-translated" class="section-sub" hidden></p>
       <div id="search-results" class="card-grid"></div>
     </section>
 

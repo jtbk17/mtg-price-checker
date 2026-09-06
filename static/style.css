@@ -127,6 +127,16 @@ main {
   flex-wrap: wrap;
 }
 
+.nl-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85em;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
 select, input[type="text"] {
   background: #0f1115;
   border: 1px solid var(--border);

@@ -3,6 +3,8 @@ const searchInput = document.getElementById("search-input");
 const searchSuggestions = document.getElementById("search-suggestions");
 const searchResults = document.getElementById("search-results");
 const searchError = document.getElementById("search-error");
+const nlSearchToggle = document.getElementById("nl-search-toggle");
+const searchTranslated = document.getElementById("search-translated");
 const watchlistEl = document.getElementById("watchlist");
 const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
@@ -174,7 +176,7 @@ function selectSuggestion(name) {
   // exact name — search for exactly that card (Scryfall's !"..." syntax)
   // instead of the plain-text search, which does a broad fuzzy/oracle-text
   // match and would pull in dozens of loosely related cards.
-  performSearch(`!"${name.replace(/"/g, '\\"')}"`);
+  performSearch(`!"${name.replace(/"/g, '\\"')}"`, { nl: false });
 }
 
 function moveActiveSuggestion(delta) {
@@ -202,8 +204,10 @@ function handleSearchInputKeydown(event) {
   }
 }
 
-async function performSearch(query) {
+async function performSearch(query, { nl } = {}) {
+  const useNl = nl ?? nlSearchToggle.checked;
   showError(searchError, "");
+  showError(searchTranslated, "");
   searchResults.innerHTML = "<p class=\"empty\">Searching…</p>";
   // Guards against rendering result cards before conditionOptions has
   // loaded (fired at startup, essentially always resolved by the time a
@@ -213,8 +217,19 @@ async function performSearch(query) {
   // and never re-rendered once loadConditions() actually resolves).
   await conditionsLoaded;
   try {
-    const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
-    renderSearchResults(cards);
+    if (useNl) {
+      const { translatedQuery, cards } = await fetchJSON(
+        `/api/search/nl?${new URLSearchParams({ q: query }).toString()}`
+      );
+      if (translatedQuery) {
+        searchTranslated.textContent = `Searched as: ${translatedQuery}`;
+        searchTranslated.hidden = false;
+      }
+      renderSearchResults(cards);
+    } else {
+      const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
+      renderSearchResults(cards);
+    }
   } catch (err) {
     searchResults.innerHTML = "";
     showError(searchError, err.message);
