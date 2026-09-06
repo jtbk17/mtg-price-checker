@@ -731,6 +731,46 @@ class CollectionChatTests(unittest.TestCase):
         json.dumps(history)  # must round-trip through JSON for the /api/chat response
 
 
+class MoverCommentaryTests(unittest.TestCase):
+    MOVER = {
+        "name": "Test Card",
+        "set": "TST",
+        "set_full_name": "Test Set",
+        "price_before": 1.0,
+        "price_now": 2.0,
+        "pct_change": 100.0,
+    }
+
+    def test_comment_returns_none_when_not_configured(self):
+        import mover_commentary
+
+        with patch.object(mover_commentary.claude_client, "configured", return_value=False):
+            self.assertIsNone(mover_commentary.comment(self.MOVER, "today"))
+
+    def test_comment_joins_text_blocks_across_search_results(self):
+        import mover_commentary
+
+        # A response that used web search interleaves non-text blocks
+        # (server_tool_use/web_search_tool_result) with the final text —
+        # comment() must skip those and only join the text ones.
+        search_block = type("Block", (), {"type": "server_tool_use"})()
+        text_block = type("Block", (), {"type": "text", "text": "Likely a reprint announcement."})()
+        fake_response = type("Response", (), {"content": [search_block, text_block]})()
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type("Messages", (), {"create": lambda self, **kw: fake_response})()
+
+        with patch.object(mover_commentary.claude_client, "configured", return_value=True), \
+             patch.object(mover_commentary.claude_client, "get_client", return_value=fake_client):
+            self.assertEqual(mover_commentary.comment(self.MOVER, "today"), "Likely a reprint announcement.")
+
+    def test_comment_fails_soft_on_api_error(self):
+        import mover_commentary
+
+        with patch.object(mover_commentary.claude_client, "configured", return_value=True), \
+             patch.object(mover_commentary.claude_client, "get_client", side_effect=RuntimeError("boom")):
+            self.assertIsNone(mover_commentary.comment(self.MOVER, "today"))
+
+
 class NlSearchTests(unittest.TestCase):
     def test_translate_returns_none_when_not_configured(self):
         import nl_search
@@ -771,6 +811,7 @@ class ImportsTests(unittest.TestCase):
         import claude_client  # noqa: F401
         import collection_chat  # noqa: F401
         import market_alerts  # noqa: F401
+        import mover_commentary  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401
         import nl_search  # noqa: F401
         import record_feedback  # noqa: F401

@@ -5,11 +5,13 @@ recommendation; feedback collected by poll_telegram_feedback.py trains
 recommender.py's model to annotate future alerts with a confidence score.
 """
 
+import html
 import json
 import logging
 from pathlib import Path
 
 import db
+import mover_commentary
 import recommender
 import telegram_notify
 
@@ -56,11 +58,18 @@ def send_market_alerts():
             confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
             confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
 
+            commentary = mover_commentary.comment(mover, label)
+            # Escaped (unlike the other fields interpolated below) because
+            # this is freeform LLM output, not a tightly-controlled numeric
+            # or Scryfall field — a stray "<" or "&" in it would otherwise
+            # produce malformed HTML and silently drop the whole alert.
+            commentary_line = f"\n<i>{html.escape(commentary)}</i>" if commentary else ""
+
             text = (
                 f"<b>Market mover ({label})</b>\n"
                 f"{mover['name']} ({mover.get('set_full_name', mover['set'])}): "
                 f"${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
-                f"(+{mover['pct_change']}%){confidence_line}"
+                f"(+{mover['pct_change']}%){confidence_line}{commentary_line}"
             )
             buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
             sent = telegram_notify.send_photo_with_buttons(mover.get("image_url"), text, buttons)
