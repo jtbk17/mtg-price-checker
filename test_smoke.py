@@ -421,6 +421,9 @@ class ManaboxImportTests(unittest.TestCase):
         with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"abc-123": fake_card}), \
              patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value="fake-uuid"), \
              patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
+             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
              patch.object(
                  manabox_import.cardkingdom,
                  "get_prices",
@@ -452,6 +455,9 @@ class ManaboxImportTests(unittest.TestCase):
         with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"abc-123": fake_card}), \
              patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value="fake-uuid"), \
              patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets") as mock_prefetch, \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
+             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
              patch.object(manabox_import.cardkingdom, "get_prices", return_value={"market": 1.0, "buylist": 0.5}):
             # The two lower-level pieces (_fetch_scryfall_cards, prefetch_sets)
             # are mocked above for the rest of this test suite's purposes, but
@@ -514,6 +520,9 @@ class ManaboxImportTests(unittest.TestCase):
         with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"new-card-id": new_card}), \
              patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
              patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
+             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
+             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
              patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
             result = manabox_import.import_rows(rows, owner="SyncTest")
 
@@ -570,6 +579,83 @@ class MtgjsonCrosswalkTests(unittest.TestCase):
             mc._cache = original_cache
 
 
+class TcgMarketplaceTests(unittest.TestCase):
+    def setUp(self):
+        import tcgmarketplace as tcg
+
+        self.tcg = tcg
+        self._orig_id_cache = tcg._id_cache
+        self._orig_price_cache = dict(tcg._price_cache)
+        tcg._id_cache = {}
+        tcg._price_cache = {}
+        # Without this, find_id()'s real cache-save would write test data
+        # into the actual tcgmarketplace_id_cache.json on disk — which
+        # happened once already and poisoned it with a fake id.
+        save_patcher = patch.object(tcg, "_save_id_cache")
+        save_patcher.start()
+        self.addCleanup(save_patcher.stop)
+
+    def tearDown(self):
+        self.tcg._id_cache = self._orig_id_cache
+        self.tcg._price_cache = self._orig_price_cache
+
+    def test_find_id_matches_by_normalized_set_name(self):
+        results = [
+            {"id": 1, "setname": "Some Other Set"},
+            {"id": 2, "setname": "  30th  Anniversary Edition "},  # extra whitespace shouldn't break the match
+            {"id": 3, "setname": "Yet Another Set"},
+        ]
+        with patch.object(self.tcg, "_search", return_value=results) as mock_search:
+            found = self.tcg.find_id("Lightning Bolt", "30th Anniversary Edition")
+            self.assertEqual(found, 2)
+
+            # Second lookup for the same key must hit the cache, not search again.
+            found_again = self.tcg.find_id("Lightning Bolt", "30th Anniversary Edition")
+            self.assertEqual(found_again, 2)
+            mock_search.assert_called_once()
+
+    def test_find_id_caches_negative_result_without_immediate_recheck(self):
+        with patch.object(self.tcg, "_search", return_value=[{"id": 1, "setname": "Nonmatching Set"}]) as mock_search:
+            found = self.tcg.find_id("Some Card", "A Set It's Not In")
+            self.assertIsNone(found)
+            self.assertIsNone(self.tcg.find_id("Some Card", "A Set It's Not In"))
+            mock_search.assert_called_once()  # second call served from the negative cache
+
+    def test_get_price_prefers_price_from_then_falls_back_to_day1(self):
+        def fake_response(price_from, day1):
+            resp = type("Resp", (), {})()
+            resp.raise_for_status = lambda: None
+            resp.json = lambda: {"data": {"data": [{"price_from": price_from, "day1": day1}]}}
+            return resp
+
+        with patch.object(self.tcg._session, "get", return_value=fake_response("12.50", "9.00")):
+            self.assertEqual(self.tcg.get_price(111), 12.50)
+
+        self.tcg._price_cache = {}  # bypass the price TTL cache for the next case
+        with patch.object(self.tcg._session, "get", return_value=fake_response(None, "9.00")):
+            self.assertEqual(self.tcg.get_price(222), 9.00)
+
+    def test_prefetch_ids_and_prices_report_progress(self):
+        with patch.object(self.tcg, "find_id", side_effect=[10, 20]) as mock_find, \
+             patch.object(self.tcg, "get_price", return_value=1.0) as mock_price:
+            id_calls = []
+            self.tcg.prefetch_ids(
+                [("A", "Set A"), ("B", "Set B")],
+                on_progress=lambda phase, done, total: id_calls.append((phase, done, total)),
+            )
+            self.assertEqual(mock_find.call_count, 2)
+            self.assertEqual(len(id_calls), 2)
+            self.assertEqual(id_calls[-1][1:], (2, 2))
+
+            price_calls = []
+            self.tcg.prefetch_prices(
+                [10, 20, None],  # None must be filtered out, not passed to get_price
+                on_progress=lambda phase, done, total: price_calls.append((phase, done, total)),
+            )
+            self.assertEqual(mock_price.call_count, 2)
+            self.assertEqual(len(price_calls), 2)
+
+
 class ImportsTests(unittest.TestCase):
     """Every module should at least import cleanly — catches syntax errors
     and top-level exceptions before they reach the nightly job."""
@@ -582,6 +668,7 @@ class ImportsTests(unittest.TestCase):
         import record_feedback  # noqa: F401
         import refresh_job  # noqa: F401
         import scryfall  # noqa: F401
+        import tcgmarketplace  # noqa: F401
         import telegram_notify  # noqa: F401
 
 

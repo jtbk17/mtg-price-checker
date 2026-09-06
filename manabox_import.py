@@ -27,6 +27,7 @@ import requests
 import cardkingdom
 import db
 import mtgjson_crosswalk
+import tcgmarketplace
 
 logger = logging.getLogger("tcg-price-checker")
 
@@ -196,6 +197,18 @@ def import_rows(rows, owner=None, on_progress=None):
         on_progress=on_progress,
     )
 
+    # Same two-pass concurrency reasoning as Card Kingdom just above:
+    # TheTCGMarketplace has no bulk file to cache from, so a diverse
+    # import needs this to avoid one blocking call per card.
+    def _name_and_set(g):
+        card, row = g["card"], g["row"]
+        return card.get("name") or row.get("Name"), card.get("set_name") or row.get("Set name")
+
+    tcgmarketplace.prefetch_ids((_name_and_set(g) for g in grouped.values()), on_progress=on_progress)
+    tcgmarketplace.prefetch_prices(
+        (tcgmarketplace.find_id(*_name_and_set(g)) for g in grouped.values()), on_progress=on_progress
+    )
+
     imported = 0
     total_variants = len(grouped)
     for i, (variant_id, g) in enumerate(grouped.items(), start=1):
@@ -204,13 +217,15 @@ def import_rows(rows, owner=None, on_progress=None):
         uuid = mtgjson_crosswalk.get_uuid(g["scryfall_id"], set_code)
         ck_prices = cardkingdom.get_prices(uuid, foil=(g["finish"] != "nonfoil")) if uuid else None
         avg_purchase_price = g["_cost_total"] / g["_cost_qty"] if g["_cost_qty"] else None
+        name, set_name = _name_and_set(g)
+        tcg_market_price = tcgmarketplace.get_price_for_card(name, set_name)
 
         watchlist_card = {
             "variant_id": variant_id,
             "card_id": g["scryfall_id"],
             "game": "Magic: The Gathering",
-            "name": card.get("name") or row.get("Name"),
-            "set_name": card.get("set_name") or row.get("Set name"),
+            "name": name,
+            "set_name": set_name,
             "condition": g["condition"],
             "printing": g["printing"],
             "tcgplayer_id": card.get("tcgplayer_id"),
@@ -219,6 +234,7 @@ def import_rows(rows, owner=None, on_progress=None):
             "mtgjson_id": uuid,
             "cardkingdom_price": ck_prices["market"] if ck_prices else None,
             "cardkingdom_buylist_price": ck_prices["buylist"] if ck_prices else None,
+            "tcgmarketplace_price": tcg_market_price,
             "owner": owner,
             "quantity": g["quantity"],
             "purchase_price": avg_purchase_price,

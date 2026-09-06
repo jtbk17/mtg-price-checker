@@ -13,6 +13,7 @@ from pathlib import Path
 
 import cardkingdom
 import db
+import tcgmarketplace
 import telegram_notify
 
 logging.basicConfig(level=logging.INFO)
@@ -36,8 +37,26 @@ def refresh_watchlist_prices():
     recorded price (increases only)."""
     items = db.list_watchlist()
     logger.info("Refreshing prices for %d watched card(s)", len(items))
+
+    # TheTCGMarketplace has no bulk price file to cache from like MTGJSON —
+    # every card needs a live call. Resolving ids then fetching prices
+    # concurrently (same two-pass pattern as /api/search) turns what would
+    # be one blocking round trip per card, sequentially, into however long
+    # the slowest one takes.
+    tcgmarketplace.prefetch_ids((item["name"], item["set_name"]) for item in items)
+    tcgmarketplace.prefetch_prices(
+        tcgmarketplace.find_id(item["name"], item["set_name"]) for item in items
+    )
+
     alerts = []
     for item in items:
+        # Independent of the Card Kingdom gate just below: TheTCGMarketplace
+        # is matched by name+set, not mtgjson_id, so it applies even to
+        # cards Card Kingdom doesn't carry.
+        tcg_price = tcgmarketplace.get_price_for_card(item["name"], item["set_name"])
+        if tcg_price is not None:
+            db.update_tcgmarketplace_price(item["variant_id"], tcg_price)
+
         if not item.get("mtgjson_id"):
             continue
         ck_prices = cardkingdom.get_prices(item["mtgjson_id"], foil=_is_foil(item.get("printing")))

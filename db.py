@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS watchlist (
     owner TEXT,
     quantity INTEGER DEFAULT 1,
     purchase_price REAL,
+    tcgmarketplace_price REAL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (variant_id, owner)
 );
@@ -84,6 +85,7 @@ def init_db():
             ("owner", "TEXT"),
             ("quantity", "INTEGER DEFAULT 1"),
             ("purchase_price", "REAL"),
+            ("tcgmarketplace_price", "REAL"),
         ):
             if column not in existing_columns:
                 conn.execute(f"ALTER TABLE watchlist ADD COLUMN {column} {coltype}")
@@ -157,16 +159,19 @@ def init_db():
                     owner TEXT,
                     quantity INTEGER DEFAULT 1,
                     purchase_price REAL,
+                    tcgmarketplace_price REAL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE (variant_id, owner)
                 );
                 INSERT INTO watchlist_new
                     (id, variant_id, card_id, game, name, set_name, condition, printing,
                      tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
-                     cardkingdom_buylist_price, owner, quantity, purchase_price, created_at)
+                     cardkingdom_buylist_price, owner, quantity, purchase_price,
+                     tcgmarketplace_price, created_at)
                 SELECT id, variant_id, card_id, game, name, set_name, condition, printing,
                        tcgplayer_id, image_url, mtgjson_id, cardkingdom_price,
-                       cardkingdom_buylist_price, owner, quantity, purchase_price, created_at
+                       cardkingdom_buylist_price, owner, quantity, purchase_price,
+                       tcgmarketplace_price, created_at
                 FROM watchlist;
                 DROP TABLE watchlist;
                 ALTER TABLE watchlist_new RENAME TO watchlist;
@@ -192,6 +197,7 @@ _WATCHLIST_FIELDS = (
     "cardkingdom_buylist_price",
     "owner",
     "purchase_price",
+    "tcgmarketplace_price",
 )
 
 
@@ -216,8 +222,8 @@ def add_to_watchlist(card):
         card["owner"] = card.get("owner") or ""
         conn.execute(
             """
-            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price, owner, quantity, purchase_price)
-            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price, :owner, :quantity, :purchase_price)
+            INSERT INTO watchlist (variant_id, card_id, game, name, set_name, condition, printing, tcgplayer_id, image_url, mtgjson_id, cardkingdom_price, cardkingdom_buylist_price, owner, quantity, purchase_price, tcgmarketplace_price)
+            VALUES (:variant_id, :card_id, :game, :name, :set_name, :condition, :printing, :tcgplayer_id, :image_url, :mtgjson_id, :cardkingdom_price, :cardkingdom_buylist_price, :owner, :quantity, :purchase_price, :tcgmarketplace_price)
             ON CONFLICT(variant_id, owner) DO UPDATE SET
                 quantity = excluded.quantity,
                 purchase_price = COALESCE(excluded.purchase_price, watchlist.purchase_price)
@@ -381,6 +387,18 @@ def update_cardkingdom_price(variant_id, market_price, buylist_price):
         conn.execute(
             "UPDATE watchlist SET cardkingdom_price = ?, cardkingdom_buylist_price = ? WHERE variant_id = ?",
             (market_price, buylist_price, variant_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_tcgmarketplace_price(variant_id, price):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE watchlist SET tcgmarketplace_price = ? WHERE variant_id = ?",
+            (price, variant_id),
         )
         conn.commit()
     finally:

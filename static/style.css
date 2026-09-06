@@ -215,6 +215,7 @@ button.secondary {
 .card .name { font-weight: 700; }
 .card .meta { color: var(--muted); font-size: 0.85em; }
 .card .ck-buylist { color: #d4a24c; }
+.card .tcg-marketplace { color: #6bb0ff; }
 .card .variant-select {
   width: 100%;
   font-size: 0.85em;

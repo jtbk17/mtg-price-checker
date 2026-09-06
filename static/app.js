@@ -43,10 +43,15 @@ function pickDefaultVariant(variants) {
   return variants.find((v) => v.printing === "Normal") || variants[0];
 }
 
-function priceSectionHtml(variant) {
+function priceSectionHtml(variant, card) {
   return `
     <div class="price">${formatPrice(variant.cardKingdomPrice)}</div>
     <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(variant.cardKingdomBuylist)}</div>
+    ${
+      card && card.tcgMarketplacePrice != null
+        ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(card.tcgMarketplacePrice)}</div>`
+        : ""
+    }
   `;
 }
 
@@ -243,7 +248,7 @@ function renderSearchResults(cards) {
 
     const priceSection = el.querySelector(".price-section");
     const renderPrice = () => {
-      priceSection.innerHTML = priceSectionHtml(selected);
+      priceSection.innerHTML = priceSectionHtml(selected, card);
     };
     renderPrice();
 
@@ -297,6 +302,7 @@ async function trackCard(card, variant, quantity, condition, cost) {
         mtgjsonId: card.mtgjsonId,
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
+        tcgMarketplacePrice: card.tcgMarketplacePrice,
         purchasePrice: cost === "" || cost == null ? null : Number(cost),
         owner: currentOwner(),
         quantity: quantity || 1,
@@ -345,6 +351,7 @@ function renderWatchlist(items) {
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
       ${gainLoss ? `<div class="delta ${gainLoss.direction}">${gainLoss.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+      ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
       <div class="actions">
         <button type="button" data-action="add-copies">Add more</button>
         <button type="button" data-action="history">History</button>

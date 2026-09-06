@@ -14,6 +14,7 @@ import db
 import manabox_import
 import mtgjson_crosswalk
 import scryfall
+import tcgmarketplace
 from refresh_job import export_alerts, export_snapshot, notify_alerts, refresh_watchlist_prices
 
 logging.basicConfig(level=logging.INFO)
@@ -109,6 +110,12 @@ def _serialize_card(card):
             }
         )
 
+    # One price per card, not per variant/finish: TheTCGMarketplace is
+    # matched by (name, set) only (see tcgmarketplace.py), since their
+    # search results don't expose enough to reliably pick the exact
+    # finish when a set lists foil/nonfoil as separate products.
+    tcg_market_price = tcgmarketplace.get_price_for_card(card.get("name"), card.get("set_name"))
+
     return {
         "scryfallId": scryfall_id,
         "mtgjsonId": uuid,
@@ -116,6 +123,7 @@ def _serialize_card(card):
         "set": set_code,
         "setName": card.get("set_name"),
         "tcgplayerId": card.get("tcgplayer_id"),
+        "tcgMarketplacePrice": tcg_market_price,
         "imageUrl": scryfall.extract_image(card),
         "variants": variants,
     }
@@ -155,6 +163,15 @@ def api_search():
         # sequentially inside _serialize_card (the old behavior) measured
         # at 84s for one such search.
         mtgjson_crosswalk.prefetch_sets(c.get("set") for c in cards)
+        # Same reasoning for TheTCGMarketplace, in two passes: resolve
+        # every card's id concurrently (warms find_id's cache), then fetch
+        # every resolved id's price concurrently too (warms get_price's
+        # cache) — both are needed, since id-resolution alone still leaves
+        # _serialize_card doing one sequential product/single call per card.
+        tcgmarketplace.prefetch_ids((c.get("name"), c.get("set_name")) for c in cards)
+        tcgmarketplace.prefetch_prices(
+            tcgmarketplace.find_id(c.get("name"), c.get("set_name")) for c in cards
+        )
         return jsonify([_serialize_card(c) for c in cards])
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -212,6 +229,7 @@ def api_watchlist_add():
         "cardkingdom_price": payload.get("cardKingdomPrice"),
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
         "purchase_price": purchase_price,
+        "tcgmarketplace_price": payload.get("tcgMarketplacePrice"),
         "owner": owner,
         "quantity": quantity,
     }
