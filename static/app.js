@@ -3,8 +3,6 @@ const searchInput = document.getElementById("search-input");
 const searchSuggestions = document.getElementById("search-suggestions");
 const searchResults = document.getElementById("search-results");
 const searchError = document.getElementById("search-error");
-const nlSearchToggle = document.getElementById("nl-search-toggle");
-const searchTranslated = document.getElementById("search-translated");
 const watchlistEl = document.getElementById("watchlist");
 const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
@@ -30,26 +28,6 @@ const addCopiesCost = document.getElementById("add-copies-cost");
 const addCopiesError = document.getElementById("add-copies-error");
 const closeAddCopiesBtn = document.getElementById("close-add-copies");
 let addCopiesTargetId = null;
-const chatToggleBtn = document.getElementById("chat-toggle");
-const chatOverlay = document.getElementById("chat-overlay");
-const chatCloseBtn = document.getElementById("chat-close");
-const chatLog = document.getElementById("chat-log");
-const chatError = document.getElementById("chat-error");
-const chatForm = document.getElementById("chat-form");
-const chatInput = document.getElementById("chat-input");
-const chatResetBtn = document.getElementById("chat-reset");
-let chatHistory = null;
-
-function openChat() {
-  chatOverlay.hidden = false;
-  chatToggleBtn.hidden = true;
-  chatInput.focus();
-}
-
-function closeChat() {
-  chatOverlay.hidden = true;
-  chatToggleBtn.hidden = false;
-}
 
 function showError(el, message) {
   el.textContent = message;
@@ -196,7 +174,7 @@ function selectSuggestion(name) {
   // exact name — search for exactly that card (Scryfall's !"..." syntax)
   // instead of the plain-text search, which does a broad fuzzy/oracle-text
   // match and would pull in dozens of loosely related cards.
-  performSearch(`!"${name.replace(/"/g, '\\"')}"`, { nl: false });
+  performSearch(`!"${name.replace(/"/g, '\\"')}"`);
 }
 
 function moveActiveSuggestion(delta) {
@@ -224,10 +202,8 @@ function handleSearchInputKeydown(event) {
   }
 }
 
-async function performSearch(query, { nl } = {}) {
-  const useNl = nl ?? nlSearchToggle.checked;
+async function performSearch(query) {
   showError(searchError, "");
-  showError(searchTranslated, "");
   searchResults.innerHTML = "<p class=\"empty\">Searching…</p>";
   // Guards against rendering result cards before conditionOptions has
   // loaded (fired at startup, essentially always resolved by the time a
@@ -237,19 +213,8 @@ async function performSearch(query, { nl } = {}) {
   // and never re-rendered once loadConditions() actually resolves).
   await conditionsLoaded;
   try {
-    if (useNl) {
-      const { translatedQuery, cards } = await fetchJSON(
-        `/api/search/nl?${new URLSearchParams({ q: query }).toString()}`
-      );
-      if (translatedQuery) {
-        searchTranslated.textContent = `Searched as: ${translatedQuery}`;
-        searchTranslated.hidden = false;
-      }
-      renderSearchResults(cards);
-    } else {
-      const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
-      renderSearchResults(cards);
-    }
+    const cards = await fetchJSON(`/api/search?${new URLSearchParams({ q: query }).toString()}`);
+    renderSearchResults(cards);
   } catch (err) {
     searchResults.innerHTML = "";
     showError(searchError, err.message);
@@ -706,50 +671,6 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-function appendChatMessage(role, text) {
-  const el = document.createElement("div");
-  el.className = `chat-msg ${role}`;
-  el.textContent = text;
-  chatLog.appendChild(el);
-  chatLog.scrollTop = chatLog.scrollHeight;
-  return el;
-}
-
-async function submitChat(event) {
-  event.preventDefault();
-  const question = chatInput.value.trim();
-  if (!question) return;
-
-  showError(chatError, "");
-  appendChatMessage("user", question);
-  chatInput.value = "";
-  chatInput.disabled = true;
-  const pending = appendChatMessage("assistant pending", "Thinking…");
-
-  try {
-    const { answer, history } = await fetchJSON("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: chatHistory }),
-    });
-    pending.remove();
-    appendChatMessage("assistant", answer);
-    chatHistory = history;
-  } catch (err) {
-    pending.remove();
-    showError(chatError, err.message);
-  } finally {
-    chatInput.disabled = false;
-    chatInput.focus();
-  }
-}
-
-function resetChat() {
-  chatHistory = null;
-  chatLog.innerHTML = "";
-  showError(chatError, "");
-}
-
 searchForm.addEventListener("submit", runSearch);
 searchInput.addEventListener("input", scheduleAutocomplete);
 searchInput.addEventListener("keydown", handleSearchInputKeydown);
@@ -766,10 +687,6 @@ importInput.addEventListener("change", () => {
 });
 ownerFilter.addEventListener("change", loadWatchlist);
 sortSelect.addEventListener("change", loadWatchlist);
-chatForm.addEventListener("submit", submitChat);
-chatResetBtn.addEventListener("click", resetChat);
-chatToggleBtn.addEventListener("click", openChat);
-chatCloseBtn.addEventListener("click", closeChat);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";

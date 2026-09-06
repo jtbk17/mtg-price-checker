@@ -27,12 +27,7 @@
         </div>
         <button type="submit">Search</button>
       </form>
-      <label class="nl-toggle">
-        <input type="checkbox" id="nl-search-toggle">
-        Describe it in plain English instead (e.g. "cheap red removal under $5") — uses Claude
-      </label>
       <div id="search-error" class="error" hidden></div>
-      <p id="search-translated" class="section-sub" hidden></p>
       <div id="search-results" class="card-grid"></div>
     </section>
 
@@ -72,23 +67,6 @@
     </section>
 
   </main>
-
-  <button id="chat-toggle" class="chat-toggle" type="button">💬 Ask about your collection</button>
-
-  <div id="chat-overlay" class="chat-overlay" hidden>
-    <div class="chat-overlay-header">
-      <h3>Ask about your collection</h3>
-      <button type="button" id="chat-close" class="chat-close" aria-label="Close chat">✕</button>
-    </div>
-    <p class="section-sub">e.g. "what's my most valuable card" or "how has my Sol Ring done" — uses Claude</p>
-    <div id="chat-log" class="chat-log"></div>
-    <div id="chat-error" class="error" hidden></div>
-    <form id="chat-form" class="chat-form">
-      <input type="text" id="chat-input" placeholder="Ask a question…" autocomplete="off" required>
-      <button type="submit">Ask</button>
-      <button type="button" id="chat-reset" class="secondary">Reset</button>
-    </form>
-  </div>
 
   <dialog id="history-dialog">
     <h3 id="history-title"></h3>
