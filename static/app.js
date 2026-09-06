@@ -39,6 +39,19 @@ function formatPrice(price) {
   return `$${Number(price).toFixed(2)}`;
 }
 
+// Grey Ogre Games' (GOG) trade-in offer is a fixed multiple of Card Kingdom's own
+// buylist price — credit pays more than cash, as a normal LGS incentive
+// to take store credit over money. Derived at display time from the CK
+// buylist value we already fetch/store, rather than as its own stored
+// column, since it's just that one number scaled by a constant and would
+// otherwise need a migration/backfill every time the multiplier changes.
+const GOG_CASH_MULTIPLIER = 1.15;
+const GOG_CREDIT_MULTIPLIER = 1.38;
+
+function gogPrice(buylistPrice, multiplier) {
+  return buylistPrice == null ? null : buylistPrice * multiplier;
+}
+
 function pickDefaultVariant(variants) {
   return variants.find((v) => v.printing === "Normal") || variants[0];
 }
@@ -47,6 +60,8 @@ function priceSectionHtml(variant, card) {
   return `
     <div class="price">${formatPrice(variant.cardKingdomPrice)}</div>
     <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(variant.cardKingdomBuylist)}</div>
+    <div class="meta gog-price">GOG Cash: ${formatPrice(gogPrice(variant.cardKingdomBuylist, GOG_CASH_MULTIPLIER))}</div>
+    <div class="meta gog-price">GOG Credit: ${formatPrice(gogPrice(variant.cardKingdomBuylist, GOG_CREDIT_MULTIPLIER))}</div>
     ${
       card && card.tcgMarketplacePrice != null
         ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(card.tcgMarketplacePrice)}</div>`
@@ -351,6 +366,8 @@ function renderWatchlist(items) {
       ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
       ${gainLoss ? `<div class="delta ${gainLoss.direction}">${gainLoss.text}</div>` : ""}
       <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+      <div class="meta gog-price">GOG Cash: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER))}</div>
+      <div class="meta gog-price">GOG Credit: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CREDIT_MULTIPLIER))}</div>
       ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
       <div class="actions">
         <button type="button" data-action="add-copies">Add more</button>
