@@ -4,6 +4,14 @@ one small JSON file per set (e.g. M10.json) containing each card's
 `identifiers.scryfallId`, so sets are fetched and cached lazily as the
 app encounters them rather than downloading MTGJSON's full ~200MB
 identifiers dump up front.
+
+For split/adventure/double-faced cards, MTGJSON emits one card object
+per face (side "a", "b", ...) that all share the same Scryfall id (since
+Scryfall treats the whole card as one object) but each get their own
+uuid — and empirically, only one face's uuid usually carries actual Card
+Kingdom pricing, and it isn't reliably the same side from card to card.
+So each Scryfall id maps to a *list* of candidate uuids, and get_uuid()
+picks whichever candidate the price feed actually has data for.
 """
 
 import json
@@ -13,6 +21,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
+
+import cardkingdom
 
 logger = logging.getLogger("tcg-price-checker")
 
@@ -66,7 +76,7 @@ def _fetch_set(set_code):
         for card in data.get("data", {}).get("cards", []):
             scryfall_id = card.get("identifiers", {}).get("scryfallId")
             if scryfall_id:
-                cache["map"][scryfall_id] = card["uuid"]
+                cache["map"].setdefault(scryfall_id, []).append(card["uuid"])
         cache["fetched_sets"].append(code)
         _save()
 
@@ -99,8 +109,28 @@ def prefetch_sets(set_codes, max_workers=25, on_progress=None):
                 on_progress("Looking up Card Kingdom prices", completed, total)
 
 
-def get_uuid(scryfall_id, set_code):
+def get_uuid_candidates(scryfall_id, set_code):
+    """`set_code` may be omitted (None) to do a cache-only lookup — used
+    by refresh_watchlist_prices() to cheaply re-check an already-crosswalked
+    card without needing its set code on hand; an uncached id with no
+    set_code just returns no candidates rather than fetching."""
     cache = _load()
-    if scryfall_id not in cache["map"]:
+    if scryfall_id not in cache["map"] and set_code:
         _fetch_set(set_code)
-    return cache["map"].get(scryfall_id)
+    return cache["map"].get(scryfall_id, [])
+
+
+def get_uuid(scryfall_id, set_code):
+    candidates = get_uuid_candidates(scryfall_id, set_code)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    # Multiple MTGJSON objects share this Scryfall id (see module
+    # docstring) — prefer whichever one the price feed actually has data
+    # for. If none do, fall back to the first candidate arbitrarily; it's
+    # harmless since neither would return a price anyway.
+    for uuid in candidates:
+        if cardkingdom.has_prices(uuid):
+            return uuid
+    return candidates[0]

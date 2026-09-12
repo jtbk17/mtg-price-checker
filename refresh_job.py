@@ -13,6 +13,7 @@ from pathlib import Path
 
 import cardkingdom
 import db
+import mtgjson_crosswalk
 import tcgmarketplace
 import telegram_notify
 
@@ -59,7 +60,24 @@ def refresh_watchlist_prices():
 
         if not item.get("mtgjson_id"):
             continue
-        ck_prices = cardkingdom.get_prices(item["mtgjson_id"], foil=_is_foil(item.get("printing")))
+
+        mtgjson_id = item["mtgjson_id"]
+        # Some split/adventure/double-faced cards have Card Kingdom's price
+        # attached to a different MTGJSON uuid than the one this card was
+        # originally crosswalked to (see mtgjson_crosswalk.py's module
+        # docstring) — and which uuid that is can drift from one day's
+        # price feed to the next. Re-check (cache-only: no network call
+        # for a card already crosswalked, since set_code is omitted) and
+        # self-heal the stored id if it's drifted.
+        if item.get("card_id"):
+            candidates = mtgjson_crosswalk.get_uuid_candidates(item["card_id"], set_code=None)
+            if len(candidates) > 1:
+                preferred = mtgjson_crosswalk.get_uuid(item["card_id"], set_code=None)
+                if preferred and preferred != mtgjson_id:
+                    db.update_mtgjson_id(item["variant_id"], preferred)
+                    mtgjson_id = preferred
+
+        ck_prices = cardkingdom.get_prices(mtgjson_id, foil=_is_foil(item.get("printing")))
         if not ck_prices:
             continue
 

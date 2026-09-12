@@ -539,7 +539,109 @@ class ManaboxImportTests(unittest.TestCase):
             db.remove_from_watchlist(item["id"])
 
 
+class RefreshJobTests(unittest.TestCase):
+    def test_refresh_self_heals_stale_mtgjson_id_for_multi_candidate_cards(self):
+        import refresh_job
+
+        # A split/adventure card whose stored mtgjson_id ("uuid-a") no
+        # longer has price data — the crosswalk now prefers "uuid-b" (see
+        # MtgjsonCrosswalkTests) — refresh should correct the stored id
+        # and fetch prices under the corrected one, not the stale one.
+        item = {
+            "variant_id": "v1",
+            "name": "Ardenvale Tactician // Dizzying Swoop",
+            "set_name": "Throne of Eldraine",
+            "card_id": "sid1",
+            "mtgjson_id": "uuid-a",
+            "printing": "Normal",
+            "latest_price": None,
+        }
+        with patch.object(refresh_job.db, "list_watchlist", return_value=[item]), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
+             patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
+             patch.object(refresh_job.mtgjson_crosswalk, "get_uuid_candidates", return_value=["uuid-a", "uuid-b"]), \
+             patch.object(refresh_job.mtgjson_crosswalk, "get_uuid", return_value="uuid-b"), \
+             patch.object(refresh_job.db, "update_mtgjson_id") as mock_update_id, \
+             patch.object(
+                 refresh_job.cardkingdom, "get_prices", return_value={"market": 1.23, "buylist": None}
+             ) as mock_get_prices, \
+             patch.object(refresh_job.db, "record_price"), \
+             patch.object(refresh_job.db, "update_cardkingdom_price"):
+            refresh_job.refresh_watchlist_prices()
+
+        mock_update_id.assert_called_once_with("v1", "uuid-b")
+        mock_get_prices.assert_called_once_with("uuid-b", foil=False)
+
+    def test_refresh_leaves_single_candidate_mtgjson_id_untouched(self):
+        import refresh_job
+
+        item = {
+            "variant_id": "v1",
+            "name": "Plain Old Card",
+            "set_name": "Some Set",
+            "card_id": "sid1",
+            "mtgjson_id": "uuid-only",
+            "printing": "Normal",
+            "latest_price": None,
+        }
+        with patch.object(refresh_job.db, "list_watchlist", return_value=[item]), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
+             patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
+             patch.object(refresh_job.mtgjson_crosswalk, "get_uuid_candidates", return_value=["uuid-only"]), \
+             patch.object(refresh_job.db, "update_mtgjson_id") as mock_update_id, \
+             patch.object(
+                 refresh_job.cardkingdom, "get_prices", return_value={"market": 1.23, "buylist": None}
+             ) as mock_get_prices, \
+             patch.object(refresh_job.db, "record_price"), \
+             patch.object(refresh_job.db, "update_cardkingdom_price"):
+            refresh_job.refresh_watchlist_prices()
+
+        mock_update_id.assert_not_called()
+        mock_get_prices.assert_called_once_with("uuid-only", foil=False)
+
+
 class MtgjsonCrosswalkTests(unittest.TestCase):
+    def test_get_uuid_prefers_candidate_with_actual_price_data(self):
+        # Split/adventure/DFC cards: MTGJSON emits one card object per face
+        # sharing the same Scryfall id (see module docstring) — only one
+        # face's uuid usually has real Card Kingdom price data, and it
+        # isn't reliably the first (side "a") one.
+        import mtgjson_crosswalk as mc
+
+        original_cache = mc._cache
+        mc._cache = {"fetched_sets": ["ELD"], "map": {"sid1": ["uuid-a", "uuid-b"]}}
+        try:
+            with patch("cardkingdom.has_prices", side_effect=lambda u: u == "uuid-b"):
+                self.assertEqual(mc.get_uuid("sid1", "ELD"), "uuid-b")
+                self.assertEqual(mc.get_uuid_candidates("sid1", "ELD"), ["uuid-a", "uuid-b"])
+        finally:
+            mc._cache = original_cache
+
+    def test_get_uuid_falls_back_to_first_candidate_if_none_priced(self):
+        import mtgjson_crosswalk as mc
+
+        original_cache = mc._cache
+        mc._cache = {"fetched_sets": ["ELD"], "map": {"sid1": ["uuid-a", "uuid-b"]}}
+        try:
+            with patch("cardkingdom.has_prices", return_value=False):
+                self.assertEqual(mc.get_uuid("sid1", "ELD"), "uuid-a")
+        finally:
+            mc._cache = original_cache
+
+    def test_get_uuid_candidates_cache_only_lookup_skips_fetch_without_set_code(self):
+        import mtgjson_crosswalk as mc
+
+        original_cache = mc._cache
+        mc._cache = {"fetched_sets": [], "map": {}}
+        try:
+            with patch.object(mc, "_fetch_set") as mock_fetch:
+                self.assertEqual(mc.get_uuid_candidates("unknown-sid", set_code=None), [])
+                mock_fetch.assert_not_called()
+        finally:
+            mc._cache = original_cache
+
     def test_prefetch_sets_dedupes_and_skips_cached(self):
         import mtgjson_crosswalk as mc
 

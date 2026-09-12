@@ -76,6 +76,17 @@ def get_all_prices():
     return _load()
 
 
+def has_prices(mtgjson_id):
+    """Whether the feed has any actual price data at all for this uuid —
+    used by mtgjson_crosswalk.get_uuid() to disambiguate a Scryfall id
+    that maps to multiple MTGJSON uuids (split/adventure/DFC faces)."""
+    entry = _load().get(mtgjson_id)
+    return bool(entry) and any(
+        entry.get(field) is not None
+        for field in ("retail_normal", "retail_foil", "buylist_normal", "buylist_foil")
+    )
+
+
 def get_prices(mtgjson_id, foil=False):
     """Return {"market": ..., "buylist": ...} Card Kingdom prices for a
     Magic card, or None if the card isn't in the feed (e.g. non-Magic

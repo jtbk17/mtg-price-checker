@@ -381,6 +381,20 @@ def get_watchlist_item(watchlist_id):
         conn.close()
 
 
+def update_mtgjson_id(variant_id, mtgjson_id):
+    """Corrects a previously-stored mtgjson_id — needed because some
+    split/adventure/DFC cards have their Card Kingdom price data attached
+    to a different MTGJSON uuid than the one they were originally
+    crosswalked to (see mtgjson_crosswalk.py), and which uuid that is can
+    change from one day's price feed to the next."""
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE watchlist SET mtgjson_id = ? WHERE variant_id = ?", (mtgjson_id, variant_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_cardkingdom_price(variant_id, market_price, buylist_price):
     conn = get_connection()
     try:
