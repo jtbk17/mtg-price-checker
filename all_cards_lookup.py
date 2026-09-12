@@ -67,15 +67,26 @@ def get_by_uuid(mtgjson_uuid):
     conn.row_factory = sqlite3.Row
     try:
         card = conn.execute(
-            "SELECT id, mtgjson_uuid, name, set_code FROM cards WHERE mtgjson_uuid = ?",
+            "SELECT id, mtgjson_uuid, name, set_code, canonical_card_id FROM cards WHERE mtgjson_uuid = ?",
             (mtgjson_uuid,),
         ).fetchone()
         if not card:
             return None
 
+        # Split/adventure/double-faced cards can be split across two rows
+        # here (see all_cards_history.py's module docstring) — merge by
+        # canonical group so the chart isn't full of gaps on whichever
+        # days the *other* row happened to hold that day's price.
+        group_id = card["canonical_card_id"] or card["id"]
         history = conn.execute(
-            "SELECT day, price_cents FROM price_history WHERE card_id = ? ORDER BY day ASC",
-            (card["id"],),
+            """
+            SELECT ph.day, ph.price_cents
+            FROM price_history ph
+            JOIN cards c ON c.id = ph.card_id
+            WHERE COALESCE(c.canonical_card_id, c.id) = ?
+            ORDER BY ph.day ASC
+            """,
+            (group_id,),
         ).fetchall()
         return {
             "name": card["name"],

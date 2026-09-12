@@ -11,6 +11,19 @@ This module only touches the database file on disk; downloading it from
 and uploading it back to the GitHub Release is done by the calling
 workflow step via `gh release download` / `gh release upload`, so this
 code has no GitHub-specific logic and can be tested locally.
+
+Split/adventure/double-faced cards get one MTGJSON card object — and
+uuid — per face, all sharing the same Scryfall id (mirrors the same
+quirk mtgjson_crosswalk.py works around for search/watchlist pricing).
+Here that means the same physical card can land in *two* `cards` rows,
+each only getting a price snapshot on the days MTGJSON's feed happens
+to link Card Kingdom's price to that particular face — confirmed (by
+inspecting the real data) to alternate day to day with no overlap,
+never both on the same day. reconcile_canonical_groups() groups such
+rows under one canonical id (the lowest) so compute_movers() and
+all_cards_lookup.py see one continuous price series per physical card
+instead of two series each full of gaps that rarely line up with
+themselves day-over-day.
 """
 
 import gzip
@@ -69,6 +82,7 @@ def _get_connection(db_path):
         ("set_name", "TEXT"),
         ("scryfall_id", "TEXT"),
         ("is_token", "INTEGER"),
+        ("canonical_card_id", "INTEGER"),
     ):
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE cards ADD COLUMN {column} {coltype}")
@@ -219,6 +233,51 @@ def backfill_names(db_path):
     logger.info("Updated labels for %d card(s)", len(updates))
 
 
+def reconcile_canonical_groups(db_path):
+    """Group `cards` rows that share a Scryfall id (see module docstring)
+    under one canonical id — the lowest — so movers/history queries treat
+    them as one card. Idempotent and cheap: run after every backfill_names()
+    call, since a newly-labeled card can reveal a new group that wasn't
+    visible while its scryfall_id was still NULL."""
+    conn = _get_connection(db_path)
+    groups = conn.execute(
+        """
+        SELECT GROUP_CONCAT(id) FROM cards
+        WHERE scryfall_id IS NOT NULL
+        GROUP BY scryfall_id
+        HAVING COUNT(*) > 1
+        """
+    ).fetchall()
+
+    updates = []
+    for (ids_csv,) in groups:
+        ids = sorted(int(i) for i in ids_csv.split(","))
+        canonical_id = ids[0]
+        updates.extend((canonical_id, child_id) for child_id in ids[1:])
+
+    if updates:
+        conn.executemany("UPDATE cards SET canonical_card_id = ? WHERE id = ?", updates)
+
+    # A canonical row can itself still be missing labels a child row
+    # already has (e.g. backfill_names labeled the child first) — copy
+    # them over so the canonical row is always the fully-labeled source
+    # of truth compute_movers()/all_cards_lookup.py read from.
+    conn.execute(
+        """
+        UPDATE cards SET
+            name = COALESCE(name, (SELECT c2.name FROM cards c2 WHERE c2.canonical_card_id = cards.id AND c2.name IS NOT NULL LIMIT 1)),
+            set_code = COALESCE(set_code, (SELECT c2.set_code FROM cards c2 WHERE c2.canonical_card_id = cards.id AND c2.set_code IS NOT NULL LIMIT 1)),
+            set_name = COALESCE(set_name, (SELECT c2.set_name FROM cards c2 WHERE c2.canonical_card_id = cards.id AND c2.set_name IS NOT NULL LIMIT 1)),
+            is_token = COALESCE(is_token, (SELECT c2.is_token FROM cards c2 WHERE c2.canonical_card_id = cards.id AND c2.is_token IS NOT NULL LIMIT 1))
+        WHERE canonical_card_id IS NULL
+        """
+    )
+    conn.commit()
+    conn.close()
+    if updates:
+        logger.info("Reconciled %d card(s) into canonical groups", len(updates))
+
+
 def compute_movers(db_path, top_n=15):
     """Biggest day-over-day and week-over-week movers across every card
     Card Kingdom prices, using the history this module has been
@@ -234,14 +293,27 @@ def compute_movers(db_path, top_n=15):
     today_day = _day_number(date.today())
 
     def top_movers(days_back):
+        # Grouping by COALESCE(canonical_card_id, id) (see reconcile_canonical_groups)
+        # merges a split/adventure/DFC card's two per-face rows into one
+        # series before comparing days — confirmed no day ever has a price
+        # on both rows, so this merge can't produce duplicate/conflicting
+        # matches. `p.price_cents != 0` guards a divide-by-zero below; it
+        # has never actually occurred in the feed, but a crash here would
+        # silently skip that night's alerts entirely, so it's cheap
+        # insurance either way.
         rows = conn.execute(
             """
-            SELECT c.name, c.set_code, c.set_name, c.scryfall_id, t.price_cents, p.price_cents
-            FROM price_history t
-            JOIN price_history p ON p.card_id = t.card_id AND p.day = ?
-            JOIN cards c ON c.id = t.card_id
-            WHERE t.day = ? AND c.name IS NOT NULL AND c.is_token = 0
-                AND t.price_cents != p.price_cents
+            WITH merged AS (
+                SELECT COALESCE(c.canonical_card_id, c.id) AS gid, ph.day, ph.price_cents
+                FROM price_history ph
+                JOIN cards c ON c.id = ph.card_id
+            )
+            SELECT g.name, g.set_code, g.set_name, g.scryfall_id, t.price_cents, p.price_cents
+            FROM merged t
+            JOIN merged p ON p.gid = t.gid AND p.day = ?
+            JOIN cards g ON g.id = t.gid
+            WHERE t.day = ? AND g.name IS NOT NULL AND g.is_token = 0
+                AND t.price_cents != p.price_cents AND p.price_cents != 0
             """,
             (today_day - days_back, today_day),
         ).fetchall()
@@ -298,4 +370,5 @@ if __name__ == "__main__":
         backfill_88_days(year_db)
     snapshot_today(year_db)
     backfill_names(year_db)
+    reconcile_canonical_groups(year_db)
     export_movers(year_db)

@@ -320,6 +320,107 @@ class AllCardsHistoryTests(unittest.TestCase):
         self.assertNotIn("Generic Token", names)
         self.assertNotIn("Unchanged Card", names)
 
+    def test_reconcile_canonical_groups_merges_split_card_rows(self):
+        # A split/adventure/DFC card's two per-face rows (see module
+        # docstring): each only has data on alternating days, and neither
+        # row alone shows a day-over-day change — but the merged series
+        # does, and reconcile_canonical_groups is what makes compute_movers
+        # see it as one continuous series instead of two gappy ones.
+        conn = ach._get_connection(self.db_path)
+        today = ach._day_number(__import__("datetime").date.today())
+
+        conn.execute(
+            "INSERT INTO cards (mtgjson_uuid, name, set_code, scryfall_id, is_token) "
+            "VALUES ('face-a', 'Split Card // Other Half', 'TST', 'shared-sid', 0)"
+        )
+        conn.execute(
+            "INSERT INTO cards (mtgjson_uuid, set_code, scryfall_id) "
+            "VALUES ('face-b', 'TST', 'shared-sid')"
+        )
+        face_a_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-a'").fetchone()[0]
+        face_b_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-b'").fetchone()[0]
+        # face-a carried yesterday's price, face-b carries today's — never
+        # both on the same day, matching what the real feed does.
+        conn.executemany(
+            "INSERT INTO price_history (card_id, day, price_cents) VALUES (?, ?, ?)",
+            [(face_a_id, today - 1, 100), (face_b_id, today, 200)],
+        )
+        conn.commit()
+        conn.close()
+
+        ach.reconcile_canonical_groups(self.db_path)
+
+        conn = ach._get_connection(self.db_path)
+        canonical = conn.execute("SELECT canonical_card_id FROM cards WHERE id = ?", (face_b_id,)).fetchone()[0]
+        self.assertEqual(canonical, face_a_id)
+        # The canonical (face-a) row had no name of its own set — wait, it
+        # does; check the *other* direction: face-b's row (no name) should
+        # not have been promoted to canonical over face-a (which has one).
+        name = conn.execute("SELECT name FROM cards WHERE id = ?", (face_a_id,)).fetchone()[0]
+        self.assertEqual(name, "Split Card // Other Half")
+        conn.close()
+
+        movers = ach.compute_movers(self.db_path)
+        names = {m["name"] for m in movers["daily_gainers"]}
+        self.assertIn("Split Card // Other Half", names)
+
+    def test_reconcile_canonical_groups_backfills_canonical_row_labels_from_child(self):
+        # If backfill_names() happens to label the *second*-seen (higher
+        # id) row first, the canonical (lowest id) row must still end up
+        # with real labels — compute_movers() filters on c.name IS NOT NULL,
+        # so an unlabeled canonical row would silently drop the whole group.
+        conn = ach._get_connection(self.db_path)
+        conn.execute("INSERT INTO cards (mtgjson_uuid, scryfall_id) VALUES ('face-a', 'shared-sid')")
+        conn.execute(
+            "INSERT INTO cards (mtgjson_uuid, name, set_code, set_name, scryfall_id, is_token) "
+            "VALUES ('face-b', 'Split Card // Other Half', 'TST', 'Test Set', 'shared-sid', 0)"
+        )
+        conn.commit()
+        conn.close()
+
+        ach.reconcile_canonical_groups(self.db_path)
+
+        conn = ach._get_connection(self.db_path)
+        row = conn.execute(
+            "SELECT name, set_code, set_name, is_token FROM cards WHERE mtgjson_uuid = 'face-a'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(tuple(row), ("Split Card // Other Half", "TST", "Test Set", 0))
+
+
+class AllCardsLookupTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tmp_dir.name) / "all_cards_lookup_test.db"
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def test_get_by_uuid_merges_history_across_canonical_group(self):
+        import all_cards_lookup
+
+        conn = ach._get_connection(self.db_path)
+        conn.execute(
+            "INSERT INTO cards (mtgjson_uuid, name, set_code, scryfall_id) "
+            "VALUES ('face-a', 'Split Card // Other Half', 'TST', 'shared-sid')"
+        )
+        conn.execute("INSERT INTO cards (mtgjson_uuid, set_code, scryfall_id) VALUES ('face-b', 'TST', 'shared-sid')")
+        face_a_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-a'").fetchone()[0]
+        face_b_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-b'").fetchone()[0]
+        conn.executemany(
+            "INSERT INTO price_history (card_id, day, price_cents) VALUES (?, ?, ?)",
+            [(face_a_id, 100, 35), (face_b_id, 101, 49), (face_a_id, 102, 40)],
+        )
+        conn.commit()
+        conn.close()
+
+        ach.reconcile_canonical_groups(self.db_path)
+
+        with patch.object(all_cards_lookup, "_ensure_cached", return_value=self.db_path):
+            result = all_cards_lookup.get_by_uuid("face-b")  # looked up by the *child* uuid
+
+        self.assertEqual(len(result["history"]), 3)  # merged across both rows, not just face-b's one point
+
 
 class ManaboxImportTests(unittest.TestCase):
     def setUp(self):
