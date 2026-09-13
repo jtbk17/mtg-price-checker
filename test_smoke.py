@@ -364,6 +364,33 @@ class AllCardsHistoryTests(unittest.TestCase):
         names = {m["name"] for m in movers["daily_gainers"]}
         self.assertIn("Split Card // Other Half", names)
 
+    def test_reconcile_canonical_groups_physically_moves_price_history(self):
+        # compute_movers()/get_by_uuid() rely on price_history actually
+        # being consolidated onto the canonical card_id — not merged at
+        # query time (a self-join on a computed grouping column across
+        # the full table, which hung for hours at real production scale
+        # and got caught before it could do any damage). This locks in
+        # that the move is physical, so a regression back to query-time
+        # merging would fail loudly here instead of only at scale.
+        conn = ach._get_connection(self.db_path)
+        conn.execute("INSERT INTO cards (mtgjson_uuid, name, set_code, scryfall_id) VALUES ('face-a', 'X', 'TST', 'sid')")
+        conn.execute("INSERT INTO cards (mtgjson_uuid, set_code, scryfall_id) VALUES ('face-b', 'TST', 'sid')")
+        face_a_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-a'").fetchone()[0]
+        face_b_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = 'face-b'").fetchone()[0]
+        conn.execute("INSERT INTO price_history (card_id, day, price_cents) VALUES (?, 100, 35)", (face_b_id,))
+        conn.commit()
+        conn.close()
+
+        ach.reconcile_canonical_groups(self.db_path)
+
+        conn = ach._get_connection(self.db_path)
+        self.assertEqual(
+            conn.execute("SELECT COUNT(*) FROM price_history WHERE card_id = ?", (face_b_id,)).fetchone()[0], 0
+        )
+        moved = conn.execute("SELECT day, price_cents FROM price_history WHERE card_id = ?", (face_a_id,)).fetchone()
+        self.assertEqual(tuple(moved), (100, 35))
+        conn.close()
+
     def test_reconcile_canonical_groups_backfills_canonical_row_labels_from_child(self):
         # If backfill_names() happens to label the *second*-seen (higher
         # id) row first, the canonical (lowest id) row must still end up
@@ -641,6 +668,49 @@ class ManaboxImportTests(unittest.TestCase):
 
 
 class RefreshJobTests(unittest.TestCase):
+    def test_chunk_lines_keeps_short_batches_in_one_chunk(self):
+        import refresh_job
+
+        lines = ["short line"] * 5
+        self.assertEqual(refresh_job._chunk_lines(lines, limit=1000), [lines])
+
+    def test_chunk_lines_splits_when_over_limit(self):
+        import refresh_job
+
+        lines = ["x" * 30 for _ in range(10)]  # 10 lines, ~31 chars each with newlines
+        chunks = refresh_job._chunk_lines(lines, limit=100)
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertLessEqual(len("\n".join(chunk)), 100)
+        # No line dropped or duplicated across the split.
+        self.assertEqual([line for chunk in chunks for line in chunk], lines)
+
+    def test_notify_alerts_splits_large_batch_into_multiple_messages(self):
+        import refresh_job
+
+        alerts = [
+            {
+                "name": f"Card {i}",
+                "set_name": "Test Set",
+                "printing": "Normal",
+                "owner": None,
+                "price_before": 1.0,
+                "price_now": 2.0,
+                "pct_change": 100.0,
+            }
+            for i in range(200)  # enough to blow past 4096 chars in one message
+        ]
+        with patch.object(refresh_job.telegram_notify, "send_message") as mock_send:
+            refresh_job.notify_alerts(alerts)
+
+        self.assertGreater(mock_send.call_count, 1)
+        for call in mock_send.call_args_list:
+            self.assertLessEqual(len(call.args[0]), refresh_job.TELEGRAM_MESSAGE_LIMIT)
+        # Every alert line appears exactly once across all the sent messages.
+        sent_text = "\n".join(call.args[0] for call in mock_send.call_args_list)
+        for i in range(200):
+            self.assertEqual(sent_text.count(f"Card {i} ["), 1)
+
     def test_refresh_self_heals_stale_mtgjson_id_for_multi_candidate_cards(self):
         import refresh_job
 

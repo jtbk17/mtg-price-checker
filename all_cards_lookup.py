@@ -74,18 +74,15 @@ def get_by_uuid(mtgjson_uuid):
             return None
 
         # Split/adventure/double-faced cards can be split across two rows
-        # here (see all_cards_history.py's module docstring) — merge by
-        # canonical group so the chart isn't full of gaps on whichever
-        # days the *other* row happened to hold that day's price.
+        # here (see all_cards_history.py's module docstring) — their
+        # price_history rows are physically consolidated onto the
+        # canonical row's card_id by reconcile_canonical_groups(), so
+        # looking a child uuid up by its canonical_card_id (falling back
+        # to its own id if it has none) finds the full, gap-free history
+        # via a plain indexed lookup rather than a table-scanning join.
         group_id = card["canonical_card_id"] or card["id"]
         history = conn.execute(
-            """
-            SELECT ph.day, ph.price_cents
-            FROM price_history ph
-            JOIN cards c ON c.id = ph.card_id
-            WHERE COALESCE(c.canonical_card_id, c.id) = ?
-            ORDER BY ph.day ASC
-            """,
+            "SELECT day, price_cents FROM price_history WHERE card_id = ? ORDER BY day ASC",
             (group_id,),
         ).fetchall()
         return {

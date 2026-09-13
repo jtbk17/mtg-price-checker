@@ -141,17 +141,52 @@ def export_alerts(alerts):
     logger.info("Wrote %d alert(s) to %s", len(alerts), ALERTS_FILE)
 
 
+TELEGRAM_MESSAGE_LIMIT = 4096
+
+
+def _alert_line(a):
+    owner_tag = f" ({a['owner']})" if a.get("owner") else ""
+    return (
+        f"{a['name']} [{a['set_name']}, {a['printing']}]{owner_tag}: "
+        f"${a['price_before']:.2f} → ${a['price_now']:.2f} (+{a['pct_change']}%)"
+    )
+
+
+def _chunk_lines(lines, limit):
+    """Group lines into as few messages as possible, each under `limit`
+    characters — a single alert line is never anywhere close to Telegram's
+    per-message cap on its own, so there's no need to split a line
+    itself."""
+    chunks = []
+    current, current_len = [], 0
+    for line in lines:
+        extra = len(line) + (1 if current else 0)  # +1 for the joining newline
+        if current and current_len + extra > limit:
+            chunks.append(current)
+            current, current_len, extra = [], 0, len(line)
+        current.append(line)
+        current_len += extra
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def notify_alerts(alerts):
+    """Sends one or more Telegram messages listing every triggered
+    watchlist alert, splitting across messages when there are enough that
+    one would exceed Telegram's 4096-character-per-message limit —
+    previously every alert was crammed into a single sendMessage call, so
+    a big batch (163 alerts, once observed) failed outright and silently
+    dropped every alert in it, not just the ones past the limit."""
     if not alerts:
         return
-    lines = ["<b>MTG price alerts</b>"]
-    for a in alerts:
-        owner_tag = f" ({a['owner']})" if a.get("owner") else ""
-        lines.append(
-            f"{a['name']} [{a['set_name']}, {a['printing']}]{owner_tag}: "
-            f"${a['price_before']:.2f} → ${a['price_now']:.2f} (+{a['pct_change']}%)"
-        )
-    telegram_notify.send_message("\n".join(lines))
+    lines = [_alert_line(a) for a in alerts]
+    header = "<b>MTG price alerts</b>"
+    chunks = _chunk_lines(lines, TELEGRAM_MESSAGE_LIMIT - len(header) - 20)  # headroom for the "(n/N)" suffix
+    total = len(chunks)
+    for i, chunk_lines in enumerate(chunks, start=1):
+        title = header if total == 1 else f"{header} ({i}/{total})"
+        telegram_notify.send_message(title + "\n" + "\n".join(chunk_lines))
 
 
 if __name__ == "__main__":

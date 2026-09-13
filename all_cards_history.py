@@ -272,6 +272,33 @@ def reconcile_canonical_groups(db_path):
         WHERE canonical_card_id IS NULL
         """
     )
+
+    # Physically move each child's price_history rows onto the canonical
+    # card_id, rather than merging at query time (a first attempt at that
+    # — a self-join on a computed, unindexed grouping column across the
+    # full price_history table — hung for hours at the real ~85k-card,
+    # 100+-day scale in production; caught before it did any damage since
+    # the whole job got killed before ever reaching `git push`). Moving
+    # the rows here instead means compute_movers() and get_by_uuid() stay
+    # on their original simple, index-friendly `WHERE card_id = ?` shape.
+    # INSERT OR IGNORE is the safety net for the (unobserved, but
+    # theoretically possible) case of both rows having data on the same
+    # day — canonical's own value wins rather than raising a PK conflict.
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO price_history (card_id, day, price_cents)
+        SELECT c.canonical_card_id, ph.day, ph.price_cents
+        FROM price_history ph
+        JOIN cards c ON c.id = ph.card_id
+        WHERE c.canonical_card_id IS NOT NULL
+        """
+    )
+    conn.execute(
+        """
+        DELETE FROM price_history
+        WHERE card_id IN (SELECT id FROM cards WHERE canonical_card_id IS NOT NULL)
+        """
+    )
     conn.commit()
     conn.close()
     if updates:
@@ -293,26 +320,23 @@ def compute_movers(db_path, top_n=15):
     today_day = _day_number(date.today())
 
     def top_movers(days_back):
-        # Grouping by COALESCE(canonical_card_id, id) (see reconcile_canonical_groups)
-        # merges a split/adventure/DFC card's two per-face rows into one
-        # series before comparing days — confirmed no day ever has a price
-        # on both rows, so this merge can't produce duplicate/conflicting
-        # matches. `p.price_cents != 0` guards a divide-by-zero below; it
-        # has never actually occurred in the feed, but a crash here would
-        # silently skip that night's alerts entirely, so it's cheap
-        # insurance either way.
+        # A split/adventure/DFC card's two per-face rows are physically
+        # consolidated onto one card_id by reconcile_canonical_groups()
+        # (moving price_history rows, not merging at query time — an
+        # earlier attempt at a query-time merge via a self-join on a
+        # computed grouping column hung for hours at real production
+        # scale, since it couldn't use price_history's (card_id, day)
+        # index). So this stays the plain, index-friendly shape it always
+        # was. `p.price_cents != 0` guards a divide-by-zero below; never
+        # actually observed in the feed, but a crash here would silently
+        # skip that night's alerts entirely, so it's cheap insurance.
         rows = conn.execute(
             """
-            WITH merged AS (
-                SELECT COALESCE(c.canonical_card_id, c.id) AS gid, ph.day, ph.price_cents
-                FROM price_history ph
-                JOIN cards c ON c.id = ph.card_id
-            )
-            SELECT g.name, g.set_code, g.set_name, g.scryfall_id, t.price_cents, p.price_cents
-            FROM merged t
-            JOIN merged p ON p.gid = t.gid AND p.day = ?
-            JOIN cards g ON g.id = t.gid
-            WHERE t.day = ? AND g.name IS NOT NULL AND g.is_token = 0
+            SELECT c.name, c.set_code, c.set_name, c.scryfall_id, t.price_cents, p.price_cents
+            FROM price_history t
+            JOIN price_history p ON p.card_id = t.card_id AND p.day = ?
+            JOIN cards c ON c.id = t.card_id
+            WHERE t.day = ? AND c.name IS NOT NULL AND c.is_token = 0
                 AND t.price_cents != p.price_cents AND p.price_cents != 0
             """,
             (today_day - days_back, today_day),
