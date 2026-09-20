@@ -1,4 +1,3110 @@
 {
-  "generated_at": "2026-09-19T12:05:25.819036+00:00",
-  "alerts": []
+  "generated_at": "2026-09-20T12:16:27.685936+00:00",
+  "alerts": [
+    {
+      "name": "Origin of the Hulk",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Matt Murdock, Justice Seeker",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Giant's Boulder",
+      "set_name": "The Hobbit",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Aggravated Assault",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Thorin, Mountain-king",
+      "set_name": "The Hobbit",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Minas Morgul, Dark Fortress",
+      "set_name": "The Hobbit Eternal",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
+    },
+    {
+      "name": "Gollum, Riddle Master",
+      "set_name": "The Hobbit",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Head of the Hunt",
+      "set_name": "The Hobbit",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Syr Konrad, the Grim",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Whip Silk",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Deafening Silence",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Merfolk Trickster",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Simian Spirit Guide",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Lava Dart",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Leyline of the Void",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Dark Fortress",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Arahbo, the First Fang",
+      "set_name": "Foundations",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.99,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Pearl-Ear, Imperial Advisor",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Historian's Boon",
+      "set_name": "Dominaria United Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Templar Knight",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Mirror Entity",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Clarion Conqueror",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Benevolent Bodyguard",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Youthful Valkyrie",
+      "set_name": "Foundations",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Hop to It",
+      "set_name": "Bloomburrow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Rest in Peace",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Secure the Wastes",
+      "set_name": "Fallout",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Benevolent Bodyguard",
+      "set_name": "Judgment",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Seal of Cleansing",
+      "set_name": "Nemesis",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Rest in Peace",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Temporary Lockdown",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Defiler of Faith",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Prowl, Stoic Strategist // Prowl, Pursuit Vehicle",
+      "set_name": "Transformers",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Reya Dawnbringer",
+      "set_name": "Ultimate Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "White Orchid Phantom",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Aang's Iceberg",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.49,
+      "pct_change": 25.1
+    },
+    {
+      "name": "Unbreakable Formation",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "The Wandering Rescuer",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Rhox Faithmender",
+      "set_name": "Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Fangorn, Tree Shepherd",
+      "set_name": "The Lord of the Rings: Tales of Middle-earth",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Fall of Gil-galad",
+      "set_name": "The Lord of the Rings: Tales of Middle-earth",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Ugl\u00fak of the White Hand",
+      "set_name": "The Lord of the Rings: Tales of Middle-earth",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Ghost Quarter",
+      "set_name": "Innistrad",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Field of Ruin",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Disruptor Flute",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Flitterwing Nuisance",
+      "set_name": "Lorwyn Eclipsed Promos",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Etched Champion",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "The Squadron Sinister",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Demolition Field",
+      "set_name": "Outlaws of Thunder Junction Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Aven Mindcensor",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Auriok Steelshaper",
+      "set_name": "Mirrodin",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Ancient Den",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Nevinyrral's Disk",
+      "set_name": "Commander Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Mirage Mirror",
+      "set_name": "Commander Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Guardian Idol",
+      "set_name": "Iconic Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Fractured Powerstone",
+      "set_name": "March of the Machine Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Commander's Sphere",
+      "set_name": "Doctor Who",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Hedron Archive",
+      "set_name": "Commander Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Pithing Needle",
+      "set_name": "Double Masters 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Jan Jansen, Chaos Crafter",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Maelstrom Colossus",
+      "set_name": "Commander Legends",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Pillar of Origins",
+      "set_name": "Commander Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Sandstone Oracle",
+      "set_name": "Commander Legends",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Dockside Extortionist",
+      "set_name": "Double Masters 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 9.99,
+      "price_now": 10.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Manifold Mouse",
+      "set_name": "Bloomburrow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Mass Hysteria",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Sundering Eruption // Volcanic Fissure",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Goblin Gang Leader",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Private Eye",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Stadium Headliner",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Virtue of Courage // Embereth Blaze",
+      "set_name": "Wilds of Eldraine",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Pinnacle Monk // Mystic Peak",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Heartfire Hero",
+      "set_name": "Bloomburrow",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Inti, Seneschal of the Sun",
+      "set_name": "The Lost Caverns of Ixalan",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Seifer Almasy",
+      "set_name": "Final Fantasy",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Ganax, Astral Hunter",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 6.99,
+      "price_now": 7.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Slickshot Show-Off",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 8.99,
+      "price_now": 9.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Chong and Lily, Nomads",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Aether Flash",
+      "set_name": "Seventh Edition",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Demand Answers",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Cemetery Gatekeeper",
+      "set_name": "Innistrad: Crimson Vow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Searing Touch",
+      "set_name": "Tempest",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Lightning Bolt",
+      "set_name": "Double Masters 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Kyoshi Warrior Exemplars",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Ironheart, Clever Champion",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Kindred Discovery",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 8.99,
+      "price_now": 9.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Uthros Research Craft",
+      "set_name": "Edge of Eternities Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Secret of Bloodbending",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Final Act",
+      "set_name": "Marvel Universe",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "The Mindskinner",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 5.99,
+      "price_now": 6.99,
+      "pct_change": 16.7
+    },
+    {
+      "name": "The Mindskinner",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Cavalier of Gales",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Portent of Calamity",
+      "set_name": "Bloomburrow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Null Elemental Blast",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.49,
+      "pct_change": 40.0
+    },
+    {
+      "name": "Abundant Growth",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Annul",
+      "set_name": "Urza's Saga",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "High-Society Hunter",
+      "set_name": "Foundations",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Zeriam, Golden Wind",
+      "set_name": "Dominaria United Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Kellan, Planar Trailblazer",
+      "set_name": "Foundations",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Theft of Dreams",
+      "set_name": "Portal Second Age",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Whir of Invention",
+      "set_name": "Special Guests",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
+    },
+    {
+      "name": "Snap",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Secrets of the Dead",
+      "set_name": "Dark Ascension",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Conspiracy Unraveler",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Ninja of the Deep Hours",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Tetsuko Umezawa, Fugitive",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Waterbender's Restoration",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Preordain",
+      "set_name": "Outlaws of Thunder Junction Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Cracked Earth Technique",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.49,
+      "pct_change": 25.1
+    },
+    {
+      "name": "Padeem, Consul of Innovation",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Emry, Lurker of the Loch",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Thoughtcast",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Deluxe Dragster",
+      "set_name": "March of the Machine Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Shared Roots",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Ram Through",
+      "set_name": "Commander Masters",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "River Bear",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Insidious Fungus",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Loot, Exuberant Explorer",
+      "set_name": "Foundations",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Timberwatch Elf",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Wear Down",
+      "set_name": "Bloomburrow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Sutina, Speaker of the Tajuru",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Trail of Crumbs",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Gaea's Blessing",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Blossoming Defense",
+      "set_name": "Kaladesh",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Bane of Progress",
+      "set_name": "Commander Collection: Green",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Hydra's Growth",
+      "set_name": "Theros Beyond Death",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Avacyn's Pilgrim",
+      "set_name": "Modern Masters 2017",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.99,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Tectonic Split",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Badgermole Cub",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 69.99,
+      "price_now": 74.99,
+      "pct_change": 7.1
+    },
+    {
+      "name": "Mightform Harmonizer",
+      "set_name": "Edge of Eternities",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Rampant Growth",
+      "set_name": "Double Masters 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Garruk's Uprising",
+      "set_name": "Core Set 2021",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Zendikar's Roil",
+      "set_name": "Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Korlessa, Scale Singer",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Cactusfolk Sureshot",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Kellan Joins Up",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Clement, the Worrywort",
+      "set_name": "Bloomburrow Promos",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "The Mighty Thor, Jane Foster",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Hawkeye, Young Avenger",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Doom Reigns Supreme",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Final Showdown",
+      "set_name": "Marvel Universe",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "It's Clobberin' Time!",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "The Coming of Galactus",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "The Sentry, Golden Guardian",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Gathering Place",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Gleaming Bastion",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Super-Soldier Serum",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Black Widow, Intel Expert",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Abomination, Irradiated Brute",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Scattered Groves",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Fantastic Elasticity",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Unnatural Growth",
+      "set_name": "Marvel Universe",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Promise of Loyalty",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Hidden Lair",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Warleader's Call",
+      "set_name": "Marvel Universe",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 6.99,
+      "price_now": 7.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Mole Man, Moloid Master",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Fleecemane Lion",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Green Goblin, Back for More",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Goldvein Hydra",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Lady Spider, Maybelle Reilly",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Spider-UK",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Willowrush Verge",
+      "set_name": "Aetherdrift",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 8.99,
+      "price_now": 9.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Soulstone Sanctuary",
+      "set_name": "Foundations",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Overlord of the Balemurk",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Emperor of Bones",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Great Hall of the Citadel",
+      "set_name": "The Lord of the Rings: Tales of Middle-earth",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Skyclave Apparition",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Anger",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Laelia, the Blade Reforged",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Tocasia's Welcome",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Glaring Fleshraker",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Rootbound Crag",
+      "set_name": "Fallout",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Mj\u00f6lnir, Storm Hammer",
+      "set_name": "Assassin's Creed",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Mister Gutsy",
+      "set_name": "Fallout",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Saprazzan Skerry",
+      "set_name": "Mercadian Masques",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Blackcleave Cliffs",
+      "set_name": "Phyrexia: All Will Be One",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Frontier Bivouac",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Crystal Shard",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Smuggler's Copter",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Seraph Sanctuary",
+      "set_name": "Avacyn Restored",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Liquimetal Torque",
+      "set_name": "Modern Horizons 2",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Dragonfire Blade",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Verdant Catacombs",
+      "set_name": "Modern Horizons 2",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 54.99,
+      "price_now": 59.99,
+      "pct_change": 9.1
+    },
+    {
+      "name": "Hedge Maze",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Deserted Temple",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.49,
+      "pct_change": 25.1
+    },
+    {
+      "name": "Herigast, Erupting Nullkite",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Muraganda Raceway",
+      "set_name": "Aetherdrift",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Snow-Covered Wastes",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Dragonfire Blade",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Valgavoth's Lair",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Midgar, City of Mako // Reactor Raid",
+      "set_name": "Final Fantasy",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Argoth, Sanctum of Nature",
+      "set_name": "The Brothers' War",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Gruul Signet",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Gemstone Mine",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Contaminated Aquifer",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Abstergo Entertainment",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Crystal Chimes",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Swiftfoot Boots",
+      "set_name": "Wizards Play Network 2022",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Screeching Scorchbeast",
+      "set_name": "Fallout",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Royal Assassin",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Herigast, Erupting Nullkite",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Vexing Bauble",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 6.99,
+      "price_now": 7.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Attempted Murder",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Desmond Miles",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Witch of the Moors",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Come Back Wrong",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Archfiend of the Dross",
+      "set_name": "Phyrexia: All Will Be One",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Mutilate",
+      "set_name": "Mystery Booster 2",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Burnt Offering",
+      "set_name": "Ice Age",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Chorale of the Void",
+      "set_name": "Edge of Eternities",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Surgical Extraction",
+      "set_name": "Breaking News",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Sorin the Mirthless",
+      "set_name": "Innistrad: Crimson Vow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Bastion of Remembrance",
+      "set_name": "Duskmourn: House of Horror Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Gisa, Glorious Resurrector",
+      "set_name": "Innistrad: Midnight Hunt",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Bubbling Muck",
+      "set_name": "Urza's Destiny",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Crowded Crypt",
+      "set_name": "Midnight Hunt Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Savage Gorger",
+      "set_name": "Core Set 2020",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "K'rrik, Son of Yawgmoth",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Harvester of Souls",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Apprentice Necromancer",
+      "set_name": "Ultimate Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Stinkweed Imp",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Army of the Damned",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Abyssal Harvester",
+      "set_name": "Foundations",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Tormod, the Desecrator",
+      "set_name": "Commander Legends",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Victimize",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Phyrexian Scriptures",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Lich-Knights' Conquest",
+      "set_name": "Wilds of Eldraine",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Ardyn, the Usurper",
+      "set_name": "Final Fantasy",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.99,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Fain, the Broker",
+      "set_name": "The Brothers' War Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Mai, Scornful Striker",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Caustic Bronco",
+      "set_name": "Outlaws of Thunder Junction Promos",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Fire Lord Ozai",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Tyrant's Choice",
+      "set_name": "Conspiracy",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Bojuka Bog",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 3.49,
+      "pct_change": 16.7
+    },
+    {
+      "name": "Temple of the False God",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Eliminate",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Fracture",
+      "set_name": "Strixhaven: School of Mages",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Defiant Strike",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Opt",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Snakeskin Veil",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Dragonlord's Servant",
+      "set_name": "Jumpstart 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Lightning Helix",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Thrill of Possibility",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Culling Ritual",
+      "set_name": "Strixhaven: School of Mages",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Cultivate",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Whirlwind Denial",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Kelpie Guide",
+      "set_name": "Strixhaven: School of Mages",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Dread Summons",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Isolated Chapel",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Caves of Koilos",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Orzhov Signet",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Gleaming Overseer",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Undead Augur",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Fleshbag Marauder",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Combustion Technique",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Adaptive Omnitool",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Blasphemous Act",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Arcane Denial",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Sulfur Falls",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Path of Ancestry",
+      "set_name": "Aetherdrift Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Sram, Senior Edificer",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Darksteel Mutation",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Bloodghast",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Defiling Daemogoth",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Necroblossom Snarl",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Springbloom Druid",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Temple of Malady",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Forgotten Ancient",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Curse of the Swine",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Yavimaya Coast",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Dance with Calamity",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Cursed Mirror",
+      "set_name": "Secrets of Strixhaven Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Settle the Wreckage",
+      "set_name": "Secret Lair Drop",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Containment Priest",
+      "set_name": "Time Spiral Remastered",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Energybending",
+      "set_name": "Avatar: The Last Airbender",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Munitions Expert",
+      "set_name": "Modern Horizons",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Disdainful Stroke",
+      "set_name": "Cowboy Bebop",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Haughty Djinn",
+      "set_name": "Dominaria United",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Consult the Star Charts",
+      "set_name": "Edge of Eternities",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 6.99,
+      "price_now": 7.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Trostani, Three Whispers",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Fracture",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Koma, World-Eater",
+      "set_name": "Foundations",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Ajani, the Greathearted",
+      "set_name": "Secret Lair Drop",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Expressive Iteration",
+      "set_name": "Special Guests",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Teferi, Time Raveler",
+      "set_name": "Bloomburrow Commander",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Zur, Eternal Schemer",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.49,
+      "price_now": 4.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Sivitri, Dragon Master",
+      "set_name": "Dominaria United Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Jodah, the Unifier",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Duelist's Heritage",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Big Score",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
+    },
+    {
+      "name": "Requisition Raid",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Wisdom of Ages",
+      "set_name": "Secrets of Strixhaven",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Great Hall of the Biblioplex",
+      "set_name": "Secrets of Strixhaven",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Blazing Firesinger // Seething Song",
+      "set_name": "Secrets of Strixhaven",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Colorstorm Stallion",
+      "set_name": "Secrets of Strixhaven",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Armageddon",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 8.99,
+      "price_now": 9.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Abrade",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Pick Your Poison",
+      "set_name": "Secrets of Strixhaven Mystical Archive",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Exhibition Tidecaller",
+      "set_name": "Secrets of Strixhaven",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Omo, Queen of Vesuva",
+      "set_name": "Modern Horizons 3 Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Despark",
+      "set_name": "War of the Spark",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Spitemare",
+      "set_name": "Eventide",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Abstruse Appropriation",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.59,
+      "price_now": 0.69,
+      "pct_change": 16.9
+    },
+    {
+      "name": "Elas il-Kor, Sadistic Pilgrim",
+      "set_name": "Dominaria United",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 2.49,
+      "price_now": 2.79,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Bayek of Siwa",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Soulherder",
+      "set_name": "Modern Horizons",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Spell Pierce",
+      "set_name": "Ixalan",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Fleeting Reflection",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Skittering Precursor",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Chevill, Bane of Monsters",
+      "set_name": "Ikoria: Lair of Behemoths",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Screeching Scorchbeast",
+      "set_name": "Fallout",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Nightshade Harvester",
+      "set_name": "Duskmourn: House of Horror Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Elephant-Mandrill",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Thopter Fabricator",
+      "set_name": "Aetherdrift Promos",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.29,
+      "price_now": 1.49,
+      "pct_change": 15.5
+    },
+    {
+      "name": "Herald of War",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Writhing Chrysalis",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Rienne, Angel of Rebirth",
+      "set_name": "Dominaria United Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.79,
+      "pct_change": 20.1
+    },
+    {
+      "name": "Kiora, Behemoth Beckoner",
+      "set_name": "War of the Spark",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Mystic Gate",
+      "set_name": "Double Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 4.99,
+      "price_now": 5.49,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Shriekmaw",
+      "set_name": "Ultimate Masters",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Furnace Hellkite",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Light Up the Stage",
+      "set_name": "Ravnica Allegiance",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Twisted Riddlekeeper",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Stump Stomp // Burnwillow Clearing",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Shredder's Technique",
+      "set_name": "Teenage Mutant Ninja Turtles",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.35,
+      "price_now": 0.39,
+      "pct_change": 11.4
+    },
+    {
+      "name": "Insidious Roots",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Bristling Backwoods",
+      "set_name": "Outlaws of Thunder Junction",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Nesting Grounds",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.59,
+      "pct_change": 20.4
+    },
+    {
+      "name": "Raphael, Ninja Destroyer",
+      "set_name": "Teenage Mutant Ninja Turtles",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 1.49,
+      "price_now": 1.99,
+      "pct_change": 33.6
+    },
+    {
+      "name": "Sodden Verdure",
+      "set_name": "Teenage Mutant Ninja Turtles Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Temur Battlecrier",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.99,
+      "price_now": 2.29,
+      "pct_change": 15.1
+    },
+    {
+      "name": "Metastatic Evangel",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Mary Read and Anne Bonny",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.49,
+      "pct_change": 50.5
+    },
+    {
+      "name": "Culling Ritual",
+      "set_name": "Wizards Play Network 2025",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 2.99,
+      "price_now": 5.49,
+      "pct_change": 83.6
+    },
+    {
+      "name": "Camellia, the Seedmiser",
+      "set_name": "Bloomburrow",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.49,
+      "price_now": 3.99,
+      "pct_change": 14.3
+    },
+    {
+      "name": "Saheeli, the Sun's Brilliance",
+      "set_name": "The Lost Caverns of Ixalan",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Invert Polarity",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Frostcliff Siege",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Gerrard's Verdict",
+      "set_name": "Apocalypse",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 1.79,
+      "price_now": 1.99,
+      "pct_change": 11.2
+    },
+    {
+      "name": "Imperious Oligarch",
+      "set_name": "Ravnica Allegiance",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 0.49,
+      "price_now": 0.79,
+      "pct_change": 61.2
+    },
+    {
+      "name": "Cloudshredder Sliver",
+      "set_name": "Time Spiral Remastered",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 3.99,
+      "price_now": 4.49,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Llanowar Elves",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.79,
+      "price_now": 0.99,
+      "pct_change": 25.3
+    },
+    {
+      "name": "Sewer-veillance Cam",
+      "set_name": "Teenage Mutant Ninja Turtles",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.39,
+      "price_now": 0.49,
+      "pct_change": 25.6
+    },
+    {
+      "name": "Nomad Outpost",
+      "set_name": "Tarkir: Dragonstorm",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.69,
+      "price_now": 0.79,
+      "pct_change": 14.5
+    },
+    {
+      "name": "Talrand, Sky Summoner",
+      "set_name": "Double Masters 2022",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 0.99,
+      "price_now": 1.29,
+      "pct_change": 30.3
+    }
+  ]
 }
