@@ -248,6 +248,21 @@ class DbTests(unittest.TestCase):
         db.mark_ran_today("smoke_test_key")
         self.assertTrue(db.already_ran_today("smoke_test_key"))
 
+    def test_record_article_if_new_dedupes_by_url(self):
+        article_id = db.record_article_if_new("https://example.com/a", "Test Site", "A Title", None)
+        self.assertIsNotNone(article_id)
+        self.assertIsNone(db.record_article_if_new("https://example.com/a", "Test Site", "A Title", None))
+
+    def test_news_signal_round_trip(self):
+        article_id = db.record_article_if_new("https://example.com/signal-test", "Test Site", "Title", None)
+        signal_id = db.record_news_signal(article_id, "Some Card", "combo_discovery", True)
+        self.assertIsNotNone(signal_id)
+        db.mark_news_signal_sent(signal_id)  # must not raise
+        conn = db.get_connection()
+        row = conn.execute("SELECT telegram_sent_at FROM news_signals WHERE id = ?", (signal_id,)).fetchone()
+        conn.close()
+        self.assertIsNotNone(row["telegram_sent_at"])
+
 
 class RecommenderTests(unittest.TestCase):
     def setUp(self):
@@ -1011,6 +1026,219 @@ def _fake_playwright_context(page_behaviors):
     return _fake_sync_playwright(pages)
 
 
+def _fake_feed_xml(items):
+    """Builds a minimal WordPress-RSS-shaped XML string from
+    [(title, link, pub_date_rfc822, content_html)] tuples, for mocking
+    requests.get in MtgNewsFeedTests."""
+    body = "".join(
+        f'<item><title>{title}</title><link>{link}</link><pubDate>{pub_date}</pubDate>'
+        f'<content:encoded><![CDATA[{content_html}]]></content:encoded></item>'
+        for title, link, pub_date, content_html in items
+    )
+    return (
+        '<?xml version="1.0"?>'
+        '<rss xmlns:content="http://purl.org/rss/1.0/modules/content/">'
+        f"<channel>{body}</channel></rss>"
+    ).encode()
+
+
+class MtgNewsFeedTests(unittest.TestCase):
+    def _fake_response(self, xml_bytes):
+        resp = type("Resp", (), {})()
+        resp.content = xml_bytes
+        resp.raise_for_status = lambda: None
+        return resp
+
+    def test_fetch_recent_articles_parses_full_content_and_strips_html(self):
+        import mtg_news_feed as mnf
+
+        xml = _fake_feed_xml(
+            [("A Title", "https://example.com/a", "Fri, 02 Oct 2026 20:00:00 +0000", "<p>Hello <b>World</b></p>")]
+        )
+        with patch.object(mnf.requests, "get", return_value=self._fake_response(xml)):
+            articles = mnf.fetch_recent_articles()
+
+        mine = [a for a in articles if a["link"] == "https://example.com/a"]
+        self.assertGreaterEqual(len(mine), 1)  # the same fake response is returned for every feed URL
+        self.assertEqual(mine[0]["text"].strip(), "Hello World")
+        self.assertEqual(mine[0]["published"].year, 2026)
+
+    def test_fetch_recent_articles_skips_a_down_feed_without_crashing(self):
+        import mtg_news_feed as mnf
+
+        good_xml = _fake_feed_xml([("Good", "https://example.com/good", "Fri, 02 Oct 2026 20:00:00 +0000", "ok")])
+
+        def fake_get(url, **kwargs):
+            if "mtgrocks" in url:
+                raise mnf.requests.RequestException("down")
+            return self._fake_response(good_xml)
+
+        with patch.object(mnf.requests, "get", side_effect=fake_get):
+            articles = mnf.fetch_recent_articles()
+
+        self.assertTrue(any(a["link"] == "https://example.com/good" for a in articles))
+
+    def test_find_mentioned_cards_requires_multiword_by_default(self):
+        import mtg_news_feed as mnf
+
+        names = ["Exile", "Darklight Phoenix"]
+        found = mnf.find_mentioned_cards("Exile this creature, then cast Darklight Phoenix.", names)
+        self.assertEqual(found, ["Darklight Phoenix"])
+
+    def test_find_mentioned_cards_respects_word_boundaries(self):
+        import mtg_news_feed as mnf
+
+        found = mnf.find_mentioned_cards("Check out Boltwing Hatchling in this deck.", ["Bolt Hatchling"])
+        self.assertEqual(found, [])
+
+    def test_find_mentioned_cards_can_include_single_word_when_requested(self):
+        import mtg_news_feed as mnf
+
+        found = mnf.find_mentioned_cards("Solitude is a strong card.", ["Solitude"], require_multiword=False)
+        self.assertEqual(found, ["Solitude"])
+
+
+class NewsSignalsTests(unittest.TestCase):
+    def setUp(self):
+        import news_signals
+
+        self.news_signals = news_signals
+        self.article = {
+            "source": "Test Site",
+            "title": "New Combo Discovered",
+            "link": "https://example.com/combo-article",
+            "published": None,
+            "text": "This deck uses Darklight Phoenix to great effect.",
+        }
+
+    def test_classify_mentions_empty_when_claude_not_configured(self):
+        with patch.object(self.news_signals.claude_client, "configured", return_value=False):
+            result = self.news_signals._classify_mentions(self.article, ["Darklight Phoenix"])
+        self.assertEqual(result, [])
+
+    def test_classify_mentions_strips_markdown_fences_and_filters_hallucinations(self):
+        fake_block = type("Block", (), {"type": "text", "text": (
+            '```json\n[{"card_name": "Darklight Phoenix", "is_genuine_interest": true, '
+            '"signal_type": "combo_discovery"}, {"card_name": "Made Up Card", '
+            '"is_genuine_interest": true, "signal_type": "combo_discovery"}]\n```'
+        )})()
+        fake_response = type("Response", (), {"content": [fake_block]})()
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type("Messages", (), {"create": lambda self, **kw: fake_response})()
+
+        with patch.object(self.news_signals.claude_client, "configured", return_value=True), \
+             patch.object(self.news_signals.claude_client, "get_client", return_value=fake_client):
+            result = self.news_signals._classify_mentions(self.article, ["Darklight Phoenix"])
+
+        self.assertEqual(len(result), 1)  # "Made Up Card" wasn't in the candidate list — dropped
+        self.assertEqual(result[0]["card_name"], "Darklight Phoenix")
+
+    def test_classify_mentions_caps_candidates_and_scales_max_tokens(self):
+        # Live testing against a real day's articles found a fixed
+        # max_tokens too small once an article had enough mentions —
+        # Claude's JSON got cut off mid-string and the whole batch was
+        # lost to a parse error. Scaling max_tokens with candidate count
+        # (and capping candidates at all, for cost) fixes that.
+        import news_signals as ns
+
+        many_names = [f"Card {i}" for i in range(50)]
+        captured_kwargs = {}
+
+        def fake_create(**kwargs):
+            captured_kwargs.update(kwargs)
+            block = type("Block", (), {"type": "text", "text": "[]"})()
+            return type("Response", (), {"content": [block]})()
+
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type("Messages", (), {"create": staticmethod(fake_create)})()
+
+        with patch.object(ns.claude_client, "configured", return_value=True), \
+             patch.object(ns.claude_client, "get_client", return_value=fake_client):
+            ns._classify_mentions(self.article, many_names)
+
+        sent_names = json.loads(captured_kwargs["messages"][0]["content"].split("Candidate card names mentioned: ")[1])
+        self.assertEqual(len(sent_names), ns.MAX_CANDIDATES_PER_ARTICLE)
+        expected_tokens = ns.BASE_OUTPUT_TOKENS + ns.OUTPUT_TOKENS_PER_CANDIDATE * ns.MAX_CANDIDATES_PER_ARTICLE
+        self.assertEqual(captured_kwargs["max_tokens"], expected_tokens)
+
+    def test_classify_mentions_fails_soft_on_malformed_json(self):
+        fake_block = type("Block", (), {"type": "text", "text": "not valid json at all"})()
+        fake_response = type("Response", (), {"content": [fake_block]})()
+        fake_client = type("Client", (), {})()
+        fake_client.messages = type("Messages", (), {"create": lambda self, **kw: fake_response})()
+
+        with patch.object(self.news_signals.claude_client, "configured", return_value=True), \
+             patch.object(self.news_signals.claude_client, "get_client", return_value=fake_client):
+            result = self.news_signals._classify_mentions(self.article, ["Darklight Phoenix"])
+
+        self.assertEqual(result, [])
+
+    def test_check_for_signals_skips_already_seen_articles(self):
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=None), \
+             patch.object(self.news_signals.mtg_news_feed, "find_mentioned_cards") as mock_find:
+            self.news_signals.check_for_signals()
+
+        mock_find.assert_not_called()  # already-seen article never gets this far
+
+    def test_check_for_signals_sends_actionable_signals_and_records_them(self):
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
+             patch.object(
+                 self.news_signals, "_classify_mentions",
+                 return_value=[{"card_name": "Darklight Phoenix", "is_genuine_interest": True, "signal_type": "combo_discovery"}],
+             ), \
+             patch.object(self.news_signals.db, "record_news_signal", return_value=7), \
+             patch.object(self.news_signals.db, "mark_news_signal_sent") as mock_mark_sent, \
+             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
+            self.news_signals.check_for_signals()
+
+        mock_send.assert_called_once()
+        mock_mark_sent.assert_called_once_with(7)
+
+    def test_check_for_signals_bundles_multiple_actionable_signals_into_one_message(self):
+        # Live testing found a single Secret Lair announcement naming
+        # ~22 reprinted cards — this must be one Telegram message, not
+        # 22 separate pings.
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Card A", "Card B"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
+             patch.object(self.news_signals.mtg_news_feed, "find_mentioned_cards", return_value=["Card A", "Card B"]), \
+             patch.object(
+                 self.news_signals, "_classify_mentions",
+                 return_value=[
+                     {"card_name": "Card A", "is_genuine_interest": True, "signal_type": "reprint_announcement"},
+                     {"card_name": "Card B", "is_genuine_interest": True, "signal_type": "reprint_announcement"},
+                 ],
+             ), \
+             patch.object(self.news_signals.db, "record_news_signal", side_effect=[7, 8]), \
+             patch.object(self.news_signals.db, "mark_news_signal_sent") as mock_mark_sent, \
+             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
+            self.news_signals.check_for_signals()
+
+        mock_send.assert_called_once()
+        sent_text = mock_send.call_args.args[0]
+        self.assertIn("Card A", sent_text)
+        self.assertIn("Card B", sent_text)
+        self.assertEqual(mock_mark_sent.call_count, 2)
+
+    def test_check_for_signals_does_not_alert_routine_mentions(self):
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
+             patch.object(
+                 self.news_signals, "_classify_mentions",
+                 return_value=[{"card_name": "Darklight Phoenix", "is_genuine_interest": False, "signal_type": "routine_mention"}],
+             ), \
+             patch.object(self.news_signals.db, "record_news_signal", return_value=7), \
+             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
+            self.news_signals.check_for_signals()
+
+        mock_send.assert_not_called()
+
+
 class MtgNewsTests(unittest.TestCase):
     def _fake_response(self, xml_bytes):
         resp = type("Resp", (), {})()
@@ -1322,9 +1550,12 @@ class ImportsTests(unittest.TestCase):
     def test_all_modules_import(self):
         import all_cards_lookup  # noqa: F401
         import cardkingdom  # noqa: F401
+        import claude_client  # noqa: F401
         import market_alerts  # noqa: F401
         import mtg_news  # noqa: F401
+        import mtg_news_feed  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401
+        import news_signals  # noqa: F401
         import record_feedback  # noqa: F401
         import refresh_job  # noqa: F401
         import scryfall  # noqa: F401

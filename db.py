@@ -63,6 +63,28 @@ CREATE TABLE IF NOT EXISTS app_state (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- news_signals.py: tracks which news articles have already been
+-- processed (so a re-run doesn't re-classify/re-alert the same
+-- article) and what card-mention signals were found in each.
+CREATE TABLE IF NOT EXISTS news_articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    url TEXT UNIQUE NOT NULL,
+    source TEXT,
+    title TEXT,
+    published_at TEXT,
+    seen_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS news_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id INTEGER NOT NULL REFERENCES news_articles(id),
+    card_name TEXT NOT NULL,
+    signal_type TEXT,
+    is_genuine_interest INTEGER,
+    telegram_sent_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -514,3 +536,45 @@ def mark_ran_today(key):
     from datetime import date
 
     set_state(key, date.today().isoformat())
+
+
+def record_article_if_new(url, source, title, published_at):
+    """Inserts a news article and returns its id, or returns None if this
+    URL was already recorded (by an earlier run) — the caller's signal
+    on whether to bother processing it further."""
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            "INSERT INTO news_articles (url, source, title, published_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(url) DO NOTHING",
+            (url, source, title, published_at),
+        )
+        conn.commit()
+        return cur.lastrowid if cur.rowcount else None
+    finally:
+        conn.close()
+
+
+def record_news_signal(article_id, card_name, signal_type, is_genuine_interest):
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            "INSERT INTO news_signals (article_id, card_name, signal_type, is_genuine_interest) "
+            "VALUES (?, ?, ?, ?)",
+            (article_id, card_name, signal_type, int(bool(is_genuine_interest))),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def mark_news_signal_sent(signal_id):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE news_signals SET telegram_sent_at = CURRENT_TIMESTAMP WHERE id = ?", (signal_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
