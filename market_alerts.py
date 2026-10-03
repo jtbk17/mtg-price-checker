@@ -3,13 +3,19 @@ buttons, for every general-market mover found by all_cards_history.py's
 nightly snapshot — not just watchlist cards. Each alert is logged as a
 recommendation; feedback collected by poll_telegram_feedback.py trains
 recommender.py's model to annotate future alerts with a confidence score.
+
+Also links any recent news coverage found for the card (mtg_news.py),
+so the alert hints at *why* it might be moving without needing a paid
+LLM to guess at a reason.
 """
 
+import html
 import json
 import logging
 from pathlib import Path
 
 import db
+import mtg_news
 import recommender
 import telegram_notify
 
@@ -17,6 +23,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tcg-price-checker")
 
 MOVERS_FILE = Path(__file__).parent / "docs" / "movers.json"
+
+
+def _news_lines(news_items):
+    """Formats found news items as HTML `<a>` lines to append to a
+    mover's alert text, one per item, each prefixed with a blank line.
+    Escaped (unlike the other fields in send_market_alerts, which come
+    from the tightly-controlled Scryfall/MTGJSON pipeline) since article
+    titles are third-party text — a stray "&" or "<" in one would
+    otherwise produce malformed HTML and silently drop the whole alert."""
+    return "".join(
+        f"\n📰 <a href=\"{html.escape(n['link'])}\">{html.escape(n['title'])}</a> ({html.escape(n['source'] or 'news')})"
+        for n in news_items
+    )
 
 
 SOURCES = [
@@ -56,11 +75,13 @@ def send_market_alerts():
             confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
             confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
 
+            news_lines = _news_lines(mtg_news.find_news(mover["name"]))
+
             text = (
                 f"<b>Market mover ({label})</b>\n"
                 f"{mover['name']} ({mover.get('set_full_name', mover['set'])}): "
                 f"${mover['price_before']:.2f} → ${mover['price_now']:.2f} "
-                f"(+{mover['pct_change']}%){confidence_line}"
+                f"(+{mover['pct_change']}%){confidence_line}{news_lines}"
             )
             buttons = [("👍 Good pick", f"fb:{rec_id}:good"), ("👎 False positive", f"fb:{rec_id}:bad")]
             sent = telegram_notify.send_photo_with_buttons(mover.get("image_url"), text, buttons)

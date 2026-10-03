@@ -962,6 +962,103 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertEqual(len(price_calls), 2)
 
 
+def _fake_rss(items):
+    """Builds a minimal Google-News-RSS-shaped XML string from
+    [(title, link, pub_date_rfc822, source)] tuples, for mocking
+    requests.get in MtgNewsTests without hitting the real network."""
+    body = "".join(
+        f"<item><title>{title}</title><link>{link}</link><pubDate>{pub_date}</pubDate>"
+        f"<source url=\"https://example.com\">{source}</source></item>"
+        for title, link, pub_date, source in items
+    )
+    return f'<?xml version="1.0"?><rss><channel>{body}</channel></rss>'.encode()
+
+
+class MtgNewsTests(unittest.TestCase):
+    def _fake_response(self, xml_bytes):
+        resp = type("Resp", (), {})()
+        resp.content = xml_bytes
+        resp.raise_for_status = lambda: None
+        return resp
+
+    def test_find_news_keeps_recent_items(self):
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Recent Article", "https://example.com/a", recent, "Some Site")])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "Recent Article")
+        self.assertEqual(results[0]["source"], "Some Site")
+
+    def test_find_news_strips_redundant_source_suffix_from_title(self):
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        # Google appends " - <source>" to every title itself (real example
+        # observed live: "... - Polygon.com" with <source>Polygon.com</source>).
+        xml = _fake_rss([("Big Price Spike - Polygon.com", "https://example.com/a", recent, "Polygon.com")])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(results[0]["title"], "Big Price Spike")
+
+    def test_find_news_drops_stale_items(self):
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        stale = format_datetime(datetime.now(timezone.utc) - timedelta(days=mtg_news.RECENCY_DAYS + 30))
+        xml = _fake_rss([("Old Set Guide", "https://example.com/old", stale, "Old Site")])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(results, [])
+
+    def test_find_news_respects_max_results(self):
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=1))
+        xml = _fake_rss([(f"Article {i}", f"https://example.com/{i}", recent, "Site") for i in range(5)])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+            results = mtg_news.find_news("Some Card", max_results=2)
+
+        self.assertEqual(len(results), 2)
+
+    def test_find_news_fails_soft_on_network_error(self):
+        import mtg_news
+
+        with patch.object(mtg_news.requests, "get", side_effect=mtg_news.requests.RequestException("boom")):
+            self.assertEqual(mtg_news.find_news("Some Card"), [])
+
+    def test_news_lines_formats_and_escapes_html(self):
+        import market_alerts
+
+        items = [{"title": "Price Spike & Reprint News", "link": "https://x.com/a?b=1&c=2", "source": "Site <A>"}]
+        rendered = market_alerts._news_lines(items)
+        self.assertIn("Price Spike &amp; Reprint News", rendered)
+        self.assertIn("https://x.com/a?b=1&amp;c=2", rendered)
+        self.assertIn("Site &lt;A&gt;", rendered)
+        self.assertNotIn("<A>", rendered)
+
+    def test_news_lines_empty_for_no_items(self):
+        import market_alerts
+
+        self.assertEqual(market_alerts._news_lines([]), "")
+
+
 class ImportsTests(unittest.TestCase):
     """Every module should at least import cleanly — catches syntax errors
     and top-level exceptions before they reach the nightly job."""
@@ -970,6 +1067,7 @@ class ImportsTests(unittest.TestCase):
         import all_cards_lookup  # noqa: F401
         import cardkingdom  # noqa: F401
         import market_alerts  # noqa: F401
+        import mtg_news  # noqa: F401
         import mtgjson_crosswalk  # noqa: F401
         import record_feedback  # noqa: F401
         import refresh_job  # noqa: F401
