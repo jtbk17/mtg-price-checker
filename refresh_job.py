@@ -25,7 +25,7 @@ SNAPSHOT_FILE = DOCS_DIR / "watchlist.json"
 ALERTS_FILE = DOCS_DIR / "alerts.json"
 
 ALERT_PCT_THRESHOLD = 10.0
-ALERT_ABS_THRESHOLD = 5.0
+ALERT_ABS_THRESHOLD = 2.0
 
 
 def _is_foil(finish):
@@ -34,8 +34,12 @@ def _is_foil(finish):
 
 def refresh_watchlist_prices():
     """Refresh every tracked card's Card Kingdom price, and return a list
-    of cards whose market price rose by at least $5 or 10% since the last
-    recorded price (increases only)."""
+    of cards whose market price rose by at least ALERT_ABS_THRESHOLD *and*
+    at least ALERT_PCT_THRESHOLD since the last recorded price (increases
+    only). Requiring both (not either) is what actually suppresses noise
+    from cheap cards — a card has to be worth at least
+    ALERT_ABS_THRESHOLD / (ALERT_PCT_THRESHOLD / 100) for a move to clear
+    both at once, so there's no separate price floor to maintain."""
     items = db.list_watchlist()
     logger.info("Refreshing prices for %d watched card(s)", len(items))
 
@@ -87,7 +91,7 @@ def refresh_watchlist_prices():
             if previous_price:
                 diff = new_price - previous_price
                 pct = diff / previous_price * 100
-                if diff >= ALERT_ABS_THRESHOLD or pct >= ALERT_PCT_THRESHOLD:
+                if diff >= ALERT_ABS_THRESHOLD and pct >= ALERT_PCT_THRESHOLD:
                     alerts.append(
                         {
                             "name": item["name"],

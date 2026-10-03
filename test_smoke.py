@@ -668,6 +668,39 @@ class ManaboxImportTests(unittest.TestCase):
 
 
 class RefreshJobTests(unittest.TestCase):
+    def test_alert_requires_both_dollar_and_percent_threshold(self):
+        import refresh_job
+
+        items = [
+            {  # clears both $2 and 10% -> should alert
+                "variant_id": "v1", "name": "Big Mover", "set_name": "Set", "card_id": None,
+                "mtgjson_id": "uuid-1", "printing": "Normal", "latest_price": 20.0,
+            },
+            {  # clears 10% but not $2 (cheap-card noise) -> should NOT alert
+                "variant_id": "v2", "name": "Cheap Noise", "set_name": "Set", "card_id": None,
+                "mtgjson_id": "uuid-2", "printing": "Normal", "latest_price": 1.00,
+            },
+            {  # clears $2 but not 10% -> should NOT alert
+                "variant_id": "v3", "name": "Slow Creep", "set_name": "Set", "card_id": None,
+                "mtgjson_id": "uuid-3", "printing": "Normal", "latest_price": 100.0,
+            },
+        ]
+        prices_by_uuid = {
+            "uuid-1": {"market": 25.0, "buylist": None},   # +5.00, +25%
+            "uuid-2": {"market": 1.15, "buylist": None},   # +0.15, +15%
+            "uuid-3": {"market": 102.0, "buylist": None},  # +2.00, +2%
+        }
+        with patch.object(refresh_job.db, "list_watchlist", return_value=items), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
+             patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
+             patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
+             patch.object(refresh_job.cardkingdom, "get_prices", side_effect=lambda uid, foil: prices_by_uuid[uid]), \
+             patch.object(refresh_job.db, "record_price"), \
+             patch.object(refresh_job.db, "update_cardkingdom_price"):
+            alerts = refresh_job.refresh_watchlist_prices()
+
+        self.assertEqual([a["name"] for a in alerts], ["Big Mover"])
+
     def test_chunk_lines_keeps_short_batches_in_one_chunk(self):
         import refresh_job
 
