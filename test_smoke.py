@@ -8,11 +8,12 @@ since db.py reads it once at import time — this is why it's set at the top
 of this file, before the `import db` below.
 """
 
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_db.close()
@@ -974,6 +975,42 @@ def _fake_rss(items):
     return f'<?xml version="1.0"?><rss><channel>{body}</channel></rss>'.encode()
 
 
+def _fake_sync_playwright(pages, browser=None):
+    """Builds a fake object for mtg_news.sync_playwright — mtg_news.
+    BrowserSession calls sync_playwright().start() (not `with sync_playwright()
+    as p`), so the mock must support that same shape: a callable returning
+    something with .start() -> p, and p.chromium.launch() -> browser."""
+    fake_browser = browser if browser is not None else MagicMock()
+    if browser is None:
+        fake_browser.new_page.side_effect = pages
+
+    fake_p = MagicMock()
+    fake_p.chromium.launch.return_value = fake_browser
+
+    fake_instance = MagicMock()
+    fake_instance.start.return_value = fake_p
+    return fake_instance
+
+
+def _fake_playwright_context(page_behaviors):
+    """Builds a fake sync_playwright()-shaped object for mocking
+    mtg_news.py's headless-browser verification step, without launching a
+    real browser in tests. `page_behaviors` is a list of either a body-text
+    string (what inner_text("body") returns for that candidate, in call
+    order) or an Exception instance (what goto() raises instead, simulating
+    a blocked/failed fetch)."""
+    pages = []
+    for behavior in page_behaviors:
+        page = MagicMock()
+        page.url = "https://example.com/real-article"
+        if isinstance(behavior, Exception):
+            page.goto.side_effect = behavior
+        else:
+            page.inner_text.return_value = behavior
+        pages.append(page)
+    return _fake_sync_playwright(pages)
+
+
 class MtgNewsTests(unittest.TestCase):
     def _fake_response(self, xml_bytes):
         resp = type("Resp", (), {})()
@@ -981,20 +1018,23 @@ class MtgNewsTests(unittest.TestCase):
         resp.raise_for_status = lambda: None
         return resp
 
-    def test_find_news_keeps_recent_items(self):
+    def test_find_news_keeps_recent_verified_items(self):
         import mtg_news
 
         from datetime import datetime, timedelta, timezone
         from email.utils import format_datetime
 
         recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
-        xml = _fake_rss([("Recent Article", "https://example.com/a", recent, "Some Site")])
-        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+        xml = _fake_rss([("Recent Article", "https://news.google.com/a", recent, "Some Site")])
+        fake_ctx = _fake_playwright_context(["...this article is about Some Card and its price..."])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_ctx):
             results = mtg_news.find_news("Some Card")
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "Recent Article")
-        self.assertEqual(results[0]["source"], "Some Site")
+        self.assertEqual(results[0]["link"], "https://example.com/real-article")
+        self.assertEqual(results[0]["source"], "example.com")
 
     def test_find_news_strips_redundant_source_suffix_from_title(self):
         import mtg_news
@@ -1004,25 +1044,98 @@ class MtgNewsTests(unittest.TestCase):
 
         recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
         # Google appends " - <source>" to every title itself (real example
-        # observed live: "... - Polygon.com" with <source>Polygon.com</source>).
-        xml = _fake_rss([("Big Price Spike - Polygon.com", "https://example.com/a", recent, "Polygon.com")])
-        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+        # observed live: "... - Polygon.com").
+        xml = _fake_rss([("Big Price Spike - example.com", "https://news.google.com/a", recent, "Ignored")])
+        fake_ctx = _fake_playwright_context(["Some Card appears right here in the body"])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_ctx):
             results = mtg_news.find_news("Some Card")
 
         self.assertEqual(results[0]["title"], "Big Price Spike")
 
-    def test_find_news_drops_stale_items(self):
+    def test_find_news_strips_suffix_when_title_uses_human_readable_site_name(self):
+        # The title's site-name suffix ("MTG Rocks") rarely matches the
+        # bare resolved domain ("mtgrocks.com") as an exact string — the
+        # strip has to compare normalized forms, not do a literal suffix
+        # check (confirmed live: this exact "MTG Rocks"/"mtgrocks.com"
+        # pair wasn't stripped before normalizing).
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Big Price Spike - MTG Rocks", "https://news.google.com/a", recent, "Ignored")])
+        page = MagicMock()
+        page.url = "https://mtgrocks.com/some-article"
+        page.inner_text.return_value = "Some Card appears right here in the body"
+        fake_instance = _fake_sync_playwright([page])
+
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_instance):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(results[0]["title"], "Big Price Spike")
+        self.assertEqual(results[0]["source"], "mtgrocks.com")
+
+    def test_find_news_drops_stale_items_without_even_verifying(self):
         import mtg_news
 
         from datetime import datetime, timedelta, timezone
         from email.utils import format_datetime
 
         stale = format_datetime(datetime.now(timezone.utc) - timedelta(days=mtg_news.RECENCY_DAYS + 30))
-        xml = _fake_rss([("Old Set Guide", "https://example.com/old", stale, "Old Site")])
-        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+        xml = _fake_rss([("Old Set Guide", "https://news.google.com/old", stale, "Old Site")])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright") as mock_pw:
             results = mtg_news.find_news("Some Card")
 
         self.assertEqual(results, [])
+        mock_pw.assert_not_called()  # recency filtering happens before ever opening a browser
+
+    def test_find_news_rejects_headline_match_card_name_not_in_body(self):
+        # The real false positives this is modeled on: "Island" matched a
+        # Red Dead Redemption article, "Zack Fair" matched an FF7 deals
+        # roundup — same-window headline coincidence, card never actually
+        # mentioned in the body.
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Unrelated Article", "https://news.google.com/a", recent, "Site")])
+        fake_ctx = _fake_playwright_context(["this article never mentions that card at all"])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_ctx):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(results, [])
+
+    def test_find_news_skips_blocked_candidate_and_tries_the_next_one(self):
+        # Observed live: some publishers block the headless browser outright
+        # (a 403, or a real response that's just an empty HTML shell) — that
+        # candidate is skipped (not assumed true or false), and the next
+        # headline-level candidate is still tried.
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss(
+            [
+                ("Blocked Article", "https://news.google.com/blocked", recent, "Site"),
+                ("Real Article", "https://news.google.com/real", recent, "Site"),
+            ]
+        )
+        fake_ctx = _fake_playwright_context([RuntimeError("blocked"), "Some Card shows up here"])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_ctx):
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "Real Article")
 
     def test_find_news_respects_max_results(self):
         import mtg_news
@@ -1031,16 +1144,94 @@ class MtgNewsTests(unittest.TestCase):
         from email.utils import format_datetime
 
         recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=1))
-        xml = _fake_rss([(f"Article {i}", f"https://example.com/{i}", recent, "Site") for i in range(5)])
-        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)):
+        xml = _fake_rss([(f"Article {i}", f"https://news.google.com/{i}", recent, "Site") for i in range(5)])
+        fake_ctx = _fake_playwright_context(["Some Card"] * 5)
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_ctx):
             results = mtg_news.find_news("Some Card", max_results=2)
 
         self.assertEqual(len(results), 2)
+
+    def test_find_news_reuses_a_passed_in_browser_without_launching_its_own(self):
+        # market_alerts.py checks ~20-30 movers a night — sharing one
+        # BrowserSession across all of them avoids paying browser-startup
+        # cost per card.
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Recent Article", "https://news.google.com/a", recent, "Site")])
+        page = MagicMock()
+        page.url = "https://example.com/real-article"
+        page.inner_text.return_value = "Some Card is mentioned here"
+        shared_browser = MagicMock()
+        shared_browser.new_page.return_value = page
+
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright") as mock_sync_playwright:
+            results = mtg_news.find_news("Some Card", browser=shared_browser)
+
+        self.assertEqual(len(results), 1)
+        mock_sync_playwright.assert_not_called()  # never launched its own browser
+        shared_browser.new_page.assert_called_once()
 
     def test_find_news_fails_soft_on_network_error(self):
         import mtg_news
 
         with patch.object(mtg_news.requests, "get", side_effect=mtg_news.requests.RequestException("boom")):
+            self.assertEqual(mtg_news.find_news("Some Card"), [])
+
+    def test_find_news_skips_basic_lands_without_any_network_call(self):
+        # Body-text matching gives no real discriminative power for a bare
+        # word like "Island" — confirmed live, it matched a Red Dead
+        # Redemption article and a Hawaiian powwow story. Skip entirely
+        # rather than risk a confident-looking wrong link.
+        import mtg_news
+
+        with patch.object(mtg_news.requests, "get") as mock_get, \
+             patch.object(mtg_news, "sync_playwright") as mock_pw:
+            for name in ("Island", "mountain", " Forest "):
+                self.assertEqual(mtg_news.find_news(name), [])
+        mock_get.assert_not_called()
+        mock_pw.assert_not_called()
+
+    def test_find_news_gives_up_if_redirect_never_resolves(self):
+        # Observed live: Google's own interstitial page can render a
+        # preview of the target headline before its JS redirect fires —
+        # if the page is still on news.google.com after waiting, treat it
+        # as unresolved rather than risk matching against Google's own
+        # page instead of the real article.
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Some Headline", "https://news.google.com/a", recent, "Site")])
+        page = MagicMock()
+        page.url = "https://news.google.com/rss/articles/still-here"  # never leaves Google's domain
+        fake_instance = _fake_sync_playwright([page])
+
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", return_value=fake_instance), \
+             patch.object(mtg_news.time, "monotonic", side_effect=[0, 100]):  # deadline elapses on first check
+            results = mtg_news.find_news("Some Card")
+
+        self.assertEqual(results, [])
+        page.inner_text.assert_not_called()  # never trusted Google's own page as the article body
+
+    def test_find_news_fails_soft_if_playwright_itself_is_unavailable(self):
+        import mtg_news
+
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        recent = format_datetime(datetime.now(timezone.utc) - timedelta(days=5))
+        xml = _fake_rss([("Recent Article", "https://news.google.com/a", recent, "Site")])
+        with patch.object(mtg_news.requests, "get", return_value=self._fake_response(xml)), \
+             patch.object(mtg_news, "sync_playwright", side_effect=RuntimeError("browser not installed")):
             self.assertEqual(mtg_news.find_news("Some Card"), [])
 
     def test_news_lines_formats_and_escapes_html(self):
@@ -1057,6 +1248,71 @@ class MtgNewsTests(unittest.TestCase):
         import market_alerts
 
         self.assertEqual(market_alerts._news_lines([]), "")
+
+
+class MarketAlertsTests(unittest.TestCase):
+    def setUp(self):
+        import market_alerts
+
+        self.market_alerts = market_alerts
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.movers_file = Path(self.tmp_dir.name) / "movers.json"
+        self.movers_file.write_text(json.dumps({"daily_gainers": [
+            {"name": "Mover One", "set": "TST", "set_full_name": "Test Set",
+             "price_before": 1.0, "price_now": 2.0, "pct_change": 100.0, "image_url": None},
+        ], "daily_losers": [], "weekly_gainers": [], "weekly_losers": []}))
+        self._base_patches = [
+            patch.object(market_alerts, "MOVERS_FILE", self.movers_file),
+            patch.object(market_alerts.db, "already_ran_today", return_value=False),
+            patch.object(market_alerts.db, "mark_ran_today"),
+            patch.object(market_alerts.db, "record_recommendation", return_value=1),
+            patch.object(market_alerts.db, "set_recommendation_telegram_info"),
+            patch.object(market_alerts.recommender, "train", return_value=None),
+            patch.object(market_alerts.recommender, "score", return_value=None),
+            patch.object(market_alerts.telegram_notify, "send_photo_with_buttons", return_value=None),
+        ]
+        for p in self._base_patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def test_send_market_alerts_passes_shared_browser_to_news_lookups(self):
+        fake_session = MagicMock()
+        fake_browser = MagicMock()
+        fake_session.__enter__.return_value = fake_browser
+        fake_session.__exit__.return_value = False
+
+        with patch.object(self.market_alerts.mtg_news, "BrowserSession", return_value=fake_session), \
+             patch.object(self.market_alerts.mtg_news, "find_news", return_value=[]) as mock_find_news:
+            self.market_alerts.send_market_alerts()
+
+        mock_find_news.assert_called_once_with("Mover One", browser=fake_browser)
+        fake_session.__exit__.assert_called_once()
+
+    def test_send_market_alerts_closes_browser_session_even_if_sending_fails(self):
+        fake_session = MagicMock()
+        fake_browser = MagicMock()
+        fake_session.__enter__.return_value = fake_browser
+        fake_session.__exit__.return_value = False
+
+        with patch.object(self.market_alerts.mtg_news, "BrowserSession", return_value=fake_session), \
+             patch.object(self.market_alerts.mtg_news, "find_news", return_value=[]), \
+             patch.object(
+                 self.market_alerts.telegram_notify, "send_photo_with_buttons", side_effect=RuntimeError("boom")
+             ):
+            with self.assertRaises(RuntimeError):
+                self.market_alerts.send_market_alerts()
+
+        fake_session.__exit__.assert_called_once()
+
+    def test_send_market_alerts_falls_back_to_no_browser_if_session_fails_to_start(self):
+        with patch.object(self.market_alerts.mtg_news, "BrowserSession", side_effect=RuntimeError("no chromium")), \
+             patch.object(self.market_alerts.mtg_news, "find_news", return_value=[]) as mock_find_news:
+            self.market_alerts.send_market_alerts()  # must not raise
+
+        mock_find_news.assert_called_once_with("Mover One", browser=None)
 
 
 class ImportsTests(unittest.TestCase):

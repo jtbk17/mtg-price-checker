@@ -21,7 +21,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install requests ijson scikit-learn
+      - run: pip install requests ijson scikit-learn playwright
+
+      # Needed by mtg_news.py to resolve Google News' redirect links,
+      # which only resolve via client-side JS (a plain HTTP request just
+      # gets Google's app-shell HTML, never the real article) — `--with-deps`
+      # also installs the OS libraries the browser needs on this runner.
+      - run: playwright install chromium --with-deps
 
       - name: Download existing all-cards database, if any
         env:
