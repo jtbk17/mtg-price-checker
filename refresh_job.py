@@ -36,10 +36,12 @@ def refresh_watchlist_prices():
     """Refresh every tracked card's Card Kingdom price, and return a list
     of cards whose market price rose by at least ALERT_ABS_THRESHOLD *and*
     at least ALERT_PCT_THRESHOLD since the last recorded price (increases
-    only). Requiring both (not either) is what actually suppresses noise
-    from cheap cards — a card has to be worth at least
-    ALERT_ABS_THRESHOLD / (ALERT_PCT_THRESHOLD / 100) for a move to clear
-    both at once, so there's no separate price floor to maintain."""
+    only). Requiring both (not either) is what suppresses the noise the
+    old "either" logic let through: in one real run, the median alert was
+    a $0.30 move that only cleared the percent side — a cheap card can
+    still alert here (e.g. $5 -> $7.50 clears both), it just can't ride in
+    on a trivial dollar amount the way it could when either threshold
+    alone was enough."""
     items = db.list_watchlist()
     logger.info("Refreshing prices for %d watched card(s)", len(items))
 
