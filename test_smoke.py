@@ -1374,6 +1374,24 @@ class SendEarlyWarningsTests(unittest.TestCase):
         self.assertIn("Leading Card", sent_text)
         self.assertIn("Reprint Announcement", sent_text)
 
+    def test_escapes_third_party_text_in_the_message(self):
+        # Article titles and card names are third-party text, not a
+        # tightly-controlled numeric/Scryfall field — a stray "&" or "<"
+        # in one would otherwise produce malformed HTML that Telegram
+        # rejects outright, silently dropping the whole message.
+        article_id = db.record_article_if_new(
+            "https://example.com/ew-escape", "Test Site", "Spoilers & <New> Cards Revealed", None
+        )
+        db.record_news_signal(article_id, 'Card & "Friends"', "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_called_once()
+        sent_text = self.mock_send.call_args.args[0]
+        self.assertIn("Spoilers &amp; &lt;New&gt; Cards Revealed", sent_text)
+        self.assertIn("Card &amp; &quot;Friends&quot;", sent_text)
+        self.assertNotIn("<New>", sent_text)
+
     def test_skips_cards_already_movers_tonight(self):
         self._write_movers_file(["Leading Card"])
         article_id = db.record_article_if_new("https://example.com/ew-2", "Test Site", "A Reprint Drop", None)

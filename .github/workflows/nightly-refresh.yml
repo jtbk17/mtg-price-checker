@@ -100,6 +100,8 @@ jobs:
       # reasoning as market_alerts.py, so it runs here too, not inside
       # the retry-safe phase above.
       - name: Send market alerts and early warnings (runs once, never retried)
+        id: alerts
+        continue-on-error: true  # bookkeeping push / all-cards upload below must still run even if this throws
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -139,4 +141,10 @@ jobs:
         if: steps.refresh.outcome == 'failure'
         run: |
           echo "Price-data push failed earlier in this run (see 'Refresh price data and push' step above) — alerts were still sent and the all-cards database was still uploaded." >&2
+          exit 1
+
+      - name: Fail the job if sending alerts/early warnings crashed
+        if: steps.alerts.outcome == 'failure'
+        run: |
+          echo "market_alerts.py or news_signals.py --early-warnings threw an error earlier in this run (see 'Send market alerts and early warnings' step above) — bookkeeping push and all-cards upload still ran regardless." >&2
           exit 1

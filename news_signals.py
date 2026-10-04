@@ -38,6 +38,7 @@ the same article twice — harmless to redo if it ever did, since nothing
 in that function is an irreversible external action.
 """
 
+import html
 import json
 import logging
 import sqlite3
@@ -211,16 +212,25 @@ def _load_today_movers():
 def _early_warning_text(article, items):
     """One message per article, not per card — the same reason
     market_alerts.py-adjacent bundling exists elsewhere here: a single
-    announcement can legitimately name many cards."""
-    lines = [f"<b>\U0001f52e Early signal: {article['title']}</b> ({article['source']})"]
+    announcement can legitimately name many cards.
+
+    Escaped throughout (unlike the tightly-controlled numeric/Scryfall
+    fields used elsewhere in this app): article titles, card names, and
+    source names are all third-party text here, and a stray "&" or "<"
+    in one would otherwise produce malformed HTML that Telegram just
+    rejects outright — market_alerts.py's _news_lines() hit exactly
+    this and added escaping for the same reason."""
+    lines = [
+        f"<b>\U0001f52e Early signal: {html.escape(article['title'])}</b> ({html.escape(article['source'])})"
+    ]
     for item in items:
         label = item["signal_type"].replace("_", " ").title()
         hint = _DIRECTION_HINTS.get(item["signal_type"])
-        line = f"• {item['card_name']} — {label}"
+        line = f"• {html.escape(item['card_name'])} — {html.escape(label)}"
         if hint:
-            line += f" ({hint})"
+            line += f" ({html.escape(hint)})"
         lines.append(line)
-    lines.append(article["link"])
+    lines.append(html.escape(article["link"]))
     lines.append("Not a confirmed move — just a heads-up based on recent coverage.")
     return "\n".join(lines)
 
