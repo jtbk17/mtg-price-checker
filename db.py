@@ -494,7 +494,8 @@ def get_labeled_recommendations():
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT price_before, price_now, pct_change, feedback FROM recommendations WHERE feedback IS NOT NULL"
+            "SELECT card_name, price_before, price_now, pct_change, sent_at, feedback "
+            "FROM recommendations WHERE feedback IS NOT NULL"
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -569,12 +570,29 @@ def record_news_signal(article_id, card_name, signal_type, is_genuine_interest):
         conn.close()
 
 
-def mark_news_signal_sent(signal_id):
+def had_recent_news_signal(card_name, before_timestamp, window_days=60):
+    """Whether a genuine news signal (news_signals.py) was recorded for
+    this card within `window_days` before `before_timestamp` — used by
+    recommender.py as a predictive feature, not an alert. The window
+    matches what was validated by backtesting real historical movers
+    against a control group of non-movers: movers were about 4x more
+    likely to have this kind of prior coverage (70% vs 18% in that
+    test). Uses the article's actual publish date when known, falling
+    back to when this app first saw it."""
     conn = get_connection()
     try:
-        conn.execute(
-            "UPDATE news_signals SET telegram_sent_at = CURRENT_TIMESTAMP WHERE id = ?", (signal_id,)
-        )
-        conn.commit()
+        row = conn.execute(
+            """
+            SELECT 1 FROM news_signals ns
+            JOIN news_articles na ON na.id = ns.article_id
+            WHERE ns.card_name = ?
+              AND ns.is_genuine_interest = 1
+              AND datetime(COALESCE(na.published_at, na.seen_at)) <= datetime(?)
+              AND datetime(COALESCE(na.published_at, na.seen_at)) > datetime(?, '-' || ? || ' days')
+            LIMIT 1
+            """,
+            (card_name, before_timestamp, before_timestamp, window_days),
+        ).fetchone()
+        return row is not None
     finally:
         conn.close()

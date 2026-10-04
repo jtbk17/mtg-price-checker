@@ -2,6 +2,15 @@
 classifier trained from your accumulated 'Good pick' / 'False positive'
 Telegram feedback (see market_alerts.py and poll_telegram_feedback.py).
 
+One feature comes from news_signals.py: whether genuine news coverage
+of the card was recorded recently (db.had_recent_news_signal). That
+module itself sends nothing to Telegram — the news coverage it finds
+is only ever used here, as an input the model learns a weight for,
+rather than as its own separate alert. The window/effect size this
+relies on was validated by backtesting real historical movers against
+a control group of non-movers before building on it (70% of movers had
+verified prior coverage vs. 18% of non-movers).
+
 Deliberately does NOT filter which movers get alerted on — only a
 watchlist you can react to produces feedback to learn from, so every
 mover is still sent; this only adds a confidence annotation. The model
@@ -12,17 +21,19 @@ reflects every rating you've given so far.
 """
 
 import logging
+from datetime import datetime, timezone
 
 import db
 
 logger = logging.getLogger("tcg-price-checker")
 
 MIN_LABELED_EXAMPLES = 10
+NEWS_SIGNAL_WINDOW_DAYS = 60
 
 
-def _feature_vector(price_before, pct_change):
+def _feature_vector(price_before, pct_change, had_news_signal):
     abs_change = price_before * pct_change / 100
-    return [price_before, pct_change, abs_change]
+    return [price_before, pct_change, abs_change, 1.0 if had_news_signal else 0.0]
 
 
 def train():
@@ -44,7 +55,14 @@ def train():
 
     from sklearn.linear_model import LogisticRegression
 
-    X = [_feature_vector(r["price_before"], r["pct_change"]) for r in rows]
+    X = [
+        _feature_vector(
+            r["price_before"],
+            r["pct_change"],
+            db.had_recent_news_signal(r["card_name"], r["sent_at"], NEWS_SIGNAL_WINDOW_DAYS),
+        )
+        for r in rows
+    ]
     y = [1 if r["feedback"] == "good" else 0 for r in rows]
 
     model = LogisticRegression(max_iter=1000, class_weight="balanced")
@@ -53,10 +71,16 @@ def train():
     return model
 
 
-def score(model, price_before, pct_change):
+def score(model, price_before, pct_change, card_name=None):
     """Predicted probability (0-100) that this candidate would be tagged
-    a 'good pick', or None if no model is available yet."""
+    a 'good pick', or None if no model is available yet. `card_name`
+    looks up recent news coverage as a feature; omit it only if that
+    lookup genuinely isn't possible for the caller."""
     if model is None:
         return None
-    proba = model.predict_proba([_feature_vector(price_before, pct_change)])[0][1]
+    had_news_signal = False
+    if card_name:
+        now = datetime.now(timezone.utc).isoformat()
+        had_news_signal = db.had_recent_news_signal(card_name, now, NEWS_SIGNAL_WINDOW_DAYS)
+    proba = model.predict_proba([_feature_vector(price_before, pct_change, had_news_signal)])[0][1]
     return round(proba * 100, 1)

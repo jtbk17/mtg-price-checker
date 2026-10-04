@@ -257,11 +257,36 @@ class DbTests(unittest.TestCase):
         article_id = db.record_article_if_new("https://example.com/signal-test", "Test Site", "Title", None)
         signal_id = db.record_news_signal(article_id, "Some Card", "combo_discovery", True)
         self.assertIsNotNone(signal_id)
-        db.mark_news_signal_sent(signal_id)  # must not raise
         conn = db.get_connection()
-        row = conn.execute("SELECT telegram_sent_at FROM news_signals WHERE id = ?", (signal_id,)).fetchone()
+        row = conn.execute("SELECT card_name, signal_type, is_genuine_interest FROM news_signals WHERE id = ?", (signal_id,)).fetchone()
         conn.close()
-        self.assertIsNotNone(row["telegram_sent_at"])
+        self.assertEqual(row["card_name"], "Some Card")
+        self.assertEqual(row["signal_type"], "combo_discovery")
+        self.assertEqual(row["is_genuine_interest"], 1)
+
+    def test_had_recent_news_signal_respects_window_and_genuineness(self):
+        # Within window + genuine -> True
+        article_id = db.record_article_if_new(
+            "https://example.com/news-1", "Test Site", "Title", "2026-08-01T00:00:00+00:00"
+        )
+        db.record_news_signal(article_id, "Windowed Card", "combo_discovery", True)
+        self.assertTrue(db.had_recent_news_signal("Windowed Card", "2026-08-30T00:00:00+00:00", window_days=60))
+
+        # Outside the window -> False
+        self.assertFalse(db.had_recent_news_signal("Windowed Card", "2026-12-01T00:00:00+00:00", window_days=60))
+
+        # After the cutoff (not yet "prior") -> False
+        self.assertFalse(db.had_recent_news_signal("Windowed Card", "2026-07-01T00:00:00+00:00", window_days=60))
+
+        # Not genuine -> False
+        article_id2 = db.record_article_if_new(
+            "https://example.com/news-2", "Test Site", "Title", "2026-08-01T00:00:00+00:00"
+        )
+        db.record_news_signal(article_id2, "Routine Card", "routine_mention", False)
+        self.assertFalse(db.had_recent_news_signal("Routine Card", "2026-08-30T00:00:00+00:00", window_days=60))
+
+        # Unknown card -> False
+        self.assertFalse(db.had_recent_news_signal("Nonexistent Card", "2026-08-30T00:00:00+00:00", window_days=60))
 
 
 class RecommenderTests(unittest.TestCase):
@@ -284,6 +309,47 @@ class RecommenderTests(unittest.TestCase):
         self.assertIsNotNone(score)
         self.assertGreaterEqual(score, 0)
         self.assertLessEqual(score, 100)
+
+    def test_news_signal_presence_is_a_real_feature_in_training(self):
+        # Build a dataset where "had a genuine news signal beforehand"
+        # perfectly predicts "good pick", with price/pct_change held
+        # identical across both groups — isolates the news-signal
+        # feature's effect rather than conflating it with price. Uses a
+        # dynamically-recent published_at (not a hardcoded date) since
+        # recommendations get a real CURRENT_TIMESTAMP sent_at — a fixed
+        # past date drifts out of the window as real time passes, which
+        # is exactly what silently broke this the first time it ran.
+        from datetime import datetime, timedelta, timezone
+
+        recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        rec_ids = []
+        for i in range(recommender.MIN_LABELED_EXAMPLES):
+            with_news = i % 2 == 0
+            card_name = f"NewsFeatureCard {i}"
+            rec_id = db.record_recommendation(card_name, "Set", 10.0, 15.0, 50.0)
+            rec_ids.append(rec_id)
+            db.set_recommendation_feedback(rec_id, "good" if with_news else "bad")
+            if with_news:
+                article_id = db.record_article_if_new(f"https://example.com/nf-{i}", "Test Site", "Title", recent)
+                db.record_news_signal(article_id, card_name, "combo_discovery", True)
+
+        def cleanup():
+            conn = db.get_connection()
+            conn.execute("DELETE FROM recommendations WHERE id IN ({})".format(",".join("?" * len(rec_ids))), rec_ids)
+            conn.execute("DELETE FROM news_signals WHERE card_name LIKE 'NewsFeatureCard%'")
+            conn.execute("DELETE FROM news_articles WHERE url LIKE 'https://example.com/nf-%'")
+            conn.commit()
+            conn.close()
+
+        self.addCleanup(cleanup)
+
+        model = recommender.train()
+        self.assertIsNotNone(model)
+
+        score_with_news = recommender.score(model, 10.0, 50.0, "NewsFeatureCard 0")  # had a signal
+        score_without_news = recommender.score(model, 10.0, 50.0, "Some Other Card")  # no signal recorded
+
+        self.assertGreater(score_with_news, score_without_news)
 
 
 class AllCardsHistoryTests(unittest.TestCase):
@@ -1182,7 +1248,11 @@ class NewsSignalsTests(unittest.TestCase):
 
         mock_find.assert_not_called()  # already-seen article never gets this far
 
-    def test_check_for_signals_sends_actionable_signals_and_records_them(self):
+    def test_check_for_signals_records_classified_signals_without_alerting(self):
+        # news_signals.py no longer sends anything to Telegram — the
+        # signals it finds only feed recommender.py's model
+        # (db.had_recent_news_signal), so this just has to confirm the
+        # row gets recorded, not that any message goes out.
         with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
              patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
              patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
@@ -1190,41 +1260,12 @@ class NewsSignalsTests(unittest.TestCase):
                  self.news_signals, "_classify_mentions",
                  return_value=[{"card_name": "Darklight Phoenix", "is_genuine_interest": True, "signal_type": "combo_discovery"}],
              ), \
-             patch.object(self.news_signals.db, "record_news_signal", return_value=7), \
-             patch.object(self.news_signals.db, "mark_news_signal_sent") as mock_mark_sent, \
-             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
+             patch.object(self.news_signals.db, "record_news_signal", return_value=7) as mock_record_signal:
             self.news_signals.check_for_signals()
 
-        mock_send.assert_called_once()
-        mock_mark_sent.assert_called_once_with(7)
+        mock_record_signal.assert_called_once_with(42, "Darklight Phoenix", "combo_discovery", True)
 
-    def test_check_for_signals_bundles_multiple_actionable_signals_into_one_message(self):
-        # Live testing found a single Secret Lair announcement naming
-        # ~22 reprinted cards — this must be one Telegram message, not
-        # 22 separate pings.
-        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Card A", "Card B"]), \
-             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
-             patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
-             patch.object(self.news_signals.mtg_news_feed, "find_mentioned_cards", return_value=["Card A", "Card B"]), \
-             patch.object(
-                 self.news_signals, "_classify_mentions",
-                 return_value=[
-                     {"card_name": "Card A", "is_genuine_interest": True, "signal_type": "reprint_announcement"},
-                     {"card_name": "Card B", "is_genuine_interest": True, "signal_type": "reprint_announcement"},
-                 ],
-             ), \
-             patch.object(self.news_signals.db, "record_news_signal", side_effect=[7, 8]), \
-             patch.object(self.news_signals.db, "mark_news_signal_sent") as mock_mark_sent, \
-             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
-            self.news_signals.check_for_signals()
-
-        mock_send.assert_called_once()
-        sent_text = mock_send.call_args.args[0]
-        self.assertIn("Card A", sent_text)
-        self.assertIn("Card B", sent_text)
-        self.assertEqual(mock_mark_sent.call_count, 2)
-
-    def test_check_for_signals_does_not_alert_routine_mentions(self):
+    def test_check_for_signals_records_routine_mentions_as_not_genuine(self):
         with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
              patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
              patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
@@ -1232,11 +1273,10 @@ class NewsSignalsTests(unittest.TestCase):
                  self.news_signals, "_classify_mentions",
                  return_value=[{"card_name": "Darklight Phoenix", "is_genuine_interest": False, "signal_type": "routine_mention"}],
              ), \
-             patch.object(self.news_signals.db, "record_news_signal", return_value=7), \
-             patch.object(self.news_signals.telegram_notify, "send_message") as mock_send:
+             patch.object(self.news_signals.db, "record_news_signal", return_value=7) as mock_record_signal:
             self.news_signals.check_for_signals()
 
-        mock_send.assert_not_called()
+        mock_record_signal.assert_called_once_with(42, "Darklight Phoenix", "routine_mention", False)
 
 
 class MtgNewsTests(unittest.TestCase):

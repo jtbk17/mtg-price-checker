@@ -87,7 +87,7 @@ def send_market_alerts():
                     pct_change=mover["pct_change"],
                 )
 
-                confidence = recommender.score(model, mover["price_before"], mover["pct_change"])
+                confidence = recommender.score(model, mover["price_before"], mover["pct_change"], mover["name"])
                 confidence_line = f"\nModel confidence: {confidence}% good pick" if confidence is not None else ""
 
                 news_lines = _news_lines(mtg_news.find_news(mover["name"], browser=news_browser))
