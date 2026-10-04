@@ -36,6 +36,14 @@ check_for_signals() runs dedup'd against db.news_articles so a re-run
 of the pipeline (e.g. after a git-push conflict) never re-classifies
 the same article twice — harmless to redo if it ever did, since nothing
 in that function is an irreversible external action.
+
+It also pulls mtg_news_feed.EXCERPT_FEEDS (sites whose RSS feed only
+exposes a short excerpt, not the full article) via
+_process_excerpt_articles(): these need an actual headless-browser page
+load per new article to get real text, unlike the free full-content
+feeds, so dedup happens *before* that fetch (never pay for a page load
+on an article already seen) and MAX_EXCERPT_FETCHES_PER_RUN caps how
+many new pages get loaded in one run.
 """
 
 import html
@@ -49,6 +57,7 @@ from pathlib import Path
 import all_cards_history as ach
 import claude_client
 import db
+import mtg_news
 import mtg_news_feed
 import recommender
 import telegram_notify
@@ -66,6 +75,12 @@ MAX_TEXT_CHARS = 3000
 MAX_CANDIDATES_PER_ARTICLE = 25  # also keeps the classification response bounded (see OUTPUT_TOKENS_PER_CANDIDATE)
 OUTPUT_TOKENS_PER_CANDIDATE = 40  # headroom per candidate for max_tokens, not an exact measurement
 BASE_OUTPUT_TOKENS = 200
+# mtg_news_feed.EXCERPT_FEEDS articles need a real headless-browser page
+# load each (fetch_full_text), unlike the free full-content feeds — this
+# bounds that cost per run. Articles beyond the cap are simply left
+# unrecorded (not marked seen) so they're picked up on a later run
+# rather than lost.
+MAX_EXCERPT_FETCHES_PER_RUN = 5
 
 SYSTEM_PROMPT = """You help a Magic: The Gathering price-tracking tool figure out which card mentions in a news/strategy article are genuine signals about that card, versus incidental noise (e.g. one entry in a long decklist with no special emphasis).
 
@@ -167,6 +182,84 @@ def _classify_mentions(article, card_names):
         return []
 
 
+def _classify_and_record(article_id, article, known_names):
+    """Matches, classifies, and records signals for one already-deduped
+    article (which must have a 'text' key). Returns (classified_count,
+    genuine_count)."""
+    mentions = mtg_news_feed.find_mentioned_cards(article["text"], known_names)
+    if not mentions:
+        return 0, 0
+
+    classified_count = 0
+    genuine_count = 0
+    for item in _classify_mentions(article, mentions):
+        classified_count += 1
+        signal_type = item.get("signal_type", "other")
+        is_genuine = bool(item.get("is_genuine_interest"))
+        db.record_news_signal(article_id, item["card_name"], signal_type, is_genuine)
+        if is_genuine:
+            genuine_count += 1
+    return classified_count, genuine_count
+
+
+def _dedup_excerpt_articles(items):
+    """Checks EXCERPT_FEEDS metadata against db.news_articles and
+    returns up to MAX_EXCERPT_FETCHES_PER_RUN genuinely-new (article_id,
+    item) pairs. Deliberately stops *before* recording more than the
+    cap — not after — so articles beyond it are left unrecorded and
+    picked up on a later run, rather than marked seen without ever
+    having their real text fetched."""
+    new_items = []
+    for item in items:
+        if len(new_items) >= MAX_EXCERPT_FETCHES_PER_RUN:
+            break
+        published = item["published"].isoformat() if item["published"] else None
+        article_id = db.record_article_if_new(item["link"], item["source"], item["title"], published)
+        if article_id is None:
+            continue  # already processed in an earlier run
+        new_items.append((article_id, item))
+    return new_items
+
+
+def _process_excerpt_articles(known_names):
+    """Handles mtg_news_feed.EXCERPT_FEEDS: dedup first (cheap, no
+    browser), then fetch real body text only for articles that turned
+    out to be new — a headless-browser page load is real per-article
+    cost, unlike the free full-content feeds. Returns (classified_count,
+    genuine_count, fetched_count)."""
+    new_items = _dedup_excerpt_articles(mtg_news_feed.fetch_excerpt_articles())
+    if not new_items:
+        return 0, 0, 0
+
+    # Same lazy-start, fail-soft pattern as market_alerts.py's shared
+    # browser for mtg_news lookups: this is a supplementary feature, so
+    # a browser that won't start just means skipping these articles
+    # this run, not failing the whole scan.
+    try:
+        browser_session = mtg_news.BrowserSession()
+        browser = browser_session.__enter__()
+    except Exception as exc:
+        logger.warning("Could not start a browser for excerpt-feed articles this run: %s", exc)
+        browser_session, browser = None, None
+
+    classified_count = genuine_count = fetched_count = 0
+    try:
+        if browser is not None:
+            for article_id, item in new_items:
+                text = mtg_news_feed.fetch_full_text(item["link"], browser)
+                if not text:
+                    continue
+                fetched_count += 1
+                c, g = _classify_and_record(article_id, {**item, "text": text}, known_names)
+                classified_count += c
+                genuine_count += g
+    finally:
+        if browser_session is not None:
+            browser_session.__exit__(None, None, None)
+
+    return classified_count, genuine_count, fetched_count
+
+
 def check_for_signals():
     """Scans and classifies new articles, recording a news_signals row
     per classified mention for recommender.py to use. Returns nothing —
@@ -185,22 +278,19 @@ def check_for_signals():
         article_id = db.record_article_if_new(article["link"], article["source"], article["title"], published)
         if article_id is None:
             continue  # already processed in an earlier run
+        c, g = _classify_and_record(article_id, article, known_names)
+        classified_count += c
+        genuine_count += g
 
-        mentions = mtg_news_feed.find_mentioned_cards(article["text"], known_names)
-        if not mentions:
-            continue
-
-        for item in _classify_mentions(article, mentions):
-            classified_count += 1
-            signal_type = item.get("signal_type", "other")
-            is_genuine = bool(item.get("is_genuine_interest"))
-            db.record_news_signal(article_id, item["card_name"], signal_type, is_genuine)
-            if is_genuine:
-                genuine_count += 1
+    excerpt_classified, excerpt_genuine, excerpt_fetched = _process_excerpt_articles(known_names)
+    classified_count += excerpt_classified
+    genuine_count += excerpt_genuine
 
     logger.info(
-        "Processed %d article(s), classified %d candidate mention(s), %d genuine signal(s) recorded",
+        "Processed %d full-content article(s) + %d excerpt article(s) fetched, "
+        "classified %d candidate mention(s), %d genuine signal(s) recorded",
         len(articles),
+        excerpt_fetched,
         classified_count,
         genuine_count,
     )

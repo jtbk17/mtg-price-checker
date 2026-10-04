@@ -1223,6 +1223,49 @@ class MtgNewsFeedTests(unittest.TestCase):
         found = mnf.find_mentioned_cards("Solitude is a strong card.", ["Solitude"], require_multiword=False)
         self.assertEqual(found, ["Solitude"])
 
+    def test_fetch_excerpt_articles_returns_metadata_without_text(self):
+        # EXCERPT_FEEDS sites' feeds only expose a short excerpt, not
+        # real body text, so this intentionally returns no "text" key —
+        # callers need fetch_full_text(link, browser) for that.
+        import mtg_news_feed as mnf
+
+        xml = _fake_rss([("Metagame Update", "https://example.com/qs-article", "Fri, 02 Oct 2026 20:00:00 +0000", "Ignored")])
+        with patch.object(mnf.requests, "get", return_value=self._fake_response(xml)):
+            articles = mnf.fetch_excerpt_articles()
+
+        mine = [a for a in articles if a["link"] == "https://example.com/qs-article"]
+        self.assertEqual(len(mine), 1)
+        self.assertNotIn("text", mine[0])
+        self.assertEqual(mine[0]["title"], "Metagame Update")
+
+    def test_fetch_full_text_returns_cleaned_body_on_success(self):
+        import mtg_news_feed as mnf
+
+        page = MagicMock()
+        page.inner_text.return_value = "  Some   article\n\nbody text  "
+        browser = MagicMock()
+        browser.new_page.return_value = page
+
+        result = mnf.fetch_full_text("https://example.com/qs-article", browser)
+
+        self.assertEqual(result, "Some article body text")
+        page.goto.assert_called_once()
+        page.close.assert_called_once()
+
+    def test_fetch_full_text_returns_none_if_page_load_fails(self):
+        # Same "can't verify, skip" treatment mtg_news.py uses for sites
+        # that block headless browsers — never a target to defeat.
+        import mtg_news_feed as mnf
+
+        page = MagicMock()
+        page.goto.side_effect = Exception("blocked")
+        browser = MagicMock()
+        browser.new_page.return_value = page
+
+        result = mnf.fetch_full_text("https://example.com/qs-article", browser)
+
+        self.assertIsNone(result)
+
     def test_find_mentioned_cards_orders_by_first_appearance_in_text(self):
         # A caller that truncates a long candidate list (news_signals.py
         # caps candidates per article for cost) should keep whichever
@@ -1314,6 +1357,7 @@ class NewsSignalsTests(unittest.TestCase):
     def test_check_for_signals_skips_already_seen_articles(self):
         with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
              patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[]), \
              patch.object(self.news_signals.db, "record_article_if_new", return_value=None), \
              patch.object(self.news_signals.mtg_news_feed, "find_mentioned_cards") as mock_find:
             self.news_signals.check_for_signals()
@@ -1327,6 +1371,7 @@ class NewsSignalsTests(unittest.TestCase):
         # row gets recorded, not that any message goes out.
         with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
              patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[]), \
              patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
              patch.object(
                  self.news_signals, "_classify_mentions",
@@ -1340,6 +1385,7 @@ class NewsSignalsTests(unittest.TestCase):
     def test_check_for_signals_records_routine_mentions_as_not_genuine(self):
         with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
              patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[self.article]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[]), \
              patch.object(self.news_signals.db, "record_article_if_new", return_value=42), \
              patch.object(
                  self.news_signals, "_classify_mentions",
@@ -1349,6 +1395,65 @@ class NewsSignalsTests(unittest.TestCase):
             self.news_signals.check_for_signals()
 
         mock_record_signal.assert_called_once_with(42, "Darklight Phoenix", "routine_mention", False)
+
+    def test_check_for_signals_skips_browser_fetch_for_already_seen_excerpt_articles(self):
+        # Dedup against db.news_articles must happen BEFORE paying for a
+        # headless-browser page load — an already-seen excerpt article
+        # should never reach fetch_full_text.
+        excerpt_item = {"source": "Quiet Speculation", "title": "Update", "link": "https://example.com/qs-1", "published": None}
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[excerpt_item]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=None), \
+             patch.object(self.news_signals.mtg_news, "BrowserSession") as mock_session, \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_full_text") as mock_fetch_text:
+            self.news_signals.check_for_signals()
+
+        mock_session.assert_not_called()  # no new excerpt articles -> never even starts a browser
+        mock_fetch_text.assert_not_called()
+
+    def test_check_for_signals_fetches_and_classifies_new_excerpt_articles(self):
+        excerpt_item = {"source": "Quiet Speculation", "title": "Update", "link": "https://example.com/qs-2", "published": None}
+        fake_browser = MagicMock()
+        fake_session = MagicMock()
+        fake_session.__enter__.return_value = fake_browser
+
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[excerpt_item]), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=99), \
+             patch.object(self.news_signals.mtg_news, "BrowserSession", return_value=fake_session), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_full_text", return_value="Darklight Phoenix is great") as mock_fetch_text, \
+             patch.object(
+                 self.news_signals, "_classify_mentions",
+                 return_value=[{"card_name": "Darklight Phoenix", "is_genuine_interest": True, "signal_type": "combo_discovery"}],
+             ), \
+             patch.object(self.news_signals.db, "record_news_signal", return_value=7) as mock_record_signal:
+            self.news_signals.check_for_signals()
+
+        mock_fetch_text.assert_called_once_with("https://example.com/qs-2", fake_browser)
+        mock_record_signal.assert_called_once_with(99, "Darklight Phoenix", "combo_discovery", True)
+
+    def test_check_for_signals_caps_excerpt_fetches_per_run(self):
+        import news_signals as ns
+
+        items = [
+            {"source": "Quiet Speculation", "title": f"Update {i}", "link": f"https://example.com/qs-cap-{i}", "published": None}
+            for i in range(ns.MAX_EXCERPT_FETCHES_PER_RUN + 3)
+        ]
+        fake_browser = MagicMock()
+        fake_session = MagicMock()
+        fake_session.__enter__.return_value = fake_browser
+
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=items), \
+             patch.object(self.news_signals.db, "record_article_if_new", return_value=1), \
+             patch.object(self.news_signals.mtg_news, "BrowserSession", return_value=fake_session), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_full_text", return_value=None) as mock_fetch_text:
+            self.news_signals.check_for_signals()
+
+        self.assertEqual(mock_fetch_text.call_count, ns.MAX_EXCERPT_FETCHES_PER_RUN)
 
 
 class SendEarlyWarningsTests(unittest.TestCase):
