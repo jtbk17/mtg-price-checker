@@ -570,6 +570,40 @@ def record_news_signal(article_id, card_name, signal_type, is_genuine_interest):
         conn.close()
 
 
+def mark_news_signal_sent(signal_id):
+    """Marks a news_signals row as having gone out in an early-warning
+    Telegram message (news_signals.send_early_warnings) — used by
+    had_recent_early_warning() to dedupe: the same real event covered by
+    multiple articles over several nights (confirmed live: one Secret
+    Lair drop was covered by 3 separate articles) shouldn't re-alert on
+    the same (card, signal_type) combo each time."""
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE news_signals SET telegram_sent_at = CURRENT_TIMESTAMP WHERE id = ?", (signal_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def had_recent_early_warning(card_name, signal_type, window_days=7):
+    """Whether an early-warning message already went out for this exact
+    (card_name, signal_type) combo within the last `window_days`."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT 1 FROM news_signals
+            WHERE card_name = ? AND signal_type = ? AND telegram_sent_at IS NOT NULL
+              AND datetime(telegram_sent_at) > datetime('now', '-' || ? || ' days')
+            LIMIT 1
+            """,
+            (card_name, signal_type, window_days),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def had_recent_news_signal(card_name, before_timestamp, window_days=60, signal_types=None):
     """Whether a genuine news signal (news_signals.py) was recorded for
     this card within `window_days` before `before_timestamp` — used by

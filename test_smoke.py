@@ -321,6 +321,33 @@ class DbTests(unittest.TestCase):
         # No filter -> matches regardless of type (existing behavior).
         self.assertTrue(db.had_recent_news_signal("Typed Card", "2026-08-30T00:00:00+00:00", window_days=60))
 
+    def test_had_recent_early_warning_tracks_mark_news_signal_sent(self):
+        # news_signals.send_early_warnings() uses this pair to avoid
+        # re-alerting on the same (card, signal_type) combo when the
+        # same real event is covered by a second article on a later
+        # night (confirmed live: one Secret Lair drop, 3 articles).
+        article_id = db.record_article_if_new(
+            "https://example.com/dedup-marker", "Test Site", "Title", None
+        )
+        signal_id = db.record_news_signal(article_id, "Dedup Card", "reprint_announcement", True)
+
+        def cleanup():
+            conn = db.get_connection()
+            conn.execute("DELETE FROM news_signals WHERE article_id = ?", (article_id,))
+            conn.execute("DELETE FROM news_articles WHERE id = ?", (article_id,))
+            conn.commit()
+            conn.close()
+
+        self.addCleanup(cleanup)
+
+        self.assertFalse(db.had_recent_early_warning("Dedup Card", "reprint_announcement", window_days=7))
+
+        db.mark_news_signal_sent(signal_id)
+
+        self.assertTrue(db.had_recent_early_warning("Dedup Card", "reprint_announcement", window_days=7))
+        # Different signal_type on the same card is a distinct combo — not deduped.
+        self.assertFalse(db.had_recent_early_warning("Dedup Card", "banned_restricted", window_days=7))
+
 
 class RecommenderTests(unittest.TestCase):
     def setUp(self):
@@ -1196,6 +1223,18 @@ class MtgNewsFeedTests(unittest.TestCase):
         found = mnf.find_mentioned_cards("Solitude is a strong card.", ["Solitude"], require_multiword=False)
         self.assertEqual(found, ["Solitude"])
 
+    def test_find_mentioned_cards_orders_by_first_appearance_in_text(self):
+        # A caller that truncates a long candidate list (news_signals.py
+        # caps candidates per article for cost) should keep whichever
+        # names are actually prominent in the article, not whatever
+        # arbitrary order the source database happens to return rows in.
+        import mtg_news_feed as mnf
+
+        names = ["Zephyr Charge", "Darklight Phoenix", "Ambush Viper"]
+        text = "First we discuss Ambush Viper, then later Darklight Phoenix, and finally Zephyr Charge."
+        found = mnf.find_mentioned_cards(text, names)
+        self.assertEqual(found, ["Ambush Viper", "Darklight Phoenix", "Zephyr Charge"])
+
 
 class NewsSignalsTests(unittest.TestCase):
     def setUp(self):
@@ -1440,6 +1479,29 @@ class SendEarlyWarningsTests(unittest.TestCase):
         self.news_signals.send_early_warnings()  # same calendar day — must not resend
 
         self.mock_send.assert_not_called()
+
+    def test_skips_and_marks_sent_for_cross_night_dedup(self):
+        # Same real event (e.g. one Secret Lair drop), two articles on
+        # different nights — the second shouldn't re-alert on a card
+        # already warned about for the same signal_type recently.
+        article_id = db.record_article_if_new("https://example.com/ew-7", "Test Site", "A Reprint Drop", None)
+        signal_id = db.record_news_signal(article_id, "Leading Card", "reprint_announcement", True)
+        db.mark_news_signal_sent(signal_id)  # simulate: already warned about this combo recently
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_not_called()
+
+    def test_marks_included_signals_as_sent(self):
+        article_id = db.record_article_if_new("https://example.com/ew-8", "Test Site", "A Reprint Drop", None)
+        db.record_news_signal(article_id, "Leading Card", "reprint_announcement", True)
+
+        self.assertFalse(db.had_recent_early_warning("Leading Card", "reprint_announcement"))
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_called_once()
+        self.assertTrue(db.had_recent_early_warning("Leading Card", "reprint_announcement"))
 
 
 class MtgNewsTests(unittest.TestCase):

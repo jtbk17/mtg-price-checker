@@ -119,13 +119,29 @@ def _classify_mentions(article, card_names):
     decklist/roundup where most are routine anyway) both to bound cost
     and because live testing found a fixed max_tokens too small for a
     busy article silently truncated the JSON mid-string, losing the
-    whole batch to a parse error instead of just the overflow. Returns
-    [] if Claude isn't configured, the call fails, or the response can't
-    be parsed — this is a supplementary feature, so it always fails
+    whole batch to a parse error instead of just the overflow.
+    `card_names` is expected pre-ordered by first appearance in the
+    article (see mtg_news_feed.find_mentioned_cards), so truncating
+    keeps the names that are actually prominent rather than an
+    arbitrary slice — truncation is logged either way. Returns [] if
+    Claude isn't configured, the call fails, or the response can't be
+    parsed — this is a supplementary feature, so it always fails
     soft."""
     if not claude_client.configured() or not card_names:
         return []
 
+    if len(card_names) > MAX_CANDIDATES_PER_ARTICLE:
+        # Previously silent — card_names is now ordered by first
+        # appearance in the article (mtg_news_feed.find_mentioned_cards),
+        # so this keeps whichever names are actually prominent rather
+        # than an arbitrary slice, but it's still real signal being
+        # dropped and worth knowing how often it happens.
+        logger.info(
+            "%r mentioned %d candidate card(s) — classifying only the first %d (by order of appearance)",
+            article["title"],
+            len(card_names),
+            MAX_CANDIDATES_PER_ARTICLE,
+        )
     card_names = card_names[:MAX_CANDIDATES_PER_ARTICLE]
     prompt = (
         f"Article title: {article['title']}\n"
@@ -235,16 +251,23 @@ def _early_warning_text(article, items):
     return "\n".join(lines)
 
 
+EARLY_WARNING_DEDUP_DAYS = 7
+
+
 def send_early_warnings():
     """Sends one bundled Telegram message per article for genuinely
     leading-type signals (recommender.LEADING_SIGNAL_TYPES) recorded
-    *today*, for cards that aren't already a mover tonight. Call this
-    once — never inside a retry loop, same reasoning as
-    market_alerts.py: a Telegram send here is irreversible, and the
-    "already sent today" guard it writes to tcg_prices.db would
-    otherwise get wiped by a `git reset --hard` on a later retry,
-    causing a resend (this is exactly the bug a previous version of
-    this pipeline hit for real)."""
+    *today*, for cards that aren't already a mover tonight and haven't
+    already had an early warning for this same (card, signal_type)
+    combo in the last EARLY_WARNING_DEDUP_DAYS — confirmed live that a
+    single real event (one Secret Lair drop) can be covered by several
+    separate articles on different nights, which would otherwise alert
+    on the same cards repeatedly. Call this once — never inside a retry
+    loop, same reasoning as market_alerts.py: a Telegram send here is
+    irreversible, and the "already sent today" guard it writes to
+    tcg_prices.db would otherwise get wiped by a `git reset --hard` on
+    a later retry, causing a resend (this is exactly the bug a previous
+    version of this pipeline hit for real)."""
     if db.already_ran_today("news_early_warnings_sent"):
         logger.info("Early warnings already sent today — skipping (safe to re-run the pipeline)")
         return
@@ -255,7 +278,8 @@ def send_early_warnings():
         placeholders = ",".join("?" * len(recommender.LEADING_SIGNAL_TYPES))
         rows = conn.execute(
             f"""
-            SELECT ns.card_name, ns.signal_type, na.id AS article_id, na.title, na.source, na.url
+            SELECT ns.id AS signal_id, ns.card_name, ns.signal_type,
+                   na.id AS article_id, na.title, na.source, na.url
             FROM news_signals ns
             JOIN news_articles na ON na.id = ns.article_id
             WHERE ns.is_genuine_interest = 1
@@ -268,23 +292,34 @@ def send_early_warnings():
         conn.close()
 
     by_article = {}
+    deduped_count = 0
     for r in rows:
         if r["card_name"] in today_movers:
+            continue
+        if db.had_recent_early_warning(r["card_name"], r["signal_type"], EARLY_WARNING_DEDUP_DAYS):
+            deduped_count += 1
             continue
         entry = by_article.setdefault(
             r["article_id"], {"title": r["title"], "source": r["source"], "link": r["url"], "items": []}
         )
-        entry["items"].append({"card_name": r["card_name"], "signal_type": r["signal_type"]})
+        entry["items"].append({"signal_id": r["signal_id"], "card_name": r["card_name"], "signal_type": r["signal_type"]})
 
     message_count = 0
     signal_count = 0
     for article in by_article.values():
         telegram_notify.send_message(_early_warning_text(article, article["items"]))
+        for item in article["items"]:
+            db.mark_news_signal_sent(item["signal_id"])
         message_count += 1
         signal_count += len(article["items"])
 
     db.mark_ran_today("news_early_warnings_sent")
-    logger.info("Sent %d early-warning signal(s) across %d message(s)", signal_count, message_count)
+    logger.info(
+        "Sent %d early-warning signal(s) across %d message(s) (%d skipped as recent repeats)",
+        signal_count,
+        message_count,
+        deduped_count,
+    )
 
 
 if __name__ == "__main__":

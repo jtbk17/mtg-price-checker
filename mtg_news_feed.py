@@ -85,10 +85,18 @@ def fetch_recent_articles():
 
 def find_mentioned_cards(text, known_names, require_multiword=True):
     """Returns the subset of `known_names` that appear as a whole-word
-    match in `text` (case-insensitive). A cheap substring pre-filter
-    (fast, exact-match C implementation) runs first so the slower regex
-    word-boundary check — needed so "Bolt" doesn't match inside
-    "Boltwing" — only ever runs on names that already passed it.
+    match in `text` (case-insensitive), ordered by where each first
+    appears in the text — not the arbitrary order `known_names` happens
+    to come in (that's unrelated to relevance; it's whatever order the
+    source database returns rows in). This matters because callers that
+    truncate a long list (news_signals.py caps candidates per article
+    for cost) end up keeping whichever names are actually prominent in
+    the article — usually mentioned early — rather than an arbitrary
+    slice. A cheap substring pre-filter (fast, exact-match C
+    implementation, and a free source of the position) runs first so
+    the slower regex word-boundary check — needed so "Bolt" doesn't
+    match inside "Boltwing" — only ever runs on names that already
+    passed it.
 
     `require_multiword` defaults on because single-word card names
     collide heavily with ordinary MTG vocabulary: live testing against
@@ -101,15 +109,17 @@ def find_mentioned_cards(text, known_names, require_multiword=True):
     would need a real false-positive filter (e.g. a keyword blocklist)
     to be worth the extra recall."""
     text_lower = text.lower()
-    found = []
+    found = []  # (first-occurrence position, name)
     for name in known_names:
         if len(name) < MIN_NAME_LENGTH:
             continue
         if require_multiword and " " not in name:
             continue
         name_lower = name.lower()
-        if name_lower not in text_lower:
+        position = text_lower.find(name_lower)
+        if position == -1:
             continue
         if re.search(rf"\b{re.escape(name_lower)}\b", text_lower):
-            found.append(name)
-    return found
+            found.append((position, name))
+    found.sort(key=lambda pair: pair[0])
+    return [name for _, name in found]
