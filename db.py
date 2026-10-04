@@ -570,7 +570,7 @@ def record_news_signal(article_id, card_name, signal_type, is_genuine_interest):
         conn.close()
 
 
-def had_recent_news_signal(card_name, before_timestamp, window_days=60):
+def had_recent_news_signal(card_name, before_timestamp, window_days=60, signal_types=None):
     """Whether a genuine news signal (news_signals.py) was recorded for
     this card within `window_days` before `before_timestamp` — used by
     recommender.py as a predictive feature, not an alert. The window
@@ -578,21 +578,33 @@ def had_recent_news_signal(card_name, before_timestamp, window_days=60):
     against a control group of non-movers: movers were about 4x more
     likely to have this kind of prior coverage (70% vs 18% in that
     test). Uses the article's actual publish date when known, falling
-    back to when this app first saw it."""
+    back to when this app first saw it.
+
+    `signal_types`, if given, restricts the match to those specific
+    signal_type values — recommender.py uses this to keep "validation"
+    coverage (price_movement, deck_tech_feature, combo_discovery — tends
+    to appear alongside or after a move, confirming it) and "leading"
+    coverage (spoiler_preview, banned_restricted, reprint_announcement —
+    tends to precede a move and hint at future direction) as separate
+    features, since conflating them into one flat signal risks teaching
+    the model the wrong thing for a type like reprint_announcement,
+    which usually predicts a price *drop* (more supply), not a rise."""
     conn = get_connection()
     try:
-        row = conn.execute(
-            """
+        query = """
             SELECT 1 FROM news_signals ns
             JOIN news_articles na ON na.id = ns.article_id
             WHERE ns.card_name = ?
               AND ns.is_genuine_interest = 1
               AND datetime(COALESCE(na.published_at, na.seen_at)) <= datetime(?)
               AND datetime(COALESCE(na.published_at, na.seen_at)) > datetime(?, '-' || ? || ' days')
-            LIMIT 1
-            """,
-            (card_name, before_timestamp, before_timestamp, window_days),
-        ).fetchone()
+        """
+        params = [card_name, before_timestamp, before_timestamp, window_days]
+        if signal_types:
+            query += f" AND ns.signal_type IN ({','.join('?' * len(signal_types))})"
+            params.extend(signal_types)
+        query += " LIMIT 1"
+        row = conn.execute(query, params).fetchone()
         return row is not None
     finally:
         conn.close()

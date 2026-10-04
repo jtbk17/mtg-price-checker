@@ -288,6 +288,39 @@ class DbTests(unittest.TestCase):
         # Unknown card -> False
         self.assertFalse(db.had_recent_news_signal("Nonexistent Card", "2026-08-30T00:00:00+00:00", window_days=60))
 
+    def test_had_recent_news_signal_filters_by_signal_types(self):
+        # recommender.py keeps "validation" and "leading" signal types as
+        # separate features (see recommender.py) rather than one flat
+        # flag — this is the filter that makes that split possible.
+        article_id = db.record_article_if_new(
+            "https://example.com/news-type-filter", "Test Site", "Title", "2026-08-01T00:00:00+00:00"
+        )
+        db.record_news_signal(article_id, "Typed Card", "reprint_announcement", True)
+
+        def cleanup():
+            conn = db.get_connection()
+            conn.execute("DELETE FROM news_signals WHERE article_id = ?", (article_id,))
+            conn.execute("DELETE FROM news_articles WHERE id = ?", (article_id,))
+            conn.commit()
+            conn.close()
+
+        self.addCleanup(cleanup)  # this is a genuine "reprint_announcement" row — SendEarlyWarningsTests'
+        # send_early_warnings() queries ALL of today's genuine leading signals (seen_at is real "now"
+        # regardless of the fake published_at above), so a leftover row here would leak into those tests.
+
+        self.assertTrue(
+            db.had_recent_news_signal(
+                "Typed Card", "2026-08-30T00:00:00+00:00", window_days=60, signal_types=("reprint_announcement",)
+            )
+        )
+        self.assertFalse(
+            db.had_recent_news_signal(
+                "Typed Card", "2026-08-30T00:00:00+00:00", window_days=60, signal_types=("combo_discovery",)
+            )
+        )
+        # No filter -> matches regardless of type (existing behavior).
+        self.assertTrue(db.had_recent_news_signal("Typed Card", "2026-08-30T00:00:00+00:00", window_days=60))
+
 
 class RecommenderTests(unittest.TestCase):
     def setUp(self):
@@ -1277,6 +1310,118 @@ class NewsSignalsTests(unittest.TestCase):
             self.news_signals.check_for_signals()
 
         mock_record_signal.assert_called_once_with(42, "Darklight Phoenix", "routine_mention", False)
+
+
+class SendEarlyWarningsTests(unittest.TestCase):
+    """Covers news_signals.send_early_warnings() — the bundled,
+    once-a-day Telegram alert for leading-type signals (spoiler/ban/
+    reprint) on cards that aren't already a mover tonight. Uses real db
+    writes (the function reads via raw SQL) with telegram_notify and
+    MOVERS_FILE mocked."""
+
+    @staticmethod
+    def _reset_state():
+        # The "already sent today" guard is a global app_state flag, and
+        # send_early_warnings() reads ALL of today's genuine leading
+        # signals with no per-test scoping — without clearing both
+        # before AND after each test, a leftover row could leak either
+        # into a later test in this class or into any other test class
+        # that happens to record a genuine leading signal.
+        conn = db.get_connection()
+        conn.execute("DELETE FROM app_state WHERE key = 'news_early_warnings_sent'")
+        conn.execute(
+            "DELETE FROM news_signals WHERE article_id IN "
+            "(SELECT id FROM news_articles WHERE url LIKE 'https://example.com/ew-%')"
+        )
+        conn.execute("DELETE FROM news_articles WHERE url LIKE 'https://example.com/ew-%'")
+        conn.commit()
+        conn.close()
+
+    def setUp(self):
+        import news_signals
+
+        db.init_db()
+        self._reset_state()
+        self.addCleanup(self._reset_state)
+
+        self.news_signals = news_signals
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.no_movers_file = Path(self.tmp_dir.name) / "no_movers.json"  # deliberately doesn't exist
+        self._movers_patcher = patch.object(news_signals, "MOVERS_FILE", self.no_movers_file)
+        self._movers_patcher.start()
+        self.addCleanup(self._movers_patcher.stop)
+        self.addCleanup(self.tmp_dir.cleanup)
+
+        self._send_patcher = patch.object(news_signals.telegram_notify, "send_message")
+        self.mock_send = self._send_patcher.start()
+        self.addCleanup(self._send_patcher.stop)
+
+    def _write_movers_file(self, names, key="daily_gainers"):
+        movers_file = Path(self.tmp_dir.name) / "movers.json"
+        movers_file.write_text(json.dumps({key: [{"name": n} for n in names]}))
+        patcher = patch.object(self.news_signals, "MOVERS_FILE", movers_file)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_alerts_on_leading_signal_not_in_movers(self):
+        article_id = db.record_article_if_new("https://example.com/ew-1", "Test Site", "A Reprint Drop", None)
+        db.record_news_signal(article_id, "Leading Card", "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_called_once()
+        sent_text = self.mock_send.call_args.args[0]
+        self.assertIn("Leading Card", sent_text)
+        self.assertIn("Reprint Announcement", sent_text)
+
+    def test_skips_cards_already_movers_tonight(self):
+        self._write_movers_file(["Leading Card"])
+        article_id = db.record_article_if_new("https://example.com/ew-2", "Test Site", "A Reprint Drop", None)
+        db.record_news_signal(article_id, "Leading Card", "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_not_called()
+
+    def test_skips_validation_type_signals(self):
+        # combo_discovery is a VALIDATION type, not a LEADING one — it
+        # only ever feeds recommender.py's model, never this alert.
+        article_id = db.record_article_if_new("https://example.com/ew-3", "Test Site", "A Combo Deck", None)
+        db.record_news_signal(article_id, "Validation Card", "combo_discovery", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_not_called()
+
+    def test_skips_non_genuine_leading_signals(self):
+        article_id = db.record_article_if_new("https://example.com/ew-4", "Test Site", "A Reprint Drop", None)
+        db.record_news_signal(article_id, "Not Genuine Card", "reprint_announcement", False)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_not_called()
+
+    def test_bundles_multiple_cards_from_the_same_article_into_one_message(self):
+        article_id = db.record_article_if_new("https://example.com/ew-5", "Test Site", "A Secret Lair Drop", None)
+        db.record_news_signal(article_id, "Card One", "reprint_announcement", True)
+        db.record_news_signal(article_id, "Card Two", "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_called_once()
+        sent_text = self.mock_send.call_args.args[0]
+        self.assertIn("Card One", sent_text)
+        self.assertIn("Card Two", sent_text)
+
+    def test_respects_already_ran_today_guard(self):
+        article_id = db.record_article_if_new("https://example.com/ew-6", "Test Site", "A Reprint Drop", None)
+        db.record_news_signal(article_id, "Leading Card", "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+        self.mock_send.reset_mock()
+        self.news_signals.send_early_warnings()  # same calendar day — must not resend
+
+        self.mock_send.assert_not_called()
 
 
 class MtgNewsTests(unittest.TestCase):

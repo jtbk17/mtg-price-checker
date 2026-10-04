@@ -2,14 +2,32 @@
 classifier trained from your accumulated 'Good pick' / 'False positive'
 Telegram feedback (see market_alerts.py and poll_telegram_feedback.py).
 
-One feature comes from news_signals.py: whether genuine news coverage
-of the card was recorded recently (db.had_recent_news_signal). That
-module itself sends nothing to Telegram — the news coverage it finds
-is only ever used here, as an input the model learns a weight for,
-rather than as its own separate alert. The window/effect size this
-relies on was validated by backtesting real historical movers against
-a control group of non-movers before building on it (70% of movers had
-verified prior coverage vs. 18% of non-movers).
+Two features come from news_signals.py, kept separate rather than
+folded into one flat "had news" flag:
+
+- VALIDATION_SIGNAL_TYPES (price_movement, deck_tech_feature,
+  combo_discovery) tend to appear alongside or after a move — they
+  confirm something that's already happening.
+- LEADING_SIGNAL_TYPES (spoiler_preview, banned_restricted,
+  reprint_announcement) tend to precede a move and hint at a *future*
+  direction instead.
+
+Conflating them would risk teaching the model the wrong thing: a
+reprint_announcement usually predicts a price *drop* (more supply into
+circulation), not a rise, so it shouldn't share a coefficient with
+price_movement just because both happen to correlate with "genuine
+interest" in the abstract. news_signals.py itself sends nothing to
+Telegram for either category on an already-detected mover — this is
+the only place that coverage gets used, as inputs the model learns its
+own weights for. (A *leading* signal on a card that ISN'T already a
+mover is a different thing — see news_signals.py's early-warning check,
+which does alert on those, since that's the one case where the "hint"
+has nowhere else to surface.)
+
+The window/effect size this relies on was validated by backtesting
+real historical movers against a control group of non-movers before
+building on it (70% of movers had verified prior coverage vs. 18% of
+non-movers).
 
 Deliberately does NOT filter which movers get alerted on — only a
 watchlist you can react to produces feedback to learn from, so every
@@ -29,11 +47,25 @@ logger = logging.getLogger("tcg-price-checker")
 
 MIN_LABELED_EXAMPLES = 10
 NEWS_SIGNAL_WINDOW_DAYS = 60
+VALIDATION_SIGNAL_TYPES = ("price_movement", "deck_tech_feature", "combo_discovery")
+LEADING_SIGNAL_TYPES = ("spoiler_preview", "banned_restricted", "reprint_announcement")
 
 
-def _feature_vector(price_before, pct_change, had_news_signal):
+def _feature_vector(price_before, pct_change, had_validation_signal, had_leading_signal):
     abs_change = price_before * pct_change / 100
-    return [price_before, pct_change, abs_change, 1.0 if had_news_signal else 0.0]
+    return [
+        price_before,
+        pct_change,
+        abs_change,
+        1.0 if had_validation_signal else 0.0,
+        1.0 if had_leading_signal else 0.0,
+    ]
+
+
+def _news_features(card_name, before_timestamp):
+    had_validation = db.had_recent_news_signal(card_name, before_timestamp, NEWS_SIGNAL_WINDOW_DAYS, VALIDATION_SIGNAL_TYPES)
+    had_leading = db.had_recent_news_signal(card_name, before_timestamp, NEWS_SIGNAL_WINDOW_DAYS, LEADING_SIGNAL_TYPES)
+    return had_validation, had_leading
 
 
 def train():
@@ -56,11 +88,7 @@ def train():
     from sklearn.linear_model import LogisticRegression
 
     X = [
-        _feature_vector(
-            r["price_before"],
-            r["pct_change"],
-            db.had_recent_news_signal(r["card_name"], r["sent_at"], NEWS_SIGNAL_WINDOW_DAYS),
-        )
+        _feature_vector(r["price_before"], r["pct_change"], *_news_features(r["card_name"], r["sent_at"]))
         for r in rows
     ]
     y = [1 if r["feedback"] == "good" else 0 for r in rows]
@@ -78,9 +106,9 @@ def score(model, price_before, pct_change, card_name=None):
     lookup genuinely isn't possible for the caller."""
     if model is None:
         return None
-    had_news_signal = False
+    had_validation, had_leading = False, False
     if card_name:
         now = datetime.now(timezone.utc).isoformat()
-        had_news_signal = db.had_recent_news_signal(card_name, now, NEWS_SIGNAL_WINDOW_DAYS)
-    proba = model.predict_proba([_feature_vector(price_before, pct_change, had_news_signal)])[0][1]
+        had_validation, had_leading = _news_features(card_name, now)
+    proba = model.predict_proba([_feature_vector(price_before, pct_change, had_validation, had_leading)])[0][1]
     return round(proba * 100, 1)

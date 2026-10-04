@@ -94,11 +94,18 @@ jobs:
       # retry just resends everything. This happened for real: one push
       # conflict meant three nights' worth of alerts went out in a
       # single run (45 messages) before this was split out.
-      - name: Send market alerts (runs once, never retried)
+      # news_signals.py --early-warnings sends a Telegram alert for
+      # leading-type signals (spoiler/ban/reprint) on cards that aren't
+      # already a mover tonight — same "irreversible, never retried"
+      # reasoning as market_alerts.py, so it runs here too, not inside
+      # the retry-safe phase above.
+      - name: Send market alerts and early warnings (runs once, never retried)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python market_alerts.py
+        run: |
+          python market_alerts.py
+          python news_signals.py --early-warnings
 
       - name: Push alert-sent bookkeeping (best-effort, not retried with a reset)
         env:
