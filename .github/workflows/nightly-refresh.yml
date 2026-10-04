@@ -35,38 +35,35 @@ jobs:
         run: gh release download data --pattern "all_cards_*.db" --clobber || true
 
       # tcg_prices.db is a SQLite binary, so git can't merge two divergent
-      # writes to it (e.g. this job vs. a feedback-button dispatch landing
-      # around the same time) the way it can with text. On a rejected push,
-      # reset to the remote's latest state and re-run the whole pipeline
-      # rather than attempting a doomed merge. This is safe to repeat:
-      # refresh_job.py/all_cards_history.py are idempotent, market_alerts.py
-      # / the watchlist alert step both skip sending twice in the same day
-      # (see db.already_ran_today), and news_signals.py dedupes per article
-      # URL (db.news_articles) rather than per day — either way, a retry
-      # can't double up your Telegram alerts.
-      - name: Run pipeline and push (retries on conflict)
+      # writes to it (e.g. this job vs. a feedback-button dispatch, or a
+      # manual push landing around the same time — confirmed live: this
+      # job's own push collided with unrelated commits being pushed to
+      # main while it was mid-run, two nights in a row) the way it can
+      # with text. On a rejected push, reset to the remote's latest state
+      # and retry — safe here because refresh_job.py/all_cards_history.py
+      # only do idempotent price UPSERTs, so redoing them is harmless.
+      - name: Refresh price data and push (retries on conflict)
+        id: refresh
+        continue-on-error: true  # alerts below must still run even if this ultimately fails to push
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          pushed=false
           for attempt in 1 2 3; do
             echo "--- attempt $attempt ---"
             python refresh_job.py
             python all_cards_history.py
-            python market_alerts.py
-            python news_signals.py
 
             git add tcg_prices.db docs/watchlist.json docs/movers.json docs/alerts.json
             git diff --cached --quiet || git commit -m "Nightly price refresh"
 
             if git push; then
               echo "Pushed successfully on attempt $attempt"
-              exit 0
+              pushed=true
+              break
             fi
 
             echo "Push rejected on attempt $attempt — resetting to remote and retrying"
@@ -76,8 +73,46 @@ jobs:
             # doesn't touch it — no need to re-download it here.
           done
 
-          echo "Could not push after 3 attempts" >&2
-          exit 1
+          if [ "$pushed" != true ]; then
+            echo "Could not push price data after 3 attempts" >&2
+            exit 1
+          fi
+
+      # market_alerts.py and news_signals.py send Telegram messages, which
+      # are irreversible and can't be "redone safely" the way the price
+      # refresh above can. They run exactly once here, never inside a
+      # retry loop: a `git reset --hard` after a push conflict wipes each
+      # script's local "already sent" bookkeeping (db.already_ran_today,
+      # db.news_articles) without ever undoing the Telegram sends it
+      # guarded — so re-running them on retry just resends everything.
+      # This happened for real: one push conflict meant three nights'
+      # worth of alerts went out in a single run (45 market alerts, 3x
+      # the news-signal batches) before this was split out.
+      - name: Send alerts (runs once, never retried)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python market_alerts.py
+          python news_signals.py
+
+      - name: Push alert-sent bookkeeping (best-effort, not retried with a reset)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git add tcg_prices.db
+          if git diff --cached --quiet; then
+            echo "No alert bookkeeping to push"
+            exit 0
+          fi
+          git commit -m "Record alert state"
+          git fetch origin main
+          if git rebase origin/main; then
+            git push && exit 0
+          fi
+          git rebase --abort
+          echo "Could not persist alert-sent bookkeeping without re-running the scripts that already sent alerts — skipping (today's alerts were still sent; only the db record of having sent them may be lost)" >&2
 
       - name: Upload updated all-cards database
         env:
@@ -85,3 +120,13 @@ jobs:
         run: |
           gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent all-cards price history (kept out of git history; not the same as source code releases)"
           gh release upload data all_cards_*.db --clobber
+
+      # Surfaced last (after alerts/upload already ran regardless) so the
+      # price-refresh step's own failure doesn't block them, but still
+      # marks the overall job red so a real push problem doesn't go
+      # unnoticed.
+      - name: Fail the job if price data never pushed
+        if: steps.refresh.outcome == 'failure'
+        run: |
+          echo "Price-data push failed earlier in this run (see 'Refresh price data and push' step above) — alerts were still sent and the all-cards database was still uploaded." >&2
+          exit 1
