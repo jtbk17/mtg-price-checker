@@ -11,6 +11,18 @@ on:
 permissions:
   contents: write
 
+# tcg_prices.db is NOT a git-tracked file (see below) — it's shared with
+# telegram-webhook-feedback.yml, which downloads/edits/uploads the same
+# release asset the instant someone taps a Telegram feedback button.
+# Without this, that webhook landing mid-run here could upload its own
+# edit, then get silently clobbered when this job uploads its own
+# (older-based) copy at the end — real data loss, not just a conflict.
+# Using the SAME group name in both workflow files makes GitHub Actions
+# queue one run behind the other instead of letting them race.
+concurrency:
+  group: tcg-prices-db
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -29,25 +41,25 @@ jobs:
       # also installs the OS libraries the browser needs on this runner.
       - run: playwright install chromium --with-deps
 
-      - name: Download existing all-cards database, if any
+      # Neither database is git-tracked (see .gitignore) — both grew past
+      # git's practical size comfort (tcg_prices.db actually hit GitHub's
+      # hard 100MB-per-file push limit, failing every push for two nights
+      # straight), so both live as release assets instead, downloaded
+      # fresh at the start of each run and uploaded back at the end.
+      - name: Download existing databases, if any
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download data --pattern "all_cards_*.db" --clobber || true
+        run: |
+          gh release download data --pattern "tcg_prices.db" --clobber || true
+          gh release download data --pattern "all_cards_*.db" --clobber || true
 
-      # tcg_prices.db is a SQLite binary, so git can't merge two divergent
-      # writes to it (e.g. this job vs. a feedback-button dispatch, or a
-      # manual push landing around the same time — confirmed live: this
-      # job's own push collided with unrelated commits being pushed to
-      # main while it was mid-run, two nights in a row) the way it can
-      # with text. On a rejected push, reset to the remote's latest state
-      # and retry — safe here because refresh_job.py/all_cards_history.py
-      # only do idempotent price UPSERTs, and news_signals.py (since it
-      # stopped sending Telegram alerts directly — the signals it finds
-      # now just feed recommender.py's model as a feature) only records
-      # rows keyed by article URL, so redoing any of this is harmless.
-      # Runs before market_alerts.py so today's freshly-recorded signals
-      # are available to the model when it scores today's movers.
-      - name: Refresh price data and news signals, then push (retries on conflict)
+      # refresh_job.py/all_cards_history.py only do idempotent price
+      # UPSERTs, and news_signals.py only records rows keyed by article
+      # URL, so redoing any of this on a push conflict (e.g. a manual
+      # push to docs/*.json landing mid-run) is harmless. Runs before
+      # market_alerts.py so today's freshly-recorded signals are
+      # available to the model when it scores today's movers.
+      - name: Refresh price data and news signals, then push docs (retries on conflict)
         id: refresh
         continue-on-error: true  # alerts below must still run even if this ultimately fails to push
         env:
@@ -64,7 +76,7 @@ jobs:
             python all_cards_history.py
             python news_signals.py
 
-            git add tcg_prices.db docs/watchlist.json docs/movers.json docs/alerts.json
+            git add docs/watchlist.json docs/movers.json docs/alerts.json
             git diff --cached --quiet || git commit -m "Nightly price refresh"
 
             if git push; then
@@ -76,24 +88,21 @@ jobs:
             echo "Push rejected on attempt $attempt — resetting to remote and retrying"
             git fetch origin main
             git reset --hard origin/main
-            # all_cards_*.db is gitignored/untracked, so `reset --hard` above
-            # doesn't touch it — no need to re-download it here.
+            # Neither database is git-tracked, so `reset --hard` above
+            # doesn't touch them — no need to re-download either here.
           done
 
           if [ "$pushed" != true ]; then
-            echo "Could not push price data after 3 attempts" >&2
+            echo "Could not push docs data after 3 attempts" >&2
             exit 1
           fi
 
       # market_alerts.py sends Telegram messages, which are irreversible
       # and can't be "redone safely" the way the refresh above can. It
-      # runs exactly once here, never inside a retry loop: a
-      # `git reset --hard` after a push conflict wipes its local
-      # "already sent today" bookkeeping (db.already_ran_today) without
-      # ever undoing the Telegram sends it guarded — so re-running it on
-      # retry just resends everything. This happened for real: one push
-      # conflict meant three nights' worth of alerts went out in a
-      # single run (45 messages) before this was split out.
+      # runs exactly once here, never inside a retry loop: re-running it
+      # on retry would just resend everything. This happened for real:
+      # one push conflict meant three nights' worth of alerts went out in
+      # a single run (45 messages) before this was split out.
       # news_signals.py --early-warnings sends a Telegram alert for
       # leading-type signals (spoiler/ban/reprint) on cards that aren't
       # already a mover tonight — same "irreversible, never retried"
@@ -101,7 +110,7 @@ jobs:
       # the retry-safe phase above.
       - name: Send market alerts and early warnings (runs once, never retried)
         id: alerts
-        continue-on-error: true  # bookkeeping push / all-cards upload below must still run even if this throws
+        continue-on-error: true  # database upload below must still run even if this throws
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -109,42 +118,32 @@ jobs:
           python market_alerts.py
           python news_signals.py --early-warnings
 
-      - name: Push alert-sent bookkeeping (best-effort, not retried with a reset)
+      # Runs regardless of whether the steps above succeeded, so
+      # whatever each one managed to write locally (price refresh,
+      # news signals, "already sent today" bookkeeping) still gets
+      # persisted — same best-effort spirit the old git-based bookkeeping
+      # push had, but as a single unconditional upload instead of a
+      # second git push that could itself conflict.
+      - name: Upload updated databases
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git add tcg_prices.db
-          if git diff --cached --quiet; then
-            echo "No alert bookkeeping to push"
-            exit 0
-          fi
-          git commit -m "Record alert state"
-          git fetch origin main
-          if git rebase origin/main; then
-            git push && exit 0
-          fi
-          git rebase --abort
-          echo "Could not persist alert-sent bookkeeping without re-running the script that already sent alerts — skipping (today's alerts were still sent; only the db record of having sent them may be lost)" >&2
-
-      - name: Upload updated all-cards database
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent all-cards price history (kept out of git history; not the same as source code releases)"
-          gh release upload data all_cards_*.db --clobber
+          gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent tcg_prices.db and all-cards price history (kept out of git history; not the same as source code releases)"
+          gh release upload data tcg_prices.db all_cards_*.db --clobber
 
       # Surfaced last (after alerts/upload already ran regardless) so the
       # price-refresh step's own failure doesn't block them, but still
       # marks the overall job red so a real push problem doesn't go
       # unnoticed.
-      - name: Fail the job if price data never pushed
+      - name: Fail the job if docs data never pushed
         if: steps.refresh.outcome == 'failure'
         run: |
-          echo "Price-data push failed earlier in this run (see 'Refresh price data and push' step above) — alerts were still sent and the all-cards database was still uploaded." >&2
+          echo "Docs-data push failed earlier in this run (see 'Refresh price data and news signals, then push docs' step above) — alerts were still sent and the databases were still uploaded." >&2
           exit 1
 
       - name: Fail the job if sending alerts/early warnings crashed
         if: steps.alerts.outcome == 'failure'
         run: |
-          echo "market_alerts.py or news_signals.py --early-warnings threw an error earlier in this run (see 'Send market alerts and early warnings' step above) — bookkeeping push and all-cards upload still ran regardless." >&2
+          echo "market_alerts.py or news_signals.py --early-warnings threw an error earlier in this run (see 'Send market alerts and early warnings' step above) — database upload still ran regardless." >&2
           exit 1

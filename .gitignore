@@ -6,6 +6,7 @@ mtgjson_crosswalk_cache.json
 tcgmarketplace_id_cache.json
 set_names_cache.json
 all_cards_*.db
+tcg_prices.db
 run_out.log
 run_err.log
 server.pid

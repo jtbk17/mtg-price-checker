@@ -29,11 +29,11 @@ py app.py
 Open http://127.0.0.1:5000, search, and hit **Track** (or use **Import
 ManaBox CSV** to bulk-add a whole collection export at once — matched by
 its `Scryfall ID` column). Tracking, untracking, or importing automatically
-commits and pushes `tcg_prices.db` for you, so changes show up in the
-nightly job and dashboard without a manual git step. If a push fails (e.g.
-you're offline, or there's a conflict), it's logged to the console and the
-change stays committed locally — just run `git push` yourself once you're
-able to.
+syncs `tcg_prices.db` to the GitHub Release asset the nightly job and
+dashboard also read from (see `release_sync.py`), so changes show up there
+without a manual step. If the sync fails (e.g. you're offline), it's logged
+to the console and your local change is still saved — it'll sync next time
+you make an edit while online.
 
 ## How pricing works
 
@@ -50,12 +50,18 @@ able to.
 
 ## Where the data lives
 
-- **Watchlist** (`tcg_prices.db`): small, committed straight into the git
-  repo. Every nightly run and every local track/refresh updates it.
+- **Watchlist + price history** (`tcg_prices.db`): **not** committed to git —
+  it grew past GitHub's 100MB-per-file push limit once price history built
+  up, so like the all-cards database below, it's stored as an asset on a
+  GitHub Release named `data` instead. The nightly job, the Telegram-feedback
+  webhook, and the local app (`release_sync.py`) all download/edit/upload it
+  against that same asset, using a compare-and-swap check (the asset's
+  content digest) so two of them writing around the same time can't silently
+  clobber each other — whichever one detects the asset changed underneath it
+  just re-downloads and redoes its edit.
 - **All-cards history** (`all_cards_<year>.db`, e.g. `all_cards_2026.db`):
-  one row per card per day, for every card Card Kingdom prices. This file is
-  **not** committed to git (it would bloat the repo) — instead it's stored as
-  an asset on a GitHub Release named `data`, downloaded and re-uploaded by
+  one row per card per day, for every card Card Kingdom prices. Also a
+  GitHub Release asset (same `data` release), downloaded and re-uploaded by
   the nightly workflow each run. A fresh file starts each calendar year (to
   stay under GitHub's 2GB-per-file limit) and is automatically seeded with
   MTGJSON's own ~88-day rolling history the first time it's created, so
@@ -70,9 +76,6 @@ able to.
 - The first search for a card whose set hasn't been seen before will fetch
   and cache that set's MTGJSON file (a few MB); later lookups for cards in
   the same set are instant.
-- If you edit `tcg_prices.db` locally around the same time the nightly job
-  runs, `git pull` before pushing — the timestamp in `docs/watchlist.json`
-  changes every run, so pushes without pulling first will be rejected.
 
 ## Project structure
 
@@ -81,6 +84,7 @@ able to.
 - `mtgjson_crosswalk.py` — Scryfall id → MTGJSON uuid lookup, per set
 - `cardkingdom.py` — Card Kingdom market/buylist prices (MTGJSON price feed)
 - `db.py` — watchlist SQLite schema and queries
+- `release_sync.py` — compare-and-swap sync of `tcg_prices.db` against its GitHub Release asset
 - `refresh_job.py` — nightly watchlist refresh + dashboard snapshot export
 - `all_cards_history.py` — nightly full-catalog snapshot, card-name backfill, and movers computation (needs `ijson`, only used in CI)
 - `manabox_import.py` — bulk-import a ManaBox CSV export into the watchlist

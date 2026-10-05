@@ -354,10 +354,9 @@ def send_early_warnings():
     separate articles on different nights, which would otherwise alert
     on the same cards repeatedly. Call this once — never inside a retry
     loop, same reasoning as market_alerts.py: a Telegram send here is
-    irreversible, and the "already sent today" guard it writes to
-    tcg_prices.db would otherwise get wiped by a `git reset --hard` on
-    a later retry, causing a resend (this is exactly the bug a previous
-    version of this pipeline hit for real)."""
+    irreversible, so re-running it on a retry just resends everything
+    (this is exactly the bug a previous version of this pipeline hit for
+    real — three nights' worth of alerts went out in one run)."""
     if db.already_ran_today("news_early_warnings_sent"):
         logger.info("Early warnings already sent today — skipping (safe to re-run the pipeline)")
         return

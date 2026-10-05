@@ -1,9 +1,7 @@
 import logging
 import os
-import subprocess
 import threading
 import uuid
-from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -13,6 +11,7 @@ import cardkingdom
 import db
 import manabox_import
 import mtgjson_crosswalk
+import release_sync
 import scryfall
 import tcgmarketplace
 from refresh_job import export_alerts, export_snapshot, notify_alerts, refresh_watchlist_prices
@@ -23,66 +22,15 @@ logger = logging.getLogger("tcg-price-checker")
 app = Flask(__name__)
 db.init_db()
 
-PROJECT_DIR = Path(__file__).parent
 
-
-def _git_sync(operation, message_fn, max_retries=3):
+def _db_sync(operation):
     """Runs `operation()` (a callable that mutates tcg_prices.db — e.g. a
-    watchlist insert or a feedback update) and syncs the result to git.
-    `message_fn(result)` builds the commit message from whatever
-    `operation()` returns.
-
-    tcg_prices.db is a SQLite binary, so git can't meaningfully merge two
-    divergent writes to it the way it can with text — a conflict there
-    isn't something `git pull --rebase` can resolve safely. Instead, on a
-    rejected push, this resets the working tree to the remote's latest
-    state and re-runs `operation()` on top of it. That's safe specifically
-    because our writes are idempotent (ON CONFLICT DO NOTHING inserts,
-    or plain field updates) — replaying after a fresh pull converges on
-    the correct combined state instead of risking a botched binary merge.
-    """
-    result = operation()
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            subprocess.run(
-                ["git", "add", "tcg_prices.db"], cwd=PROJECT_DIR, capture_output=True, timeout=10, check=True
-            )
-            commit = subprocess.run(
-                ["git", "commit", "-m", message_fn(result)], cwd=PROJECT_DIR, capture_output=True, timeout=10
-            )
-            if commit.returncode != 0 and b"nothing to commit" not in commit.stdout:
-                logger.warning("git commit failed: %s", commit.stdout.decode(errors="replace"))
-                return result
-
-            push = subprocess.run(["git", "push"], cwd=PROJECT_DIR, capture_output=True, timeout=30)
-            if push.returncode == 0:
-                logger.info("Synced to git: %s", message_fn(result))
-                return result
-
-            logger.info(
-                "Push rejected (attempt %d/%d) — resetting to remote and retrying: %s",
-                attempt,
-                max_retries,
-                push.stderr.decode(errors="replace").strip(),
-            )
-            subprocess.run(
-                ["git", "fetch", "origin", "main"], cwd=PROJECT_DIR, capture_output=True, timeout=30, check=True
-            )
-            subprocess.run(
-                ["git", "reset", "--hard", "origin/main"],
-                cwd=PROJECT_DIR,
-                capture_output=True,
-                timeout=10,
-                check=True,
-            )
-            result = operation()
-        except Exception as exc:
-            logger.warning("Could not sync to git (%s)", exc)
-            return result
-
-    logger.warning("Could not sync to git after %d attempt(s) — you may need to push manually", max_retries)
-    return result
+    watchlist insert or a feedback update) and syncs the result to the
+    shared tcg_prices.db release asset (see release_sync.py) — the
+    nightly pipeline and the Telegram-feedback webhook both read/write
+    the same asset, so this goes through the same compare-and-swap sync
+    they do rather than just downloading/uploading blind."""
+    return release_sync.sync("tcg_prices.db", operation)
 
 
 def _is_foil(finish):
@@ -233,10 +181,7 @@ def api_watchlist_add():
         "owner": owner,
         "quantity": quantity,
     }
-    item = _git_sync(
-        lambda: db.add_to_watchlist(card),
-        lambda item: f"Track {item['name']} ({item['set_name']}){f' for {owner}' if owner else ''}",
-    )
+    item = _db_sync(lambda: db.add_to_watchlist(card))
     return jsonify(item), 201
 
 
@@ -252,10 +197,7 @@ def _run_import_job(job_id, rows, owner):
                 job.update(phase=phase, done=done, total=total)
 
     try:
-        result = _git_sync(
-            lambda: manabox_import.import_rows(rows, owner=owner, on_progress=on_progress),
-            lambda result: f"Import {result['imported']} card(s) from ManaBox CSV{f' for {owner}' if owner else ''}",
-        )
+        result = _db_sync(lambda: manabox_import.import_rows(rows, owner=owner, on_progress=on_progress))
         with _import_jobs_lock:
             _import_jobs[job_id].update(finished=True, result=result, error=None)
     except requests.RequestException as exc:
@@ -331,11 +273,7 @@ def api_watchlist_add_copies(watchlist_id):
     except (TypeError, ValueError):
         purchase_price = None
 
-    owner_tag = f" for {item['owner']}" if item.get("owner") else ""
-    updated = _git_sync(
-        lambda: db.add_copies(watchlist_id, quantity, purchase_price),
-        lambda _: f"Add {quantity} more {item['name']} ({item['set_name']}){owner_tag}",
-    )
+    updated = _db_sync(lambda: db.add_copies(watchlist_id, quantity, purchase_price))
     return jsonify(updated), 200
 
 
@@ -343,10 +281,7 @@ def api_watchlist_add_copies(watchlist_id):
 def api_watchlist_remove(watchlist_id):
     item = db.get_watchlist_item(watchlist_id)
     if item:
-        _git_sync(
-            lambda: db.remove_from_watchlist(watchlist_id),
-            lambda _: f"Untrack {item['name']} ({item['set_name']})",
-        )
+        _db_sync(lambda: db.remove_from_watchlist(watchlist_id))
     else:
         db.remove_from_watchlist(watchlist_id)
     return "", 204

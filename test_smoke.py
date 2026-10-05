@@ -1928,9 +1928,76 @@ class ImportsTests(unittest.TestCase):
         import news_signals  # noqa: F401
         import record_feedback  # noqa: F401
         import refresh_job  # noqa: F401
+        import release_sync  # noqa: F401
         import scryfall  # noqa: F401
         import tcgmarketplace  # noqa: F401
         import telegram_notify  # noqa: F401
+
+
+class ReleaseSyncTests(unittest.TestCase):
+    """Covers release_sync.sync()'s compare-and-swap retry logic in
+    isolation from the actual `gh` subprocess calls (_download/_upload/
+    _asset_digest are mocked directly) — this is what replaced
+    tcg_prices.db's old git-commit-based sync once the file grew past
+    GitHub's 100MB push limit, so the retry-on-conflict behavior here is
+    the only thing standing between two writers and a silent clobber."""
+
+    def test_sync_uploads_once_when_nothing_else_changes_the_asset(self):
+        import release_sync as rs
+
+        operation = MagicMock(return_value="ok")
+        with patch.object(rs, "_asset_digest", return_value="sha256:same"), \
+             patch.object(rs, "_download") as mock_download, \
+             patch.object(rs, "_upload") as mock_upload:
+            result = rs.sync("tcg_prices.db", operation)
+
+        self.assertEqual(result, "ok")
+        operation.assert_called_once()
+        mock_download.assert_called_once_with("tcg_prices.db")
+        mock_upload.assert_called_once_with("tcg_prices.db")
+
+    def test_sync_redoes_the_operation_if_asset_changed_while_working(self):
+        import release_sync as rs
+
+        operation = MagicMock(return_value="ok")
+        # Attempt 1: digest differs before vs. after our work (someone
+        # else's upload landed in between) -> redo. Attempt 2: stable.
+        with patch.object(rs, "_asset_digest", side_effect=["v1", "v2", "v2", "v2"]), \
+             patch.object(rs, "_download") as mock_download, \
+             patch.object(rs, "_upload") as mock_upload:
+            result = rs.sync("tcg_prices.db", operation)
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(operation.call_count, 2)  # replayed once on the detected conflict
+        self.assertEqual(mock_download.call_count, 2)
+        mock_upload.assert_called_once()
+
+    def test_sync_gives_up_after_max_retries_if_always_racing(self):
+        import release_sync as rs
+
+        operation = MagicMock(return_value="ok")
+        # Every attempt's digest changes between our download and our
+        # pre-upload check — a permanently-racing scenario.
+        with patch.object(rs, "_asset_digest", side_effect=["v1", "v2", "v2", "v3", "v3", "v4"]), \
+             patch.object(rs, "_download"), \
+             patch.object(rs, "_upload") as mock_upload:
+            result = rs.sync("tcg_prices.db", operation, max_retries=3)
+
+        self.assertEqual(operation.call_count, 3)
+        mock_upload.assert_not_called()
+        self.assertEqual(result, "ok")  # best-effort: last attempt's result, just never confirmed uploaded
+
+    def test_sync_logs_and_continues_if_upload_itself_fails(self):
+        import release_sync as rs
+
+        operation = MagicMock(return_value="ok")
+        with patch.object(rs, "_asset_digest", return_value="sha256:same"), \
+             patch.object(rs, "_download"), \
+             patch.object(rs, "_upload", side_effect=rs.subprocess.SubprocessError("boom")):
+            result = rs.sync("tcg_prices.db", operation, max_retries=2)
+
+        self.assertEqual(operation.call_count, 2)
+        self.assertEqual(result, "ok")
 
 
 class AppRouteTests(unittest.TestCase):
