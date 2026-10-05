@@ -418,12 +418,24 @@ def send_early_warnings():
 
     by_article = {}
     deduped_count = 0
+    warned_this_run = set()  # (card_name, signal_type) already queued below
     for r in rows:
         if r["card_name"] in today_movers:
             continue
-        if db.had_recent_early_warning(r["card_name"], r["signal_type"], EARLY_WARNING_DEDUP_DAYS):
+        combo = (r["card_name"], r["signal_type"])
+        # had_recent_early_warning() only sees PAST runs — db.mark_news_signal_sent
+        # happens after this whole loop finishes, so two different articles
+        # covering the same card within the SAME run would both pass that
+        # check and each get their own message unless also deduped here.
+        # Confirmed live: a single reprint announcement covered by two
+        # different articles in one run sent "Swan Song"/"Underworld
+        # Breach"/etc. as two separate messages seconds apart.
+        if combo in warned_this_run or db.had_recent_early_warning(
+            r["card_name"], r["signal_type"], EARLY_WARNING_DEDUP_DAYS
+        ):
             deduped_count += 1
             continue
+        warned_this_run.add(combo)
         entry = by_article.setdefault(
             r["article_id"], {"title": r["title"], "source": r["source"], "link": r["url"], "items": []}
         )

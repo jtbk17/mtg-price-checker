@@ -1554,6 +1554,22 @@ class SendEarlyWarningsTests(unittest.TestCase):
 
         self.mock_send.assert_not_called()
 
+    def test_dedupes_the_same_card_covered_by_two_articles_in_one_run(self):
+        # Confirmed live: a single reprint announcement covered by two
+        # different articles sent two separate messages for the same
+        # card seconds apart, because the cross-night dedup check only
+        # sees PAST runs — marking a signal sent is deferred until after
+        # this whole batch is grouped, so two articles in the SAME run
+        # both passed it before either got marked.
+        article_1 = db.record_article_if_new("https://example.com/ew-dup-1", "Test Site", "Reprint Article One", None)
+        article_2 = db.record_article_if_new("https://example.com/ew-dup-2", "Test Site", "Reprint Article Two", None)
+        db.record_news_signal(article_1, "Shared Card", "reprint_announcement", True)
+        db.record_news_signal(article_2, "Shared Card", "reprint_announcement", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_called_once()
+
     def test_escapes_third_party_text_in_the_message(self):
         # Article titles and card names are third-party text, not a
         # tightly-controlled numeric/Scryfall field — a stray "&" or "<"
