@@ -1364,6 +1364,24 @@ class NewsSignalsTests(unittest.TestCase):
 
         mock_find.assert_not_called()  # already-seen article never gets this far
 
+    def test_check_for_signals_skips_stale_articles_without_recording_them(self):
+        # A feed scanned for the first time can return its whole
+        # back-catalog, not just recent posts (confirmed live) — a stale
+        # article should never even reach db.record_article_if_new,
+        # let alone get classified.
+        from datetime import datetime, timedelta, timezone
+
+        stale_article = dict(self.article, published=datetime.now(timezone.utc) - timedelta(days=200))
+        with patch.object(self.news_signals, "_load_known_card_names", return_value=["Darklight Phoenix"]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_recent_articles", return_value=[stale_article]), \
+             patch.object(self.news_signals.mtg_news_feed, "fetch_excerpt_articles", return_value=[]), \
+             patch.object(self.news_signals.db, "record_article_if_new") as mock_record_article, \
+             patch.object(self.news_signals.mtg_news_feed, "find_mentioned_cards") as mock_find:
+            self.news_signals.check_for_signals()
+
+        mock_record_article.assert_not_called()
+        mock_find.assert_not_called()
+
     def test_check_for_signals_records_classified_signals_without_alerting(self):
         # news_signals.py no longer sends anything to Telegram — the
         # signals it finds only feed recommender.py's model
@@ -1517,6 +1535,24 @@ class SendEarlyWarningsTests(unittest.TestCase):
         sent_text = self.mock_send.call_args.args[0]
         self.assertIn("Leading Card", sent_text)
         self.assertIn("Reprint Announcement", sent_text)
+
+    def test_skips_stale_articles_discovered_for_the_first_time(self):
+        # A feed scanned for the first time can surface its back-catalog,
+        # not just recent posts (confirmed live: Quiet Speculation's feed
+        # returned a ~5-month-old article about a ban that had already
+        # happened) — seen_at being today doesn't make the NEWS itself
+        # recent, so this must key off published_at, not just seen_at.
+        from datetime import datetime, timedelta, timezone
+
+        old_published = (datetime.now(timezone.utc) - timedelta(days=150)).isoformat()
+        article_id = db.record_article_if_new(
+            "https://example.com/ew-stale", "Test Site", "Old Ban News", old_published
+        )
+        db.record_news_signal(article_id, "Old Ban Card", "banned_restricted", True)
+
+        self.news_signals.send_early_warnings()
+
+        self.mock_send.assert_not_called()
 
     def test_escapes_third_party_text_in_the_message(self):
         # Article titles and card names are third-party text, not a

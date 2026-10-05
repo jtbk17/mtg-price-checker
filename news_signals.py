@@ -51,7 +51,7 @@ import json
 import logging
 import sqlite3
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import all_cards_history as ach
@@ -81,6 +81,25 @@ BASE_OUTPUT_TOKENS = 200
 # unrecorded (not marked seen) so they're picked up on a later run
 # rather than lost.
 MAX_EXCERPT_FETCHES_PER_RUN = 5
+# A feed scanned for the first time can return its whole back-catalog,
+# not just recent posts — confirmed live: Quiet Speculation's feed, on
+# its first scan, included a ~5-month-old "pre-ban metagame" retrospective
+# that got classified and (via the stale seen_at-only check this fixed)
+# alerted on as an "early signal" about a ban that had happened months
+# earlier. Articles older than this are skipped before classification —
+# beyond recommender.py's own NEWS_SIGNAL_WINDOW_DAYS (60), an article is
+# useless to either consumer anyway, so this is mostly a Claude-cost guard.
+MAX_ARTICLE_AGE_DAYS = 60
+
+
+def _is_stale(published, max_age_days):
+    """True if `published` is more than `max_age_days` old. An article
+    with no parseable publish date is never considered stale here —
+    better to process an undated-but-current article than to silently
+    drop it for lacking a field some feeds just don't set."""
+    if published is None:
+        return False
+    return datetime.now(timezone.utc) - published > timedelta(days=max_age_days)
 
 SYSTEM_PROMPT = """You help a Magic: The Gathering price-tracking tool figure out which card mentions in a news/strategy article are genuine signals about that card, versus incidental noise (e.g. one entry in a long decklist with no special emphasis).
 
@@ -213,6 +232,8 @@ def _dedup_excerpt_articles(items):
     for item in items:
         if len(new_items) >= MAX_EXCERPT_FETCHES_PER_RUN:
             break
+        if _is_stale(item["published"], MAX_ARTICLE_AGE_DAYS):
+            continue
         published = item["published"].isoformat() if item["published"] else None
         article_id = db.record_article_if_new(item["link"], item["source"], item["title"], published)
         if article_id is None:
@@ -274,6 +295,8 @@ def check_for_signals():
     genuine_count = 0
 
     for article in articles:
+        if _is_stale(article["published"], MAX_ARTICLE_AGE_DAYS):
+            continue
         published = article["published"].isoformat() if article["published"] else None
         article_id = db.record_article_if_new(article["link"], article["source"], article["title"], published)
         if article_id is None:
@@ -342,21 +365,33 @@ def _early_warning_text(article, items):
 
 
 EARLY_WARNING_DEDUP_DAYS = 7
+# "Early signal" means the underlying news is actually recent — not
+# merely that WE discovered it today. Confirmed live: the first scan of
+# a new source (Quiet Speculation) surfaced a ~5-month-old article about
+# a card ban that had already happened, and the old `seen_at`-only check
+# below happily called it an "early signal" since seen_at was today even
+# though the article itself was ancient. Deliberately tighter than
+# MAX_ARTICLE_AGE_DAYS (which governs whether an article is worth
+# recording at all) — a "heads-up" alert needs to mean genuinely new, not
+# merely "not yet 60 days stale."
+EARLY_WARNING_MAX_ARTICLE_AGE_DAYS = 5
 
 
 def send_early_warnings():
     """Sends one bundled Telegram message per article for genuinely
     leading-type signals (recommender.LEADING_SIGNAL_TYPES) recorded
-    *today*, for cards that aren't already a mover tonight and haven't
-    already had an early warning for this same (card, signal_type)
-    combo in the last EARLY_WARNING_DEDUP_DAYS — confirmed live that a
-    single real event (one Secret Lair drop) can be covered by several
-    separate articles on different nights, which would otherwise alert
-    on the same cards repeatedly. Call this once — never inside a retry
-    loop, same reasoning as market_alerts.py: a Telegram send here is
-    irreversible, so re-running it on a retry just resends everything
-    (this is exactly the bug a previous version of this pipeline hit for
-    real — three nights' worth of alerts went out in one run)."""
+    *today*, whose article was *also* published within
+    EARLY_WARNING_MAX_ARTICLE_AGE_DAYS, for cards that aren't already a
+    mover tonight and haven't already had an early warning for this
+    same (card, signal_type) combo in the last EARLY_WARNING_DEDUP_DAYS
+    — confirmed live that a single real event (one Secret Lair drop) can
+    be covered by several separate articles on different nights, which
+    would otherwise alert on the same cards repeatedly. Call this once —
+    never inside a retry loop, same reasoning as market_alerts.py: a
+    Telegram send here is irreversible, so re-running it on a retry just
+    resends everything (this is exactly the bug a previous version of
+    this pipeline hit for real — three nights' worth of alerts went out
+    in one run)."""
     if db.already_ran_today("news_early_warnings_sent"):
         logger.info("Early warnings already sent today — skipping (safe to re-run the pipeline)")
         return
@@ -374,8 +409,9 @@ def send_early_warnings():
             WHERE ns.is_genuine_interest = 1
               AND ns.signal_type IN ({placeholders})
               AND date(na.seen_at) = date('now')
+              AND datetime(COALESCE(na.published_at, na.seen_at)) > datetime('now', '-' || ? || ' days')
             """,
-            recommender.LEADING_SIGNAL_TYPES,
+            (*recommender.LEADING_SIGNAL_TYPES, EARLY_WARNING_MAX_ARTICLE_AGE_DAYS),
         ).fetchall()
     finally:
         conn.close()
