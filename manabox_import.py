@@ -34,6 +34,14 @@ logger = logging.getLogger("tcg-price-checker")
 COLLECTION_URL = "https://api.scryfall.com/cards/collection"
 HEADERS = {"User-Agent": "tcg-price-checker/1.0 (local personal project)", "Accept": "application/json"}
 CHUNK_SIZE = 75
+# A partial/stale CSV imported under the same owner as a much bigger
+# collection silently deletes everything not in it (confirmed live: a
+# ~100-card CSV wiped 9,378 of 9,478 tracked cards with no warning,
+# since nothing here previously capped how much of an owner's
+# collection a single import could remove). Above this fraction,
+# import_rows() stops short of deleting and asks for confirmation
+# instead — see confirm_removals.
+REMOVAL_WARNING_THRESHOLD = 0.2
 
 
 def _finish_and_label(foil_value):
@@ -130,13 +138,23 @@ def _parse_price(value):
         return None
 
 
-def import_rows(rows, owner=None, on_progress=None):
+def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
     """on_progress(phase, done, total), if given, is called periodically
     across the import's three phases (Scryfall lookup, Card Kingdom price
     lookup, saving to the watchlist) — purely for UI feedback, safe to
     omit. Each phase has its own done/total (they aren't the same count),
     so a caller rendering a single progress bar should reset it on every
-    phase change rather than treating this as one continuous 0-100%."""
+    phase change rather than treating this as one continuous 0-100%.
+
+    confirm_removals=False (the default) means a removal that would wipe
+    more than REMOVAL_WARNING_THRESHOLD of the owner's current collection
+    is held back — nothing gets deleted, and the result instead reports
+    needs_confirmation=True with how many cards and what fraction would
+    go. The caller should show the user that number and re-call with
+    confirm_removals=True only if they explicitly confirm. Smaller
+    removals (e.g. a few genuinely sold cards) still happen automatically
+    either way, same as before — this only gates the unusual, high-blast-
+    radius case."""
     scryfall_cards = _fetch_scryfall_cards((row.get("Scryfall ID") for row in rows), on_progress=on_progress)
 
     # ManaBox splits the same card+finish across multiple rows when you own
@@ -245,23 +263,44 @@ def import_rows(rows, owner=None, on_progress=None):
             on_progress("Saving to your watchlist", i, total_variants)
 
     removed = 0
+    needs_confirmation = False
+    pending_removal_count = 0
     if owner:
         # Treat this CSV as the source of truth for the owner's collection:
         # anything previously tracked for them that's genuinely absent here
         # (e.g. a sold card) gets untracked automatically. Scoped by owner
         # so this never touches anyone else's cards, and — since this is a
-        # destructive, unconfirmed action — deliberately conservative about
-        # what counts as "absent": a card whose Scryfall ID appears
-        # *anywhere* in this CSV (even under a finish/condition combo that
-        # didn't end up in `grouped`, e.g. a transient per-row lookup
-        # failure) is left alone rather than risk deleting a real card over
-        # an ambiguous partial match.
+        # destructive action — deliberately conservative about what counts
+        # as "absent": a card whose Scryfall ID appears *anywhere* in this
+        # CSV (even under a finish/condition combo that didn't end up in
+        # `grouped`, e.g. a transient per-row lookup failure) is left alone
+        # rather than risk deleting a real card over an ambiguous partial
+        # match.
         csv_scryfall_ids = {row.get("Scryfall ID") for row in rows if row.get("Scryfall ID")}
         present_variant_ids = set(grouped.keys())
-        for item in db.list_watchlist(owner=owner):
-            if item["variant_id"] in present_variant_ids or item["card_id"] in csv_scryfall_ids:
-                continue
-            db.remove_from_watchlist(item["id"])
-            removed += 1
+        current_items = db.list_watchlist(owner=owner)
+        to_remove = [
+            item
+            for item in current_items
+            if item["variant_id"] not in present_variant_ids and item["card_id"] not in csv_scryfall_ids
+        ]
 
-    return {"imported": imported, "skipped": skipped, "removed": removed, "errors": errors[:20]}
+        if to_remove and current_items and len(to_remove) / len(current_items) > REMOVAL_WARNING_THRESHOLD and not confirm_removals:
+            # Big, unusual removal — hold off and let the caller confirm
+            # with the user first, instead of silently deleting most of
+            # their collection over one wrong/stale/partial CSV.
+            needs_confirmation = True
+            pending_removal_count = len(to_remove)
+        else:
+            for item in to_remove:
+                db.remove_from_watchlist(item["id"])
+                removed += 1
+
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "removed": removed,
+        "errors": errors[:20],
+        "needs_confirmation": needs_confirmation,
+        "pending_removal_count": pending_removal_count,
+    }
