@@ -4,6 +4,7 @@ const searchSuggestions = document.getElementById("search-suggestions");
 const searchResults = document.getElementById("search-results");
 const searchError = document.getElementById("search-error");
 const watchlistEl = document.getElementById("watchlist");
+const goodDealsEl = document.getElementById("good-deals");
 const watchlistError = document.getElementById("watchlist-error");
 const refreshBtn = document.getElementById("refresh-btn");
 const importInput = document.getElementById("import-input");
@@ -343,9 +344,50 @@ async function loadWatchlist() {
   }
 }
 
+// A card is a "good deal" when buying it on TheTCGMarketplace would cost
+// less than what GOG's own buylist (GOG Cash) would pay out for it —
+// i.e. you could buy there and immediately cash out at GOG for a profit.
+// Needs both prices to compare; a card missing either is left out rather
+// than guessed at.
+function goodDealInfo(item) {
+  if (item.tcgmarketplace_price == null || item.cardkingdom_buylist_price == null) return null;
+  const gogCash = gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER);
+  if (gogCash == null || item.tcgmarketplace_price >= gogCash) return null;
+  return { gogCash, margin: gogCash - item.tcgmarketplace_price };
+}
+
+function renderGoodDeals(items) {
+  const deals = items
+    .map((item) => ({ item, deal: goodDealInfo(item) }))
+    .filter((entry) => entry.deal)
+    .sort((a, b) => b.deal.margin - a.deal.margin);
+
+  goodDealsEl.innerHTML = "";
+  if (!deals.length) {
+    goodDealsEl.innerHTML = '<p class="empty">No deals right now — nothing in your watchlist is currently cheaper on TheTCGMarketplace than GOG Cash.</p>';
+    return;
+  }
+
+  deals.forEach(({ item, deal }) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
+      <div class="name">${escapeHtml(item.name)}</div>
+      <div class="meta">${escapeHtml(item.set_name || "")}</div>
+      <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
+      <div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(item.tcgmarketplace_price)}</div>
+      <div class="meta gog-price">GOG Cash: ${formatPrice(deal.gogCash)}</div>
+      <div class="price">+${formatPrice(deal.margin)} margin</div>
+    `;
+    goodDealsEl.appendChild(el);
+  });
+}
+
 function renderWatchlist(items) {
   watchlistEl.innerHTML = "";
   renderPortfolioValue(items);
+  renderGoodDeals(items);
   if (!items.length) {
     watchlistEl.innerHTML = "<p class=\"empty\">Nothing tracked yet — search above and hit Track.</p>";
     return;
