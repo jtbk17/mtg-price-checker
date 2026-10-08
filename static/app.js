@@ -64,8 +64,8 @@ function priceSectionHtml(variant, card) {
     <div class="meta gog-price">GOG Cash: ${formatPrice(gogPrice(variant.cardKingdomBuylist, GOG_CASH_MULTIPLIER))}</div>
     <div class="meta gog-price">GOG Credit: ${formatPrice(gogPrice(variant.cardKingdomBuylist, GOG_CREDIT_MULTIPLIER))}</div>
     ${
-      card && card.tcgMarketplacePrice != null
-        ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(card.tcgMarketplacePrice)}</div>`
+      variant.tcgMarketplacePrice != null
+        ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(variant.tcgMarketplacePrice)}</div>`
         : ""
     }
   `;
@@ -318,7 +318,7 @@ async function trackCard(card, variant, quantity, condition, cost) {
         mtgjsonId: card.mtgjsonId,
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
-        tcgMarketplacePrice: card.tcgMarketplacePrice,
+        tcgMarketplacePrice: variant.tcgMarketplacePrice,
         purchasePrice: cost === "" || cost == null ? null : Number(cost),
         owner: currentOwner(),
         quantity: quantity || 1,

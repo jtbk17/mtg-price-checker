@@ -72,9 +72,7 @@ def refresh_watchlist_prices():
 
     tcg_lookups = {item["variant_id"]: _tcg_lookup(item) for item in items}
     tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)
-    tcgmarketplace.prefetch_prices(
-        tcgmarketplace.find_id(*lookup) for lookup in tcg_lookups.values() if lookup
-    )
+    tcgmarketplace.prefetch_prices(lookup for lookup in tcg_lookups.values() if lookup)
 
     alerts = []
     for item in items:

@@ -55,13 +55,9 @@ def _serialize_card(card):
                 "printing": label,
                 "cardKingdomPrice": ck_prices["market"] if ck_prices else None,
                 "cardKingdomBuylist": ck_prices["buylist"] if ck_prices else None,
+                "tcgMarketplacePrice": tcgmarketplace.get_price_for_card(*tcgmarketplace.lookup_args(card, finish)),
             }
         )
-
-    # One price per card, not per variant/finish: TheTCGMarketplace lists
-    # nonfoil and foil copies of a printing under one product (only
-    # etched foils get their own), and its price is the cheapest listing.
-    tcg_market_price = tcgmarketplace.get_price_for_card(*tcgmarketplace.lookup_args(card))
 
     return {
         "scryfallId": scryfall_id,
@@ -70,7 +66,6 @@ def _serialize_card(card):
         "set": set_code,
         "setName": card.get("set_name"),
         "tcgplayerId": card.get("tcgplayer_id"),
-        "tcgMarketplacePrice": tcg_market_price,
         "imageUrl": scryfall.extract_image(card),
         "variants": variants,
     }
@@ -115,10 +110,13 @@ def api_search():
         # every resolved id's price concurrently too (warms get_price's
         # cache) — both are needed, since id-resolution alone still leaves
         # _serialize_card doing one sequential product/single call per card.
-        tcgmarketplace.prefetch_ids(tcgmarketplace.lookup_args(c) for c in cards)
-        tcgmarketplace.prefetch_prices(
-            tcgmarketplace.find_id(*tcgmarketplace.lookup_args(c)) for c in cards
-        )
+        tcg_lookups = [
+            tcgmarketplace.lookup_args(c, finish)
+            for c in cards
+            for finish in (c.get("finishes") or ["nonfoil"])
+        ]
+        tcgmarketplace.prefetch_ids(tcg_lookups)
+        tcgmarketplace.prefetch_prices(tcg_lookups)
         return jsonify([_serialize_card(c) for c in cards])
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc)}), 400

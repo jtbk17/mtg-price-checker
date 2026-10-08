@@ -1211,7 +1211,7 @@ class TcgMarketplaceTests(unittest.TestCase):
         ]
         with patch.object(self.tcg, "_search", return_value=results):
             self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "90"), "ja")
-            self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "STA", "90", True), "ja-etched")
+            self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "STA", "90", "etched"), "ja-etched")
             self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "27"), "en")
             # A printing that isn't listed must not borrow another printing's price.
             self.assertIsNone(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "999"))
@@ -1245,7 +1245,7 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertEqual(self.tcg.get_price(222), 9.00)
 
     def test_prefetch_ids_and_prices_report_progress(self):
-        with patch.object(self.tcg, "find_id", side_effect=[10, 20]) as mock_find, \
+        with patch.object(self.tcg, "find_id", side_effect=[10, 20, 10, 10, 10, None]) as mock_find, \
              patch.object(self.tcg, "get_price", return_value=1.0) as mock_price:
             id_calls = []
             self.tcg.prefetch_ids(
@@ -1258,11 +1258,28 @@ class TcgMarketplaceTests(unittest.TestCase):
 
             price_calls = []
             self.tcg.prefetch_prices(
-                [10, 20, None],  # None must be filtered out, not passed to get_price
+                [
+                    ("A", "Set A", "a", "1", "nonfoil"),
+                    ("A", "Set A", "a", "1", "foil"),  # same product, but foil is priced separately
+                    ("A", "Set A", "a", "1", "nonfoil"),  # duplicate: fetched once
+                    ("C", "Set C"),  # unresolved id: must be filtered out, not passed to get_price
+                ],
                 on_progress=lambda phase, done, total: price_calls.append((phase, done, total)),
             )
-            self.assertEqual(mock_price.call_count, 2)
+            self.assertEqual(sorted(c.args for c in mock_price.call_args_list), [(10, False), (10, True)])
             self.assertEqual(len(price_calls), 2)
+
+    def test_get_price_asks_for_foil_or_nonfoil_listings(self):
+        # Foil and nonfoil copies share one product; without foil=1 the
+        # price is the nonfoil one (e.g. a $14.99 nonfoil Noxious Revival
+        # shown as the price of a foil copy).
+        resp = type("Resp", (), {})()
+        resp.raise_for_status = lambda: None
+        resp.json = lambda: {"data": {"data": [{"price_from": "5.00", "day1": None}]}}
+        with patch.object(self.tcg._session, "get", return_value=resp) as mock_get:
+            self.tcg.get_price(333, foil=True)
+            self.tcg.get_price(333, foil=False)
+        self.assertEqual([c.kwargs["params"] for c in mock_get.call_args_list], [{"foil": 1}, {"foil": 0}])
 
 
 def _fake_rss(items):

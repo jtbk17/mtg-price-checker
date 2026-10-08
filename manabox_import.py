@@ -198,9 +198,7 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         return tcgmarketplace.lookup_args(g["card"], g["finish"], name=name, set_name=set_name)
 
     tcgmarketplace.prefetch_ids((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
-    tcgmarketplace.prefetch_prices(
-        (tcgmarketplace.find_id(*_tcg_lookup(g)) for g in grouped.values()), on_progress=on_progress
-    )
+    tcgmarketplace.prefetch_prices((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
 
     imported = 0
     total_variants = len(grouped)

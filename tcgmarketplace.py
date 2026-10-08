@@ -15,7 +15,10 @@ printings sharing a set name. Matching by set name alone used to grab
 whichever printing came first: e.g. the $55 English Mystical Archive
 Demonic Tutor (sta_27) for a ~$350 Japanese one (sta_90). Etched foils
 are listed as their own separate products, so those are told apart by
-finish too.
+finish too. Regular foil and nonfoil copies share one product, though,
+and product/single's price covers nonfoil listings only unless asked
+for ?foil=1 — so a foil card needs that, or it gets the (usually much
+cheaper) nonfoil price.
 The id itself never changes once found, so it's cached to disk
 permanently; a short negative-cache TTL covers a card that isn't listed
 *yet* without hammering the search endpoint for it every single day.
@@ -132,8 +135,9 @@ def _pick_match(results, set_name, set_code=None, collector_number=None, etched=
 
 def lookup_args(card, finish=None, name=None, set_name=None):
     """find_id()/get_price_for_card() arguments for a Scryfall card
-    object, pinned to its exact printing. `finish` ("nonfoil", "foil",
-    "etched") defaults to the card's only finish if it has just one."""
+    object, pinned to its exact printing and finish. `finish` ("nonfoil",
+    "foil", "etched") defaults to the card's only finish if it has just
+    one, else nonfoil."""
     if finish is None:
         finishes = card.get("finishes") or []
         finish = finishes[0] if len(finishes) == 1 else "nonfoil"
@@ -142,11 +146,11 @@ def lookup_args(card, finish=None, name=None, set_name=None):
         set_name or card.get("set_name"),
         card.get("set"),
         card.get("collector_number"),
-        finish == "etched",
+        finish,
     )
 
 
-def find_id(card_name, set_name, set_code=None, collector_number=None, etched=False):
+def find_id(card_name, set_name, set_code=None, collector_number=None, finish=None):
     """Find TheTCGMarketplace's internal product id for this exact
     printing, or None if not found/not carried there. Pass set_code +
     collector_number whenever known; without them it can only match by
@@ -155,6 +159,7 @@ def find_id(card_name, set_name, set_code=None, collector_number=None, etched=Fa
     positive matches permanently, negative ones for NEGATIVE_CACHE_TTL_
     SECONDS — so repeated lookups (nightly refresh, re-imports) don't
     re-search every time."""
+    etched = finish == "etched"
     cache = _load_id_cache()
     key = _cache_key(card_name, set_name, set_code, collector_number, etched)
 
@@ -184,7 +189,7 @@ def find_id(card_name, set_name, set_code=None, collector_number=None, etched=Fa
 
 def prefetch_ids(lookups, max_workers=10, on_progress=None):
     """Resolve many find_id() argument tuples — (card_name, set_name,
-    set_code, collector_number, etched), trailing ones optional — to
+    set_code, collector_number, finish), trailing ones optional — to
     internal ids concurrently, warming the id cache before a batch of
     get_price_for_card() calls. on_progress(phase, done, total), if given, is called
     as each pair finishes (order not guaranteed — these run concurrently)."""
@@ -205,21 +210,25 @@ def prefetch_ids(lookups, max_workers=10, on_progress=None):
                 on_progress("Looking up TheTCGMarketplace prices", completed, total)
 
 
-def get_price(product_id):
-    """Current reference price for this internal product id: their live
-    lowest active listing, falling back to the most recent day's average
-    sale price if nothing's currently listed. None if the id is None or
-    the card has neither. Cached briefly in memory only (not on disk) —
-    unlike the id, this is expected to actually change."""
+def get_price(product_id, foil=False):
+    """Current reference price for this internal product id, for foil or
+    nonfoil copies: their live lowest active listing, falling back to the
+    most recent day's average sale price if nothing's currently listed.
+    None if the id is None or the card has neither. Cached briefly in
+    memory only (not on disk) — unlike the id, this is expected to
+    actually change."""
     if product_id is None:
         return None
+    cache_key = (product_id, bool(foil))
     with _price_cache_lock:
-        cached = _price_cache.get(product_id)
+        cached = _price_cache.get(cache_key)
     if cached and (time.time() - cached["fetched_at"] < PRICE_CACHE_TTL_SECONDS):
         return cached["price"]
 
     try:
-        resp = _session.get(f"{BASE_URL}/product/single/{product_id}", timeout=15)
+        resp = _session.get(
+            f"{BASE_URL}/product/single/{product_id}", params={"foil": 1 if foil else 0}, timeout=15
+        )
         resp.raise_for_status()
         data = resp.json().get("data", {}).get("data")
     except requests.RequestException as exc:
@@ -237,27 +246,37 @@ def get_price(product_id):
             price = float(day1)
 
     with _price_cache_lock:
-        _price_cache[product_id] = {"price": price, "fetched_at": time.time()}
+        _price_cache[cache_key] = {"price": price, "fetched_at": time.time()}
     return price
 
 
-def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, etched=False):
+def _is_foil(finish):
+    return finish in ("foil", "etched")
+
+
+def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, finish=None):
     """Convenience: find_id + get_price in one call."""
-    return get_price(find_id(card_name, set_name, set_code, collector_number, etched))
+    return get_price(find_id(card_name, set_name, set_code, collector_number, finish), foil=_is_foil(finish))
 
 
-def prefetch_prices(product_ids, max_workers=10, on_progress=None):
-    """Warm the (short-lived) price cache for many product ids
-    concurrently. Resolving ids via prefetch_ids() alone isn't enough to
-    keep a batch of get_price_for_card() calls fast — each still hits
-    product/single once per id unless that's warmed too."""
-    ids = list(dict.fromkeys(i for i in product_ids if i is not None))
-    total = len(ids)
+def prefetch_prices(lookups, max_workers=10, on_progress=None):
+    """Warm the (short-lived) price cache for many find_id() argument
+    tuples (see prefetch_ids()) concurrently. Resolving ids via
+    prefetch_ids() alone isn't enough to keep a batch of get_price_for_
+    card() calls fast — each still hits product/single once per id and
+    finish unless that's warmed too."""
+    keys = []
+    for lookup in lookups:
+        lookup = tuple(lookup)
+        finish = lookup[4] if len(lookup) > 4 else None
+        keys.append((find_id(*lookup), _is_foil(finish)))
+    keys = list(dict.fromkeys(k for k in keys if k[0] is not None))
+    total = len(keys)
     if not total:
         return
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(get_price, product_id) for product_id in ids]
+        futures = [executor.submit(get_price, product_id, foil) for product_id, foil in keys]
         for future in as_completed(futures):
             try:
                 future.result()
