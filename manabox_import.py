@@ -20,20 +20,15 @@ near the end of import_rows() for exactly what counts as "absent".
 import csv
 import io
 import logging
-import time
-
-import requests
 
 import cardkingdom
 import db
 import mtgjson_crosswalk
+import scryfall
 import tcgmarketplace
 
 logger = logging.getLogger("tcg-price-checker")
 
-COLLECTION_URL = "https://api.scryfall.com/cards/collection"
-HEADERS = {"User-Agent": "tcg-price-checker/1.0 (local personal project)", "Accept": "application/json"}
-CHUNK_SIZE = 75
 # A partial/stale CSV imported under the same owner as a much bigger
 # collection silently deletes everything not in it (confirmed live: a
 # ~100-card CSV wiped 9,378 of 9,478 tracked cards with no warning,
@@ -88,32 +83,8 @@ def _image_url(card):
     return (image_uris or {}).get("normal")
 
 
-REQUEST_PACING_SECONDS = 0.1  # Scryfall asks for ~50-100ms between requests
-
-
 def _fetch_scryfall_cards(scryfall_ids, on_progress=None):
-    """Return {scryfall_id: card_object} via Scryfall's bulk collection
-    endpoint (up to 75 ids per request). on_progress(phase, done, total),
-    if given, is called after each chunk for progress reporting."""
-    result = {}
-    ids = list(dict.fromkeys(i for i in scryfall_ids if i))
-    total = len(ids)
-    for start in range(0, len(ids), CHUNK_SIZE):
-        if start > 0:
-            time.sleep(REQUEST_PACING_SECONDS)
-        chunk = ids[start : start + CHUNK_SIZE]
-        resp = requests.post(
-            COLLECTION_URL,
-            headers=HEADERS,
-            json={"identifiers": [{"id": i} for i in chunk]},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        for card in resp.json().get("data", []):
-            result[card["id"]] = card
-        if on_progress:
-            on_progress("Fetching card data from Scryfall", min(start + CHUNK_SIZE, total), total)
-    return result
+    return scryfall.get_cards_by_ids(scryfall_ids, on_progress=on_progress)
 
 
 def parse_csv(file_bytes):
@@ -222,9 +193,13 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         card, row = g["card"], g["row"]
         return card.get("name") or row.get("Name"), card.get("set_name") or row.get("Set name")
 
-    tcgmarketplace.prefetch_ids((_name_and_set(g) for g in grouped.values()), on_progress=on_progress)
+    def _tcg_lookup(g):
+        name, set_name = _name_and_set(g)
+        return tcgmarketplace.lookup_args(g["card"], g["finish"], name=name, set_name=set_name)
+
+    tcgmarketplace.prefetch_ids((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
     tcgmarketplace.prefetch_prices(
-        (tcgmarketplace.find_id(*_name_and_set(g)) for g in grouped.values()), on_progress=on_progress
+        (tcgmarketplace.find_id(*_tcg_lookup(g)) for g in grouped.values()), on_progress=on_progress
     )
 
     imported = 0
@@ -236,7 +211,7 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         ck_prices = cardkingdom.get_prices(uuid, foil=(g["finish"] != "nonfoil")) if uuid else None
         avg_purchase_price = g["_cost_total"] / g["_cost_qty"] if g["_cost_qty"] else None
         name, set_name = _name_and_set(g)
-        tcg_market_price = tcgmarketplace.get_price_for_card(name, set_name)
+        tcg_market_price = tcgmarketplace.get_price_for_card(*_tcg_lookup(g))
 
         watchlist_card = {
             "variant_id": variant_id,

@@ -5,11 +5,17 @@ needs no authentication for browsing/pricing (confirmed by inspecting
 that app's network calls: robots.txt is fully open, and there's no
 bot-detection wall).
 
-Matching a card to their internal numeric product id costs two calls,
-since their search endpoint (POST /product/filter, by name) returns
-each result's human-readable set name but not its set code — so the
-right printing is matched by (card name, set name) against the search
-results, then GET /product/single/<id> fetches that one's actual price.
+Matching a card to their internal numeric product id costs two calls:
+their search endpoint (POST /product/filter, by name) returns candidate
+products, then GET /product/single/<id> fetches that one's actual price.
+Search results carry no set code or collector number fields, but each
+one's image filename is Scryfall-style "<set>_<collector number> <name>"
+(e.g. "sta_90 Demonic Tutor.webp") — and that's what tells apart
+printings sharing a set name. Matching by set name alone used to grab
+whichever printing came first: e.g. the $55 English Mystical Archive
+Demonic Tutor (sta_27) for a ~$350 Japanese one (sta_90). Etched foils
+are listed as their own separate products, so those are told apart by
+finish too.
 The id itself never changes once found, so it's cached to disk
 permanently; a short negative-cache TTL covers a card that isn't listed
 *yet* without hammering the search endpoint for it every single day.
@@ -24,6 +30,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from urllib.parse import unquote
 
 import requests
 
@@ -59,32 +66,97 @@ def _save_id_cache():
     ID_CACHE_FILE.write_text(json.dumps(_id_cache))
 
 
-def _cache_key(card_name, set_name):
-    return f"{card_name}\x1f{set_name}"
+def _cache_key(card_name, set_name, set_code=None, collector_number=None, etched=False):
+    key = f"{card_name}\x1f{set_name}"
+    if set_code and collector_number:
+        key += f"\x1f{set_code.lower()}_{collector_number}" + ("\x1fetched" if etched else "")
+    return key
 
 
 def _normalize(text):
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
+SEARCH_PAGE_SIZE = 100  # the most the endpoint returns per page
+SEARCH_MAX_PAGES = 10
+
+
 def _search(card_name):
-    resp = _session.post(
-        f"{BASE_URL}/product/filter",
-        json={"category_id": MTG_CATEGORY_ID, "name": card_name, "page": 1, "item": 50},
-        timeout=15,
+    # Heavily-reprinted staples (e.g. Sol Ring: ~130 products) don't fit
+    # in one page, and the printing we want can be on any of them.
+    results = []
+    for page in range(1, SEARCH_MAX_PAGES + 1):
+        resp = _session.post(
+            f"{BASE_URL}/product/filter",
+            json={"category_id": MTG_CATEGORY_ID, "name": card_name, "page": page, "item": SEARCH_PAGE_SIZE},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        batch = resp.json().get("data", {}).get("data", [])
+        results.extend(batch)
+        if len(batch) < SEARCH_PAGE_SIZE:
+            break
+    return results
+
+
+def _printing_key(result):
+    """The "sta_90" in an image URL ending ".../sta_90%20Demonic%20Tutor.webp",
+    or None if the result has no image to read it from."""
+    filename = unquote((result.get("image") or "").rsplit("/", 1)[-1])
+    key = filename.split(" ", 1)[0]
+    return key.lower() if "_" in key else None
+
+
+def _is_etched(result):
+    return "etched" in (result.get("crd_foil_type") or "").lower()
+
+
+def _pick_match(results, set_name, set_code=None, collector_number=None, etched=False):
+    target_set = _normalize(set_name)
+    same_set = [r for r in results if _normalize(r.get("setname")) == target_set]
+    if set_code and collector_number:
+        target_key = f"{set_code}_{collector_number}".lower()
+        exact = [r for r in same_set if _printing_key(r) == target_key]
+        if not exact:
+            # Couldn't confirm the exact printing. Still safe to fall back
+            # on the set name if that set has only one printing listed —
+            # but not if it has several, since guessing between them is
+            # exactly what produced wildly wrong prices before.
+            if len({_printing_key(r) for r in same_set}) != 1:
+                return None
+            exact = same_set
+        same_set = exact
+    same_finish = [r for r in same_set if _is_etched(r) == etched]
+    return (same_finish or same_set or [None])[0]
+
+
+def lookup_args(card, finish=None, name=None, set_name=None):
+    """find_id()/get_price_for_card() arguments for a Scryfall card
+    object, pinned to its exact printing. `finish` ("nonfoil", "foil",
+    "etched") defaults to the card's only finish if it has just one."""
+    if finish is None:
+        finishes = card.get("finishes") or []
+        finish = finishes[0] if len(finishes) == 1 else "nonfoil"
+    return (
+        name or card.get("name"),
+        set_name or card.get("set_name"),
+        card.get("set"),
+        card.get("collector_number"),
+        finish == "etched",
     )
-    resp.raise_for_status()
-    return resp.json().get("data", {}).get("data", [])
 
 
-def find_id(card_name, set_name):
-    """Find TheTCGMarketplace's internal product id for this exact card
-    name + set, or None if not found/not carried there. Cached to disk —
+def find_id(card_name, set_name, set_code=None, collector_number=None, etched=False):
+    """Find TheTCGMarketplace's internal product id for this exact
+    printing, or None if not found/not carried there. Pass set_code +
+    collector_number whenever known; without them it can only match by
+    set name, which is ambiguous for sets with several printings of the
+    same card (see module docstring). Cached to disk —
     positive matches permanently, negative ones for NEGATIVE_CACHE_TTL_
     SECONDS — so repeated lookups (nightly refresh, re-imports) don't
     re-search every time."""
     cache = _load_id_cache()
-    key = _cache_key(card_name, set_name)
+    key = _cache_key(card_name, set_name, set_code, collector_number, etched)
 
     with _id_cache_lock:
         entry = cache.get(key)
@@ -101,8 +173,7 @@ def find_id(card_name, set_name):
         logger.warning("TheTCGMarketplace search failed for %r: %s", card_name, exc)
         return None
 
-    target_set = _normalize(set_name)
-    match = next((r for r in results if _normalize(r.get("setname")) == target_set), None)
+    match = _pick_match(results, set_name, set_code, collector_number, etched)
     found_id = match["id"] if match else None
 
     with _id_cache_lock:
@@ -111,18 +182,19 @@ def find_id(card_name, set_name):
     return found_id
 
 
-def prefetch_ids(card_set_pairs, max_workers=10, on_progress=None):
-    """Resolve (card_name, set_name) -> internal id for many cards
-    concurrently, warming the id cache before a batch of get_price_for_
-    card() calls. on_progress(phase, done, total), if given, is called
+def prefetch_ids(lookups, max_workers=10, on_progress=None):
+    """Resolve many find_id() argument tuples — (card_name, set_name,
+    set_code, collector_number, etched), trailing ones optional — to
+    internal ids concurrently, warming the id cache before a batch of
+    get_price_for_card() calls. on_progress(phase, done, total), if given, is called
     as each pair finishes (order not guaranteed — these run concurrently)."""
-    pairs = list(dict.fromkeys(card_set_pairs))
+    pairs = list(dict.fromkeys(tuple(lookup) for lookup in lookups))
     total = len(pairs)
     if not total:
         return
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(find_id, name, set_name) for name, set_name in pairs]
+        futures = [executor.submit(find_id, *lookup) for lookup in pairs]
         for future in as_completed(futures):
             try:
                 future.result()
@@ -169,9 +241,9 @@ def get_price(product_id):
     return price
 
 
-def get_price_for_card(card_name, set_name):
+def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, etched=False):
     """Convenience: find_id + get_price in one call."""
-    return get_price(find_id(card_name, set_name))
+    return get_price(find_id(card_name, set_name, set_code, collector_number, etched))
 
 
 def prefetch_prices(product_ids, max_workers=10, on_progress=None):

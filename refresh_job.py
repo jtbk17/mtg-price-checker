@@ -11,9 +11,12 @@ import json
 import logging
 from pathlib import Path
 
+import requests
+
 import cardkingdom
 import db
 import mtgjson_crosswalk
+import scryfall
 import tcgmarketplace
 import telegram_notify
 
@@ -50,19 +53,39 @@ def refresh_watchlist_prices():
     # concurrently (same two-pass pattern as /api/search) turns what would
     # be one blocking round trip per card, sequentially, into however long
     # the slowest one takes.
-    tcgmarketplace.prefetch_ids((item["name"], item["set_name"]) for item in items)
+    #
+    # Watchlist rows don't store the set code/collector number needed to
+    # pin TheTCGMarketplace's exact printing (see tcgmarketplace.py), so
+    # look them up from Scryfall in bulk first (~75 cards per request).
+    try:
+        scryfall_cards = scryfall.get_cards_by_ids(item.get("card_id") for item in items)
+    except requests.RequestException as exc:
+        logger.warning("Scryfall lookup failed, skipping TheTCGMarketplace prices this run: %s", exc)
+        scryfall_cards = {}
+
+    def _tcg_lookup(item):
+        card = scryfall_cards.get(item.get("card_id"))
+        if not card:
+            return None
+        finish = item["variant_id"].split(":")[1] if item["variant_id"].count(":") >= 2 else None
+        return tcgmarketplace.lookup_args(card, finish, name=item["name"], set_name=item["set_name"])
+
+    tcg_lookups = {item["variant_id"]: _tcg_lookup(item) for item in items}
+    tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)
     tcgmarketplace.prefetch_prices(
-        tcgmarketplace.find_id(item["name"], item["set_name"]) for item in items
+        tcgmarketplace.find_id(*lookup) for lookup in tcg_lookups.values() if lookup
     )
 
     alerts = []
     for item in items:
         # Independent of the Card Kingdom gate just below: TheTCGMarketplace
-        # is matched by name+set, not mtgjson_id, so it applies even to
+        # is matched by printing, not mtgjson_id, so it applies even to
         # cards Card Kingdom doesn't carry.
-        tcg_price = tcgmarketplace.get_price_for_card(item["name"], item["set_name"])
-        if tcg_price is not None:
-            db.update_tcgmarketplace_price(item["variant_id"], tcg_price)
+        tcg_lookup = tcg_lookups[item["variant_id"]]
+        if tcg_lookup:
+            # Written even when None: an exact-printing miss means any
+            # stored price came from the wrong printing and must go.
+            db.update_tcgmarketplace_price(item["variant_id"], tcgmarketplace.get_price_for_card(*tcg_lookup))
 
         if not item.get("mtgjson_id"):
             continue

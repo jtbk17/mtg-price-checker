@@ -4,6 +4,7 @@ No API key required.
 """
 
 import logging
+import time
 
 import requests
 
@@ -11,6 +12,9 @@ logger = logging.getLogger("tcg-price-checker")
 
 SEARCH_URL = "https://api.scryfall.com/cards/search"
 AUTOCOMPLETE_URL = "https://api.scryfall.com/cards/autocomplete"
+COLLECTION_URL = "https://api.scryfall.com/cards/collection"
+COLLECTION_CHUNK_SIZE = 75  # the most ids the collection endpoint accepts per request
+REQUEST_PACING_SECONDS = 0.1  # Scryfall asks for ~50-100ms between requests
 HEADERS = {
     "User-Agent": "tcg-price-checker/1.0 (local personal project)",
     "Accept": "application/json",
@@ -59,3 +63,28 @@ def extract_image(card):
     if not image_uris and card.get("card_faces"):
         image_uris = card["card_faces"][0].get("image_uris")
     return (image_uris or {}).get("normal")
+
+
+def get_cards_by_ids(scryfall_ids, on_progress=None):
+    """Return {scryfall_id: card_object} via Scryfall's bulk collection
+    endpoint (up to 75 ids per request). on_progress(phase, done, total),
+    if given, is called after each chunk for progress reporting."""
+    result = {}
+    ids = list(dict.fromkeys(i for i in scryfall_ids if i))
+    total = len(ids)
+    for start in range(0, len(ids), COLLECTION_CHUNK_SIZE):
+        if start > 0:
+            time.sleep(REQUEST_PACING_SECONDS)
+        chunk = ids[start : start + COLLECTION_CHUNK_SIZE]
+        resp = requests.post(
+            COLLECTION_URL,
+            headers=HEADERS,
+            json={"identifiers": [{"id": i} for i in chunk]},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        for card in resp.json().get("data", []):
+            result[card["id"]] = card
+        if on_progress:
+            on_progress("Fetching card data from Scryfall", min(start + COLLECTION_CHUNK_SIZE, total), total)
+    return result

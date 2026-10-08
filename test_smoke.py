@@ -964,6 +964,7 @@ class RefreshJobTests(unittest.TestCase):
             "uuid-3": {"market": 102.0, "buylist": None},  # +2.00, +2%
         }
         with patch.object(refresh_job.db, "list_watchlist", return_value=items), \
+             patch.object(refresh_job.scryfall, "get_cards_by_ids", return_value={}), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
              patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
@@ -1034,6 +1035,7 @@ class RefreshJobTests(unittest.TestCase):
             "latest_price": None,
         }
         with patch.object(refresh_job.db, "list_watchlist", return_value=[item]), \
+             patch.object(refresh_job.scryfall, "get_cards_by_ids", return_value={}), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
              patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
@@ -1063,6 +1065,7 @@ class RefreshJobTests(unittest.TestCase):
             "latest_price": None,
         }
         with patch.object(refresh_job.db, "list_watchlist", return_value=[item]), \
+             patch.object(refresh_job.scryfall, "get_cards_by_ids", return_value={}), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_ids"), \
              patch.object(refresh_job.tcgmarketplace, "prefetch_prices"), \
              patch.object(refresh_job.tcgmarketplace, "get_price_for_card", return_value=None), \
@@ -1192,6 +1195,33 @@ class TcgMarketplaceTests(unittest.TestCase):
             found_again = self.tcg.find_id("Lightning Bolt", "30th Anniversary Edition")
             self.assertEqual(found_again, 2)
             mock_search.assert_called_once()
+
+    def test_find_id_picks_exact_printing_by_collector_number(self):
+        # Real shape: Strixhaven Mystical Archive lists the English (sta_27)
+        # and Japanese (sta_90) Demonic Tutor under the same set name, each
+        # with a regular and an etched-foil product. Matching by set name
+        # alone used to return the first (English, ~$55) for a Japanese
+        # card worth ~$350.
+        base = "https://thetcgmarketplace.com:3500/uploads/products/Magic%20The%20Gathering/Strixhaven%20Mystical%20Archive/"
+        results = [
+            {"id": "en", "setname": "Strixhaven Mystical Archive", "image": base + "sta_27%20Demonic%20Tutor.webp", "crd_foil_type": None},
+            {"id": "ja", "setname": "Strixhaven Mystical Archive", "image": base + "sta_90%20Demonic%20Tutor.webp", "crd_foil_type": None},
+            {"id": "en-etched", "setname": "Strixhaven Mystical Archive", "image": base + "sta_27%20Demonic%20Tutor.webp", "crd_foil_type": "Etched foil"},
+            {"id": "ja-etched", "setname": "Strixhaven Mystical Archive", "image": base + "sta_90%20Demonic%20Tutor.webp", "crd_foil_type": "Etched foil"},
+        ]
+        with patch.object(self.tcg, "_search", return_value=results):
+            self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "90"), "ja")
+            self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "STA", "90", True), "ja-etched")
+            self.assertEqual(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "27"), "en")
+            # A printing that isn't listed must not borrow another printing's price.
+            self.assertIsNone(self.tcg.find_id("Demonic Tutor", "Strixhaven Mystical Archive", "sta", "999"))
+
+    def test_find_id_falls_back_to_set_name_only_when_unambiguous(self):
+        # No usable image to read the printing from, but it's the only
+        # product in that set, so it's safe to use.
+        results = [{"id": 7, "setname": "Ice Age", "image": None}]
+        with patch.object(self.tcg, "_search", return_value=results):
+            self.assertEqual(self.tcg.find_id("Brainstorm", "Ice Age", "ice", "61"), 7)
 
     def test_find_id_caches_negative_result_without_immediate_recheck(self):
         with patch.object(self.tcg, "_search", return_value=[{"id": 1, "setname": "Nonmatching Set"}]) as mock_search:

@@ -58,11 +58,10 @@ def _serialize_card(card):
             }
         )
 
-    # One price per card, not per variant/finish: TheTCGMarketplace is
-    # matched by (name, set) only (see tcgmarketplace.py), since their
-    # search results don't expose enough to reliably pick the exact
-    # finish when a set lists foil/nonfoil as separate products.
-    tcg_market_price = tcgmarketplace.get_price_for_card(card.get("name"), card.get("set_name"))
+    # One price per card, not per variant/finish: TheTCGMarketplace lists
+    # nonfoil and foil copies of a printing under one product (only
+    # etched foils get their own), and its price is the cheapest listing.
+    tcg_market_price = tcgmarketplace.get_price_for_card(*tcgmarketplace.lookup_args(card))
 
     return {
         "scryfallId": scryfall_id,
@@ -116,9 +115,9 @@ def api_search():
         # every resolved id's price concurrently too (warms get_price's
         # cache) — both are needed, since id-resolution alone still leaves
         # _serialize_card doing one sequential product/single call per card.
-        tcgmarketplace.prefetch_ids((c.get("name"), c.get("set_name")) for c in cards)
+        tcgmarketplace.prefetch_ids(tcgmarketplace.lookup_args(c) for c in cards)
         tcgmarketplace.prefetch_prices(
-            tcgmarketplace.find_id(c.get("name"), c.get("set_name")) for c in cards
+            tcgmarketplace.find_id(*tcgmarketplace.lookup_args(c)) for c in cards
         )
         return jsonify([_serialize_card(c) for c in cards])
     except scryfall.ScryfallError as exc:
