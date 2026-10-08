@@ -1,167 +1,15 @@
 {
-  "generated_at": "2026-10-07T14:26:59.704280+00:00",
+  "generated_at": "2026-10-08T14:52:58.328804+00:00",
   "daily_gainers": [
     {
-      "name": "Charix, the Raging Isle",
-      "set": "ZNR",
-      "set_full_name": "Zendikar Rising",
-      "scryfall_id": "e83a6804-1e3c-428c-af5e-1d56ba11c108",
-      "image_url": "https://api.scryfall.com/cards/e83a6804-1e3c-428c-af5e-1d56ba11c108?format=image&version=normal",
-      "price_now": 4.99,
-      "price_before": 0.79,
-      "pct_change": 531.6
-    },
-    {
-      "name": "Zack Fair",
-      "set": "FIN",
-      "set_full_name": "Final Fantasy",
-      "scryfall_id": "f21f9161-5945-40da-8da0-446f6a4a1c23",
-      "image_url": "https://api.scryfall.com/cards/f21f9161-5945-40da-8da0-446f6a4a1c23?format=image&version=normal",
-      "price_now": 1.99,
-      "price_before": 0.35,
-      "pct_change": 468.6
-    },
-    {
-      "name": "Island",
-      "set": "WC02",
-      "set_full_name": "World Championship Decks 2002",
-      "scryfall_id": "4b10739a-0ebd-432a-b346-385726b453a7",
-      "image_url": "https://api.scryfall.com/cards/4b10739a-0ebd-432a-b346-385726b453a7?format=image&version=normal",
-      "price_now": 8.49,
-      "price_before": 2.99,
-      "pct_change": 183.9
-    },
-    {
-      "name": "Franklin Richards, Ascendant",
-      "set": "MSC",
-      "set_full_name": "Marvel Super Heroes Commander",
-      "scryfall_id": "a60634dc-3237-4638-aeb1-44f53149e984",
-      "image_url": "https://api.scryfall.com/cards/a60634dc-3237-4638-aeb1-44f53149e984?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.69,
-      "pct_change": 87.0
-    },
-    {
-      "name": "Forest",
-      "set": "SLD",
-      "set_full_name": "Secret Lair Drop",
-      "scryfall_id": "9ff9fe02-124c-4d5c-8526-a763272e05f4",
-      "image_url": "https://api.scryfall.com/cards/9ff9fe02-124c-4d5c-8526-a763272e05f4?format=image&version=normal",
-      "price_now": 1.49,
+      "name": "Restoration Angel",
+      "set": "INR",
+      "set_full_name": "Innistrad Remastered",
+      "scryfall_id": "f17f85d3-58e5-4128-90c5-98b524256af8",
+      "image_url": "https://api.scryfall.com/cards/f17f85d3-58e5-4128-90c5-98b524256af8?format=image&version=normal",
+      "price_now": 2.49,
       "price_before": 0.99,
-      "pct_change": 50.5
-    },
-    {
-      "name": "Reconnaissance Mission",
-      "set": "40K",
-      "set_full_name": "Warhammer 40,000 Commander",
-      "scryfall_id": "009f7603-a6a3-461b-bc73-810db1ab2898",
-      "image_url": "https://api.scryfall.com/cards/009f7603-a6a3-461b-bc73-810db1ab2898?format=image&version=normal",
-      "price_now": 1.49,
-      "price_before": 0.99,
-      "pct_change": 50.5
-    },
-    {
-      "name": "Mirage Phalanx",
-      "set": "VOC",
-      "set_full_name": "Crimson Vow Commander",
-      "scryfall_id": "e67c7b3b-38c0-43ec-9cee-5605fc402af6",
-      "image_url": "https://api.scryfall.com/cards/e67c7b3b-38c0-43ec-9cee-5605fc402af6?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 0.69,
-      "pct_change": 43.5
-    },
-    {
-      "name": "Fountain of Youth",
-      "set": "10E",
-      "set_full_name": "Tenth Edition",
-      "scryfall_id": "8515a993-0f9d-4ac8-8452-889f23d9d9a9",
-      "image_url": "https://api.scryfall.com/cards/8515a993-0f9d-4ac8-8452-889f23d9d9a9?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Thunderfoot Baloth",
-      "set": "NCC",
-      "set_full_name": "New Capenna Commander",
-      "scryfall_id": "e376a953-2075-4595-a3ef-85d0f68aa8b2",
-      "image_url": "https://api.scryfall.com/cards/e376a953-2075-4595-a3ef-85d0f68aa8b2?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Eumidian Hatchery",
-      "set": "EOC",
-      "set_full_name": "Edge of Eternities Commander",
-      "scryfall_id": "00281944-a9d3-4294-8f63-34ad09e4c627",
-      "image_url": "https://api.scryfall.com/cards/00281944-a9d3-4294-8f63-34ad09e4c627?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Absolute Grace",
-      "set": "USG",
-      "set_full_name": "Urza's Saga",
-      "scryfall_id": "fe7d1839-7180-4b4c-8ddb-7df24573f740",
-      "image_url": "https://api.scryfall.com/cards/fe7d1839-7180-4b4c-8ddb-7df24573f740?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Torgal, A Fine Hound",
-      "set": "FIN",
-      "set_full_name": "Final Fantasy",
-      "scryfall_id": "b4b78fba-cde2-4ab9-bc96-51d0fc5b29cf",
-      "image_url": "https://api.scryfall.com/cards/b4b78fba-cde2-4ab9-bc96-51d0fc5b29cf?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Bellowing Tanglewurm",
-      "set": "SOM",
-      "set_full_name": "Scars of Mirrodin",
-      "scryfall_id": "44eb3e3a-60ee-4293-a321-daa452d4c70d",
-      "image_url": "https://api.scryfall.com/cards/44eb3e3a-60ee-4293-a321-daa452d4c70d?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Game Trail",
-      "set": "SOI",
-      "set_full_name": "Shadows over Innistrad",
-      "scryfall_id": "21cb5950-adaa-438d-998b-3a64bd4a2b3e",
-      "image_url": "https://api.scryfall.com/cards/21cb5950-adaa-438d-998b-3a64bd4a2b3e?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Sublime Epiphany",
-      "set": "PM21",
-      "set_full_name": "Core Set 2021 Promos",
-      "scryfall_id": "761522b7-9678-4355-a929-6d958814685f",
-      "image_url": "https://api.scryfall.com/cards/761522b7-9678-4355-a929-6d958814685f?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    }
-  ],
-  "daily_losers": [
-    {
-      "name": "Wild Growth",
-      "set": "CEI",
-      "set_full_name": "Intl. Collectors' Edition",
-      "scryfall_id": "261a3bb8-6033-4e1a-88d3-fe6ce2a30cc0",
-      "image_url": "https://api.scryfall.com/cards/261a3bb8-6033-4e1a-88d3-fe6ce2a30cc0?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 8.99,
-      "pct_change": -89.0
+      "pct_change": 151.5
     },
     {
       "name": "Agent Bishop, Man in Black",
@@ -169,9 +17,29 @@
       "set_full_name": "Teenage Mutant Ninja Turtles",
       "scryfall_id": "9c769202-178c-442a-a9e2-aa08b5ae5c9a",
       "image_url": "https://api.scryfall.com/cards/9c769202-178c-442a-a9e2-aa08b5ae5c9a?format=image&version=normal",
-      "price_now": 0.49,
+      "price_now": 0.99,
+      "price_before": 0.49,
+      "pct_change": 102.0
+    },
+    {
+      "name": "Mongrel Pack",
+      "set": "TMP",
+      "set_full_name": "Tempest",
+      "scryfall_id": "56b84315-5287-4401-a4c8-34c192423270",
+      "image_url": "https://api.scryfall.com/cards/56b84315-5287-4401-a4c8-34c192423270?format=image&version=normal",
+      "price_now": 1.99,
       "price_before": 0.99,
-      "pct_change": -50.5
+      "pct_change": 101.0
+    },
+    {
+      "name": "Gilded Lotus",
+      "set": "SLD",
+      "set_full_name": "Secret Lair Drop",
+      "scryfall_id": "5ed78861-4877-4f27-b900-981af79c2450",
+      "image_url": "https://api.scryfall.com/cards/5ed78861-4877-4f27-b900-981af79c2450?format=image&version=normal",
+      "price_now": 4.49,
+      "price_before": 2.29,
+      "pct_change": 96.1
     },
     {
       "name": "Psychic Frog",
@@ -179,126 +47,258 @@
       "set_full_name": "Modern Horizons 3",
       "scryfall_id": "d6d2cae8-9eb3-4bb2-878b-1a9032445e4f",
       "image_url": "https://api.scryfall.com/cards/d6d2cae8-9eb3-4bb2-878b-1a9032445e4f?format=image&version=normal",
-      "price_now": 10.99,
-      "price_before": 20.99,
-      "pct_change": -47.6
+      "price_now": 20.99,
+      "price_before": 10.99,
+      "pct_change": 91.0
     },
     {
-      "name": "Plains",
-      "set": "PTC",
-      "set_full_name": "Pro Tour Collector Set",
-      "scryfall_id": "f2bb7059-588b-4ba6-9ad0-78169e4e4483",
-      "image_url": "https://api.scryfall.com/cards/f2bb7059-588b-4ba6-9ad0-78169e4e4483?format=image&version=normal",
-      "price_now": 0.69,
-      "price_before": 1.29,
-      "pct_change": -46.5
+      "name": "Ob Nixilis, the Fallen",
+      "set": "PLST",
+      "set_full_name": "The List",
+      "scryfall_id": "1515b0e0-ef8f-43c7-8097-ca7eba4fd44a",
+      "image_url": "https://api.scryfall.com/cards/1515b0e0-ef8f-43c7-8097-ca7eba4fd44a?format=image&version=normal",
+      "price_now": 5.49,
+      "price_before": 3.49,
+      "pct_change": 57.3
     },
     {
-      "name": "Puppet Crafting",
+      "name": "Dark Matter Manipulator",
       "set": "FRA",
       "set_full_name": "Reality Fracture",
-      "scryfall_id": "15126d14-3737-4377-8476-e5f05a54fc77",
-      "image_url": "https://api.scryfall.com/cards/15126d14-3737-4377-8476-e5f05a54fc77?format=image&version=normal",
-      "price_now": 0.79,
+      "scryfall_id": "4ec912d5-cbe7-4d07-9ece-b03ac02d3055",
+      "image_url": "https://api.scryfall.com/cards/4ec912d5-cbe7-4d07-9ece-b03ac02d3055?format=image&version=normal",
+      "price_now": 1.99,
       "price_before": 1.29,
-      "pct_change": -38.8
+      "pct_change": 54.3
     },
     {
-      "name": "Tenured Tethermage",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "6ae471aa-74c3-416b-a884-bcf1bb2f6004",
-      "image_url": "https://api.scryfall.com/cards/6ae471aa-74c3-416b-a884-bcf1bb2f6004?format=image&version=normal",
+      "name": "Diplomatic Immunity",
+      "set": "MMQ",
+      "set_full_name": "Mercadian Masques",
+      "scryfall_id": "fb1e610e-a4a2-460b-8e4c-13674badbce3",
+      "image_url": "https://api.scryfall.com/cards/fb1e610e-a4a2-460b-8e4c-13674badbce3?format=image&version=normal",
+      "price_now": 2.99,
+      "price_before": 1.99,
+      "pct_change": 50.3
+    },
+    {
+      "name": "Ultima, Origin of Oblivion",
+      "set": "FIN",
+      "set_full_name": "Final Fantasy",
+      "scryfall_id": "d55a4c02-1aa4-454c-9041-84937377a53b",
+      "image_url": "https://api.scryfall.com/cards/d55a4c02-1aa4-454c-9041-84937377a53b?format=image&version=normal",
       "price_now": 0.99,
-      "price_before": 1.49,
-      "pct_change": -33.6
-    },
-    {
-      "name": "Null Summoner",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "fc488525-de0b-4a52-8a1a-6ee4e798474e",
-      "image_url": "https://api.scryfall.com/cards/fc488525-de0b-4a52-8a1a-6ee4e798474e?format=image&version=normal",
-      "price_now": 0.69,
-      "price_before": 0.99,
-      "pct_change": -30.3
-    },
-    {
-      "name": "Entrust the Spark",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "cec7b201-e3c4-4bde-bfc1-0049be22b890",
-      "image_url": "https://api.scryfall.com/cards/cec7b201-e3c4-4bde-bfc1-0049be22b890?format=image&version=normal",
-      "price_now": 0.69,
-      "price_before": 0.99,
-      "pct_change": -30.3
-    },
-    {
-      "name": "Entrust the Spark",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "ca894d25-b9fc-4cd6-8746-70d8c2868721",
-      "image_url": "https://api.scryfall.com/cards/ca894d25-b9fc-4cd6-8746-70d8c2868721?format=image&version=normal",
-      "price_now": 0.49,
       "price_before": 0.69,
-      "pct_change": -29.0
+      "pct_change": 43.5
     },
     {
-      "name": "Frostbite Pyromental",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "79ff0b78-c220-4940-8957-77cf4fd820e2",
-      "image_url": "https://api.scryfall.com/cards/79ff0b78-c220-4940-8957-77cf4fd820e2?format=image&version=normal",
-      "price_now": 0.49,
-      "price_before": 0.69,
-      "pct_change": -29.0
+      "name": "The Dawning Archaic",
+      "set": "PSOS",
+      "set_full_name": "Secrets of Strixhaven Promos",
+      "scryfall_id": "8613f27f-fc9e-4efc-93f9-3dc644e6b692",
+      "image_url": "https://api.scryfall.com/cards/8613f27f-fc9e-4efc-93f9-3dc644e6b692?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
     },
     {
-      "name": "Salvage",
-      "set": "P02",
-      "set_full_name": "Portal Second Age",
-      "scryfall_id": "f3012e10-566b-447c-bb0a-dfc38c8e0fdf",
-      "image_url": "https://api.scryfall.com/cards/f3012e10-566b-447c-bb0a-dfc38c8e0fdf?format=image&version=normal",
+      "name": "Karmic Guide",
+      "set": "EMA",
+      "set_full_name": "Eternal Masters",
+      "scryfall_id": "1dab6c67-1fbb-44b7-a255-15ceaf8352cf",
+      "image_url": "https://api.scryfall.com/cards/1dab6c67-1fbb-44b7-a255-15ceaf8352cf?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Thopter Shop",
+      "set": "BRC",
+      "set_full_name": "The Brothers' War Commander",
+      "scryfall_id": "e72a798b-8dab-41f4-9c2d-1d461e1b46c5",
+      "image_url": "https://api.scryfall.com/cards/e72a798b-8dab-41f4-9c2d-1d461e1b46c5?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Angel of Serenity",
+      "set": "KHC",
+      "set_full_name": "Kaldheim Commander",
+      "scryfall_id": "c175b50d-81cc-45dd-854f-7f8ca31cffa4",
+      "image_url": "https://api.scryfall.com/cards/c175b50d-81cc-45dd-854f-7f8ca31cffa4?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Kyler, Sigardian Emissary",
+      "set": "MIC",
+      "set_full_name": "Midnight Hunt Commander",
+      "scryfall_id": "62a78aae-598e-4f2b-a7bc-c3afc1d0d191",
+      "image_url": "https://api.scryfall.com/cards/62a78aae-598e-4f2b-a7bc-c3afc1d0d191?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
+    },
+    {
+      "name": "Sun Titan",
+      "set": "E01",
+      "set_full_name": "Archenemy: Nicol Bolas",
+      "scryfall_id": "cd7a20a2-4489-42c7-9a39-4e2de95c77e2",
+      "image_url": "https://api.scryfall.com/cards/cd7a20a2-4489-42c7-9a39-4e2de95c77e2?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.99,
+      "pct_change": 30.3
+    }
+  ],
+  "daily_losers": [
+    {
+      "name": "Zack Fair",
+      "set": "FIN",
+      "set_full_name": "Final Fantasy",
+      "scryfall_id": "f21f9161-5945-40da-8da0-446f6a4a1c23",
+      "image_url": "https://api.scryfall.com/cards/f21f9161-5945-40da-8da0-446f6a4a1c23?format=image&version=normal",
       "price_now": 0.35,
-      "price_before": 0.49,
+      "price_before": 1.99,
+      "pct_change": -82.4
+    },
+    {
+      "name": "Grazilaxx, Illithid Scholar",
+      "set": "CLB",
+      "set_full_name": "Commander Legends: Battle for Baldur's Gate",
+      "scryfall_id": "3de11222-c2fa-4544-a501-a02b31797259",
+      "image_url": "https://api.scryfall.com/cards/3de11222-c2fa-4544-a501-a02b31797259?format=image&version=normal",
+      "price_now": 2.49,
+      "price_before": 7.49,
+      "pct_change": -66.8
+    },
+    {
+      "name": "Variable Chaser // Arc of Fortune",
+      "set": "FRA",
+      "set_full_name": "Reality Fracture",
+      "scryfall_id": "e3afedb1-bf9d-4e31-9700-433514cc29b1",
+      "image_url": "https://api.scryfall.com/cards/e3afedb1-bf9d-4e31-9700-433514cc29b1?format=image&version=normal",
+      "price_now": 0.49,
+      "price_before": 0.69,
+      "pct_change": -29.0
+    },
+    {
+      "name": "Tamiyo's Safekeeping",
+      "set": "FDC",
+      "set_full_name": "Foundations Commander",
+      "scryfall_id": "1d167110-e5dd-409f-8744-016c26a14f1d",
+      "image_url": "https://api.scryfall.com/cards/1d167110-e5dd-409f-8744-016c26a14f1d?format=image&version=normal",
+      "price_now": 4.99,
+      "price_before": 6.99,
       "pct_change": -28.6
     },
     {
-      "name": "Rise of the Deathbringer",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "bc6be107-b3e3-4f71-880c-79755fafe98d",
-      "image_url": "https://api.scryfall.com/cards/bc6be107-b3e3-4f71-880c-79755fafe98d?format=image&version=normal",
-      "price_now": 1.49,
-      "price_before": 1.99,
-      "pct_change": -25.1
-    },
-    {
-      "name": "Chaos Warp",
-      "set": "40K",
-      "set_full_name": "Warhammer 40,000 Commander",
-      "scryfall_id": "f2c12ae4-7050-4ec3-9d9d-85a5a1265f24",
-      "image_url": "https://api.scryfall.com/cards/f2c12ae4-7050-4ec3-9d9d-85a5a1265f24?format=image&version=normal",
+      "name": "Maralen, Fae Ascendant",
+      "set": "PECL",
+      "set_full_name": "Lorwyn Eclipsed Promos",
+      "scryfall_id": "b78774cc-bd67-448b-8289-bdc59ef538e4",
+      "image_url": "https://api.scryfall.com/cards/b78774cc-bd67-448b-8289-bdc59ef538e4?format=image&version=normal",
       "price_now": 0.99,
       "price_before": 1.29,
       "pct_change": -23.3
     },
     {
-      "name": "Seachrome Coast",
-      "set": "PONE",
-      "set_full_name": "Phyrexia: All Will Be One Promos",
-      "scryfall_id": "e28c488c-351c-48bf-8bdb-3644aab3ce79",
-      "image_url": "https://api.scryfall.com/cards/e28c488c-351c-48bf-8bdb-3644aab3ce79?format=image&version=normal",
+      "name": "Circle of Protection: Black",
+      "set": "CEI",
+      "set_full_name": "Intl. Collectors' Edition",
+      "scryfall_id": "e8f10eb1-7646-4049-8622-62666bd40624",
+      "image_url": "https://api.scryfall.com/cards/e8f10eb1-7646-4049-8622-62666bd40624?format=image&version=normal",
       "price_now": 0.99,
       "price_before": 1.29,
       "pct_change": -23.3
     },
     {
-      "name": "Desmond Miles",
-      "set": "ACR",
-      "set_full_name": "Assassin's Creed",
-      "scryfall_id": "c9523cd1-c3cf-4745-af09-77c1a83ac86f",
-      "image_url": "https://api.scryfall.com/cards/c9523cd1-c3cf-4745-af09-77c1a83ac86f?format=image&version=normal",
+      "name": "Overrun",
+      "set": "TMP",
+      "set_full_name": "Tempest",
+      "scryfall_id": "0ad7a961-d3a1-471a-8472-8407d1057de0",
+      "image_url": "https://api.scryfall.com/cards/0ad7a961-d3a1-471a-8472-8407d1057de0?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Evacuation",
+      "set": "C16",
+      "set_full_name": "Commander 2016",
+      "scryfall_id": "bbf5e27b-b1ab-470c-8204-146032e26b5b",
+      "image_url": "https://api.scryfall.com/cards/bbf5e27b-b1ab-470c-8204-146032e26b5b?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Glissa's Retriever",
+      "set": "ONC",
+      "set_full_name": "Phyrexia: All Will Be One Commander",
+      "scryfall_id": "a107f2ea-1888-4fc6-b7e9-005d5ba4ca8d",
+      "image_url": "https://api.scryfall.com/cards/a107f2ea-1888-4fc6-b7e9-005d5ba4ca8d?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Legion Warboss",
+      "set": "ONC",
+      "set_full_name": "Phyrexia: All Will Be One Commander",
+      "scryfall_id": "c3de647e-3ef5-4f44-a103-b0df756bf9eb",
+      "image_url": "https://api.scryfall.com/cards/c3de647e-3ef5-4f44-a103-b0df756bf9eb?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Wooden Sphere",
+      "set": "CEI",
+      "set_full_name": "Intl. Collectors' Edition",
+      "scryfall_id": "31e5793e-3217-44e1-83ae-a8c322a30258",
+      "image_url": "https://api.scryfall.com/cards/31e5793e-3217-44e1-83ae-a8c322a30258?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Jet, Rebel Leader",
+      "set": "TLE",
+      "set_full_name": "Avatar: The Last Airbender Eternal",
+      "scryfall_id": "0d6d68fd-59a3-4893-b804-e08c48b8d104",
+      "image_url": "https://api.scryfall.com/cards/0d6d68fd-59a3-4893-b804-e08c48b8d104?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Coram, the Undertaker",
+      "set": "M3C",
+      "set_full_name": "Modern Horizons 3 Commander",
+      "scryfall_id": "e5422227-83bc-466c-8acf-1056930c91a4",
+      "image_url": "https://api.scryfall.com/cards/e5422227-83bc-466c-8acf-1056930c91a4?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Reckless Rage",
+      "set": "RIX",
+      "set_full_name": "Rivals of Ixalan",
+      "scryfall_id": "0e4b97a3-8f6f-461e-aa55-ab752752f539",
+      "image_url": "https://api.scryfall.com/cards/0e4b97a3-8f6f-461e-aa55-ab752752f539?format=image&version=normal",
+      "price_now": 0.99,
+      "price_before": 1.29,
+      "pct_change": -23.3
+    },
+    {
+      "name": "Ironroot Treefolk",
+      "set": "2ED",
+      "set_full_name": "Unlimited Edition",
+      "scryfall_id": "f89f3bda-e2fb-496e-a9f3-7260e8ac97fd",
+      "image_url": "https://api.scryfall.com/cards/f89f3bda-e2fb-496e-a9f3-7260e8ac97fd?format=image&version=normal",
       "price_now": 0.99,
       "price_before": 1.29,
       "pct_change": -23.3
@@ -311,49 +311,89 @@
       "set_full_name": "Reality Fracture",
       "scryfall_id": "aa0f77ac-741a-444a-8bf0-a42c644726bf",
       "image_url": "https://api.scryfall.com/cards/aa0f77ac-741a-444a-8bf0-a42c644726bf?format=image&version=normal",
-      "price_now": 4.99,
-      "price_before": 0.99,
-      "pct_change": 404.0
-    },
-    {
-      "name": "Oath of Teferi",
-      "set": "CMM",
-      "set_full_name": "Commander Masters",
-      "scryfall_id": "f7474f9e-a994-4ed7-83df-22edd8219e24",
-      "image_url": "https://api.scryfall.com/cards/f7474f9e-a994-4ed7-83df-22edd8219e24?format=image&version=normal",
       "price_now": 5.99,
-      "price_before": 1.99,
-      "pct_change": 201.0
+      "price_before": 0.99,
+      "pct_change": 505.1
     },
     {
-      "name": "Franklin Richards, Ascendant",
-      "set": "MSC",
-      "set_full_name": "Marvel Super Heroes Commander",
-      "scryfall_id": "a60634dc-3237-4638-aeb1-44f53149e984",
-      "image_url": "https://api.scryfall.com/cards/a60634dc-3237-4638-aeb1-44f53149e984?format=image&version=normal",
-      "price_now": 1.29,
+      "name": "Island",
+      "set": "WC02",
+      "set_full_name": "World Championship Decks 2002",
+      "scryfall_id": "4b10739a-0ebd-432a-b346-385726b453a7",
+      "image_url": "https://api.scryfall.com/cards/4b10739a-0ebd-432a-b346-385726b453a7?format=image&version=normal",
+      "price_now": 8.49,
+      "price_before": 2.99,
+      "pct_change": 183.9
+    },
+    {
+      "name": "Dark Matter Manipulator",
+      "set": "FRA",
+      "set_full_name": "Reality Fracture",
+      "scryfall_id": "4ec912d5-cbe7-4d07-9ece-b03ac02d3055",
+      "image_url": "https://api.scryfall.com/cards/4ec912d5-cbe7-4d07-9ece-b03ac02d3055?format=image&version=normal",
+      "price_now": 1.99,
+      "price_before": 0.79,
+      "pct_change": 151.9
+    },
+    {
+      "name": "Cabal Pit",
+      "set": "ODY",
+      "set_full_name": "Odyssey",
+      "scryfall_id": "848d686a-e2f7-488d-947f-a555099b74b1",
+      "image_url": "https://api.scryfall.com/cards/848d686a-e2f7-488d-947f-a555099b74b1?format=image&version=normal",
+      "price_now": 1.49,
+      "price_before": 0.79,
+      "pct_change": 88.6
+    },
+    {
+      "name": "Ob Nixilis, the Fallen",
+      "set": "PLST",
+      "set_full_name": "The List",
+      "scryfall_id": "1515b0e0-ef8f-43c7-8097-ca7eba4fd44a",
+      "image_url": "https://api.scryfall.com/cards/1515b0e0-ef8f-43c7-8097-ca7eba4fd44a?format=image&version=normal",
+      "price_now": 5.49,
+      "price_before": 2.99,
+      "pct_change": 83.6
+    },
+    {
+      "name": "Gilded Lotus",
+      "set": "SLD",
+      "set_full_name": "Secret Lair Drop",
+      "scryfall_id": "5ed78861-4877-4f27-b900-981af79c2450",
+      "image_url": "https://api.scryfall.com/cards/5ed78861-4877-4f27-b900-981af79c2450?format=image&version=normal",
+      "price_now": 4.49,
+      "price_before": 2.49,
+      "pct_change": 80.3
+    },
+    {
+      "name": "Harmonize",
+      "set": "FDC",
+      "set_full_name": "Foundations Commander",
+      "scryfall_id": "36bd3fb1-deeb-422e-a29e-b50e7aa3c334",
+      "image_url": "https://api.scryfall.com/cards/36bd3fb1-deeb-422e-a29e-b50e7aa3c334?format=image&version=normal",
+      "price_now": 0.59,
+      "price_before": 0.35,
+      "pct_change": 68.6
+    },
+    {
+      "name": "Ultima, Origin of Oblivion",
+      "set": "FIN",
+      "set_full_name": "Final Fantasy",
+      "scryfall_id": "d55a4c02-1aa4-454c-9041-84937377a53b",
+      "image_url": "https://api.scryfall.com/cards/d55a4c02-1aa4-454c-9041-84937377a53b?format=image&version=normal",
+      "price_now": 0.99,
       "price_before": 0.59,
-      "pct_change": 118.6
+      "pct_change": 67.8
     },
     {
-      "name": "Oath of Nissa",
-      "set": "OGW",
-      "set_full_name": "Oath of the Gatewatch",
-      "scryfall_id": "613513ea-55dd-4ae8-93b2-247e468112a6",
-      "image_url": "https://api.scryfall.com/cards/613513ea-55dd-4ae8-93b2-247e468112a6?format=image&version=normal",
-      "price_now": 1.79,
-      "price_before": 0.99,
-      "pct_change": 80.8
-    },
-    {
-      "name": "My Precious // Allure of Power",
-      "set": "HOB",
-      "set_full_name": "The Hobbit",
-      "scryfall_id": "15ae4d50-be2f-412c-bb6b-b0a06b60474a",
-      "image_url": "https://api.scryfall.com/cards/15ae4d50-be2f-412c-bb6b-b0a06b60474a?format=image&version=normal",
-      "price_now": 1.79,
-      "price_before": 0.99,
-      "pct_change": 80.8
+      "name": "Diplomatic Immunity",
+      "set": "MMQ",
+      "set_full_name": "Mercadian Masques",
+      "scryfall_id": "fb1e610e-a4a2-460b-8e4c-13674badbce3",
+      "image_url": "https://api.scryfall.com/cards/fb1e610e-a4a2-460b-8e4c-13674badbce3?format=image&version=normal",
+      "price_now": 2.99,
+      "price_before": 1.79,
+      "pct_change": 67.0
     },
     {
       "name": "Forest",
@@ -362,18 +402,28 @@
       "scryfall_id": "c0e38987-e257-4da0-b270-bc48404947cd",
       "image_url": "https://api.scryfall.com/cards/c0e38987-e257-4da0-b270-bc48404947cd?format=image&version=normal",
       "price_now": 4.99,
-      "price_before": 2.79,
-      "pct_change": 78.9
+      "price_before": 2.99,
+      "pct_change": 66.9
     },
     {
-      "name": "Way of the Pyromancer",
+      "name": "Elspeth, Knight-Errant",
+      "set": "SLD",
+      "set_full_name": "Secret Lair Drop",
+      "scryfall_id": "25cfc62a-2bd0-4292-968e-64c77f427f78",
+      "image_url": "https://api.scryfall.com/cards/25cfc62a-2bd0-4292-968e-64c77f427f78?format=image&version=normal",
+      "price_now": 13.99,
+      "price_before": 8.49,
+      "pct_change": 64.8
+    },
+    {
+      "name": "Geist of Saint Thalia",
       "set": "FRA",
       "set_full_name": "Reality Fracture",
-      "scryfall_id": "c1a00020-7c14-4503-a057-5763704bb83e",
-      "image_url": "https://api.scryfall.com/cards/c1a00020-7c14-4503-a057-5763704bb83e?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 0.59,
-      "pct_change": 67.8
+      "scryfall_id": "85082e55-cb7e-4fe2-86d5-f8accd48ba2c",
+      "image_url": "https://api.scryfall.com/cards/85082e55-cb7e-4fe2-86d5-f8accd48ba2c?format=image&version=normal",
+      "price_now": 8.99,
+      "price_before": 5.49,
+      "pct_change": 63.8
     },
     {
       "name": "Glamdring, Foe-hammer // Gleam of Death",
@@ -396,76 +446,26 @@
       "pct_change": 63.3
     },
     {
-      "name": "Gruul Signet",
-      "set": "PLST",
-      "set_full_name": "The List",
-      "scryfall_id": "7294a5e8-68bf-445f-bb88-f9e8ef2e8cd6",
-      "image_url": "https://api.scryfall.com/cards/7294a5e8-68bf-445f-bb88-f9e8ef2e8cd6?format=image&version=normal",
+      "name": "Telling Time",
+      "set": "SLD",
+      "set_full_name": "Secret Lair Drop",
+      "scryfall_id": "6c47bcb9-69a2-40ac-bb8f-2b3c808096d9",
+      "image_url": "https://api.scryfall.com/cards/6c47bcb9-69a2-40ac-bb8f-2b3c808096d9?format=image&version=normal",
       "price_now": 1.29,
       "price_before": 0.79,
       "pct_change": 63.3
-    },
-    {
-      "name": "Dark Matter Manipulator",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "4ec912d5-cbe7-4d07-9ece-b03ac02d3055",
-      "image_url": "https://api.scryfall.com/cards/4ec912d5-cbe7-4d07-9ece-b03ac02d3055?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.79,
-      "pct_change": 63.3
-    },
-    {
-      "name": "Vigorbloom Charm",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "2b198e10-b507-4314-a29c-a219f06e48b7",
-      "image_url": "https://api.scryfall.com/cards/2b198e10-b507-4314-a29c-a219f06e48b7?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.79,
-      "pct_change": 63.3
-    },
-    {
-      "name": "Island",
-      "set": "3ED",
-      "set_full_name": "Revised Edition",
-      "scryfall_id": "22f6e971-349d-498b-ae01-ab81ce21772c",
-      "image_url": "https://api.scryfall.com/cards/22f6e971-349d-498b-ae01-ab81ce21772c?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 0.49,
-      "pct_change": 61.2
-    },
-    {
-      "name": "Dwarven Miner",
-      "set": "MIR",
-      "set_full_name": "Mirage",
-      "scryfall_id": "b7142196-c379-4932-9402-97642ad2ebdb",
-      "image_url": "https://api.scryfall.com/cards/b7142196-c379-4932-9402-97642ad2ebdb?format=image&version=normal",
-      "price_now": 1.99,
-      "price_before": 1.29,
-      "pct_change": 54.3
-    },
-    {
-      "name": "Seasoned Cryomancer",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "51d86875-420d-4e82-b69c-4feeb99c9428",
-      "image_url": "https://api.scryfall.com/cards/51d86875-420d-4e82-b69c-4feeb99c9428?format=image&version=normal",
-      "price_now": 12.99,
-      "price_before": 8.49,
-      "pct_change": 53.0
     }
   ],
   "weekly_losers": [
     {
-      "name": "Wild Growth",
-      "set": "CEI",
-      "set_full_name": "Intl. Collectors' Edition",
-      "scryfall_id": "261a3bb8-6033-4e1a-88d3-fe6ce2a30cc0",
-      "image_url": "https://api.scryfall.com/cards/261a3bb8-6033-4e1a-88d3-fe6ce2a30cc0?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 8.99,
-      "pct_change": -89.0
+      "name": "Zack Fair",
+      "set": "FIN",
+      "set_full_name": "Final Fantasy",
+      "scryfall_id": "f21f9161-5945-40da-8da0-446f6a4a1c23",
+      "image_url": "https://api.scryfall.com/cards/f21f9161-5945-40da-8da0-446f6a4a1c23?format=image&version=normal",
+      "price_now": 0.35,
+      "price_before": 1.99,
+      "pct_change": -82.4
     },
     {
       "name": "Omnipresence",
@@ -508,6 +508,16 @@
       "pct_change": -68.5
     },
     {
+      "name": "Grazilaxx, Illithid Scholar",
+      "set": "CLB",
+      "set_full_name": "Commander Legends: Battle for Baldur's Gate",
+      "scryfall_id": "3de11222-c2fa-4544-a501-a02b31797259",
+      "image_url": "https://api.scryfall.com/cards/3de11222-c2fa-4544-a501-a02b31797259?format=image&version=normal",
+      "price_now": 2.49,
+      "price_before": 7.49,
+      "pct_change": -66.8
+    },
+    {
       "name": "Serra's Emissary",
       "set": "FRC",
       "set_full_name": "Reality Fracture Commander",
@@ -538,26 +548,6 @@
       "pct_change": -66.7
     },
     {
-      "name": "Null Summoner",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "fc488525-de0b-4a52-8a1a-6ee4e798474e",
-      "image_url": "https://api.scryfall.com/cards/fc488525-de0b-4a52-8a1a-6ee4e798474e?format=image&version=normal",
-      "price_now": 0.69,
-      "price_before": 1.99,
-      "pct_change": -65.3
-    },
-    {
-      "name": "Entrust the Spark",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "cec7b201-e3c4-4bde-bfc1-0049be22b890",
-      "image_url": "https://api.scryfall.com/cards/cec7b201-e3c4-4bde-bfc1-0049be22b890?format=image&version=normal",
-      "price_now": 0.69,
-      "price_before": 1.99,
-      "pct_change": -65.3
-    },
-    {
       "name": "Elspeth, Sun's Champion",
       "set": "FRC",
       "set_full_name": "Reality Fracture Commander",
@@ -575,16 +565,6 @@
       "image_url": "https://api.scryfall.com/cards/727511d8-be1a-4c2e-92f6-5cc9d67a2b0c?format=image&version=normal",
       "price_now": 4.99,
       "price_before": 13.99,
-      "pct_change": -64.3
-    },
-    {
-      "name": "Return to the Light Realms",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "c0d25cd5-1977-4303-b83c-0dd415c13077",
-      "image_url": "https://api.scryfall.com/cards/c0d25cd5-1977-4303-b83c-0dd415c13077?format=image&version=normal",
-      "price_now": 9.99,
-      "price_before": 27.99,
       "pct_change": -64.3
     },
     {
@@ -606,6 +586,26 @@
       "price_now": 1.99,
       "price_before": 5.49,
       "pct_change": -63.8
+    },
+    {
+      "name": "Variable Chaser // Arc of Fortune",
+      "set": "FRA",
+      "set_full_name": "Reality Fracture",
+      "scryfall_id": "e3afedb1-bf9d-4e31-9700-433514cc29b1",
+      "image_url": "https://api.scryfall.com/cards/e3afedb1-bf9d-4e31-9700-433514cc29b1?format=image&version=normal",
+      "price_now": 0.49,
+      "price_before": 1.29,
+      "pct_change": -62.0
+    },
+    {
+      "name": "Theorist's Sanctum",
+      "set": "FRA",
+      "set_full_name": "Reality Fracture",
+      "scryfall_id": "22db5bba-46c9-4a26-821d-303ddb386ea4",
+      "image_url": "https://api.scryfall.com/cards/22db5bba-46c9-4a26-821d-303ddb386ea4?format=image&version=normal",
+      "price_now": 0.69,
+      "price_before": 1.79,
+      "pct_change": -61.5
     }
   ]
 }
