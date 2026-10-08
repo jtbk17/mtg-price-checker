@@ -1220,8 +1220,30 @@ class TcgMarketplaceTests(unittest.TestCase):
         # No usable image to read the printing from, but it's the only
         # product in that set, so it's safe to use.
         results = [{"id": 7, "setname": "Ice Age", "image": None}]
-        with patch.object(self.tcg, "_search", return_value=results):
+        with patch.object(self.tcg, "_search", return_value=results), \
+             patch.object(self.tcg, "_fetch_printing_number", return_value=None):
             self.assertEqual(self.tcg.find_id("Brainstorm", "Ice Age", "ice", "61"), 7)
+
+    def test_find_id_resolves_printing_from_product_when_image_has_none(self):
+        # Real shape: The Hobbit Commander's images are named by an internal
+        # id, not "<set>_<number>", and its surge foil One Ring (hoc_84,
+        # ~$790) is a separate printing from the regular one (hoc_44, ~$200).
+        base = "https://thetcgmarketplace.com:3500/uploads/products/Magic%20The%20Gathering/The%20Hobbit%20Commander/"
+        results = [
+            {"id": 1134821, "name": " [HOC] The One Ring (V1 - Borderless)", "setname": "The Hobbit Commander", "image": base + "c0986cb2-211f-4017-9c52-82d0d22da4f4.webp"},
+            {"id": 1134825, "name": " [HOC] The One Ring (V2 - Borderless)(Surge Foil)", "setname": "The Hobbit Commander", "image": base + "aeee2b19-76d1-4afc-bb06-b7f8cce15b2e.webp", "crd_foil_type": "Surge Foil"},
+        ]
+        printing_by_id = {1134821: "44", 1134825: "84"}
+        with patch.object(self.tcg, "_search", return_value=results), \
+             patch.object(self.tcg, "_fetch_printing_number", side_effect=printing_by_id.get):
+            self.assertEqual(self.tcg.find_id("The One Ring", "The Hobbit Eternal", "hoc", "84", "foil"), 1134825)
+            self.assertEqual(self.tcg.find_id("The One Ring", "The Hobbit Eternal", "hoc", "44", "foil"), 1134821)
+
+        # If the products can't be identified, two of them is ambiguous.
+        self.tcg._id_cache = {}
+        with patch.object(self.tcg, "_search", return_value=results), \
+             patch.object(self.tcg, "_fetch_printing_number", return_value=None):
+            self.assertIsNone(self.tcg.find_id("The One Ring", "The Hobbit Eternal", "hoc", "84", "foil"))
 
     def test_find_id_caches_negative_result_without_immediate_recheck(self):
         with patch.object(self.tcg, "_search", return_value=[{"id": 1, "setname": "Nonmatching Set"}]) as mock_search:

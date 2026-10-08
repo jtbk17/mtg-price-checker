@@ -102,30 +102,66 @@ def _search(card_name):
     return results
 
 
-def _printing_key(result):
-    """The "sta_90" in an image URL ending ".../sta_90%20Demonic%20Tutor.webp",
-    or None if the result has no image to read it from."""
+def _printing_number(result):
+    """The collector number "90" from an image URL ending
+    ".../sta_90%20Demonic%20Tutor.webp", or None if the result has no
+    image named that way. Only the number is used: the set prefix doesn't
+    always match Scryfall's set code (The List is "plist" here, "plst" on
+    Scryfall), so the set is checked via _set_code() instead."""
     filename = unquote((result.get("image") or "").rsplit("/", 1)[-1])
     key = filename.split(" ", 1)[0]
-    return key.lower() if "_" in key else None
+    return key.split("_", 1)[1].lower() if "_" in key else None
+
+
+def _set_code(result):
+    """"HOC" from a product name like " [HOC] The One Ring (V2 - ...)"."""
+    match = re.match(r"\s*\[([^\]]+)\]", result.get("name") or "")
+    return match.group(1).lower() if match else None
 
 
 def _is_etched(result):
     return "etched" in (result.get("crd_foil_type") or "").lower()
 
 
+def _fetch_printing_number(product_id):
+    """The collector number from product/single's card_id ("hoc_84") —
+    the fallback for newer products whose image is named by an internal
+    id (e.g. "aeee2b19-....webp") rather than the printing. Matters for
+    e.g. The Hobbit Commander, whose surge foil One Ring (#84, ~$790) is
+    its own printing next to the regular one (#44, ~$200)."""
+    try:
+        resp = _session.get(f"{BASE_URL}/product/single/{product_id}", timeout=15)
+        resp.raise_for_status()
+        data = resp.json().get("data", {}).get("data")
+    except requests.RequestException as exc:
+        logger.warning("TheTCGMarketplace product fetch failed for id %s: %s", product_id, exc)
+        return None
+    card_id = (data[0].get("card_id") if data else None) or ""
+    return card_id.split("_", 1)[1].lower() if "_" in card_id else None
+
+
 def _pick_match(results, set_name, set_code=None, collector_number=None, etched=False):
+    # Set names don't always agree with Scryfall's (e.g. Scryfall's "The
+    # Hobbit Eternal" is "The Hobbit Commander" here), so a product's
+    # bracketed set code counts as a match too.
     target_set = _normalize(set_name)
-    same_set = [r for r in results if _normalize(r.get("setname")) == target_set]
+    same_set = [
+        r for r in results
+        if _normalize(r.get("setname")) == target_set or (set_code and _set_code(r) == set_code.lower())
+    ]
     if set_code and collector_number:
-        target_key = f"{set_code}_{collector_number}".lower()
-        exact = [r for r in same_set if _printing_key(r) == target_key]
+        target_number = str(collector_number).lower()
+        numbers = [_printing_number(r) for r in same_set]
+        if target_number not in numbers and None in numbers:
+            numbers = [n or _fetch_printing_number(r["id"]) for r, n in zip(same_set, numbers)]
+        exact = [r for r, n in zip(same_set, numbers) if n == target_number]
         if not exact:
             # Couldn't confirm the exact printing. Still safe to fall back
-            # on the set name if that set has only one printing listed —
-            # but not if it has several, since guessing between them is
-            # exactly what produced wildly wrong prices before.
-            if len({_printing_key(r) for r in same_set}) != 1:
+            # on the set if it has only one printing listed — but not if
+            # it has several (or any we couldn't identify), since guessing
+            # between them is exactly what produced wildly wrong prices
+            # before.
+            if len(same_set) != 1 and (len(set(numbers)) != 1 or None in numbers):
                 return None
             exact = same_set
         same_set = exact
