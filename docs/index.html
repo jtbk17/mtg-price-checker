@@ -202,11 +202,22 @@
     <section id="market-deals-section">
       <div class="section-head">
         <h2>Market deals</h2>
-        <select id="market-deals-sort" aria-label="Sort market deals">
-          <option value="margin">Biggest margin per copy</option>
-          <option value="total_profit">Biggest total profit</option>
-          <option value="copies_under_gog_cash">Most copies</option>
-        </select>
+        <div class="filters">
+          <select id="market-deals-min-pct" aria-label="Minimum % profit">
+            <option value="0">Any % profit</option>
+            <option value="10">10%+ profit</option>
+            <option value="20">20%+ profit</option>
+            <option value="30">30%+ profit</option>
+            <option value="50">50%+ profit</option>
+            <option value="100">100%+ profit</option>
+          </select>
+          <select id="market-deals-sort" aria-label="Sort market deals">
+            <option value="margin">Biggest margin per copy</option>
+            <option value="profit_pct">Highest % profit</option>
+            <option value="total_profit">Biggest total profit</option>
+            <option value="copies_under_gog_cash">Most copies</option>
+          </select>
+        </div>
       </div>
       <p class="section-sub" id="market-deals-sub">Any card Card Kingdom buys, listed on TheTCGMarketplace (Near Mint, same language) for less than GOG Cash</p>
       <div id="market-deals" class="card-grid"><p class="empty">Loading…</p></div>
@@ -538,7 +549,7 @@
         <div class="meta">${escapeHtml(FINISH_LABELS[deal.finish] || deal.finish)} · NM${deal.lang && deal.lang !== "en" ? ` · ${escapeHtml(deal.lang.toUpperCase())}` : ""}</div>
         <div class="meta tcg-marketplace">TCGMP from: ${formatPrice(deal.cheapest_price)}</div>
         <div class="meta gog-price">GOG Cash: ${formatPrice(deal.gog_cash)}</div>
-        <div class="price margin">+${formatPrice(deal.margin)}</div>
+        <div class="price margin">+${formatPrice(deal.margin)} <span class="meta margin">(+${deal.profit_pct.toFixed(0)}%)</span></div>
         <div class="supply">${copies} cop${copies === 1 ? "y" : "ies"} under GOG Cash · ${formatPrice(deal.total_profit)} total</div>
       `;
       return el;
@@ -547,7 +558,9 @@
     function renderMarketDeals() {
       const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const sortKey = document.getElementById("market-deals-sort").value;
+      const minPct = Number(document.getElementById("market-deals-min-pct").value) || 0;
       const deals = marketDeals
+        .filter((d) => d.profit_pct >= minPct)
         .filter((d) => {
           const haystack = `${d.name || ""} ${d.set_name || ""}`.toLowerCase();
           return terms.every((t) => haystack.includes(t));
@@ -575,14 +588,27 @@
         }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        marketDeals = data.deals || [];
+        // % profit on the cheapest copy: what you'd make relative to what
+        // you'd pay for it.
+        marketDeals = (data.deals || []).map((d) => ({
+          ...d,
+          profit_pct: d.cheapest_price > 0 ? (d.margin / d.cheapest_price) * 100 : 0,
+        }));
         if (data.generated_at) {
           const shown = marketDeals.length < (data.total_deals || 0) ? ` (top ${marketDeals.length} shown)` : "";
           sub.textContent =
             `${data.total_deals} deal${data.total_deals === 1 ? "" : "s"}${shown} among ${data.checked} cards with GOG Cash ≥ ${formatPrice(data.min_gog_cash)} — ` +
             `Near Mint, same-language copies only — last updated ${new Date(data.generated_at).toLocaleString()}`;
         }
-        document.getElementById("market-deals-sort").addEventListener("change", renderMarketDeals);
+        for (const [id, key] of [["market-deals-sort", "dealsSort"], ["market-deals-min-pct", "dealsMinPct"]]) {
+          const select = document.getElementById(id);
+          const saved = remembered(key);
+          if (saved !== null && [...select.options].some((o) => o.value === saved)) select.value = saved;
+          select.addEventListener("change", () => {
+            remember(key, select.value);
+            renderMarketDeals();
+          });
+        }
         renderMarketDeals();
       } catch (err) {
         document.getElementById("market-deals").innerHTML =
