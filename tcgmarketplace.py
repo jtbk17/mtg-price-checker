@@ -5,9 +5,9 @@ needs no authentication for browsing/pricing (confirmed by inspecting
 that app's network calls: robots.txt is fully open, and there's no
 bot-detection wall).
 
-Matching a card to their internal numeric product id costs two calls:
-their search endpoint (POST /product/filter, by name) returns candidate
-products, then GET /product/single/<id> fetches that one's actual price.
+Pricing a card costs two calls: their search endpoint (POST
+/product/filter, by name) returns candidate products to match against,
+then that product's listings give its actual price.
 Search results carry no set code or collector number fields, but each
 one's image filename is Scryfall-style "<set>_<collector number> <name>"
 (e.g. "sta_90 Demonic Tutor.webp") — and that's what tells apart
@@ -16,14 +16,16 @@ whichever printing came first: e.g. the $55 English Mystical Archive
 Demonic Tutor (sta_27) for a ~$350 Japanese one (sta_90). Etched foils
 are listed as their own separate products, so those are told apart by
 finish too. Regular foil and nonfoil copies share one product, though,
-and product/single's price covers nonfoil listings only unless asked
-for ?foil=1 — so a foil card needs that, or it gets the (usually much
-cheaper) nonfoil price.
+as do every language's copies — so the price is worked out from the
+product's individual listings (POST /product/listed_item_filter), keeping
+only those in the card's own finish and language. Otherwise e.g. an
+English foil Year of the Dragon Dragon Tempest got the $18 price of a
+Simplified Chinese copy, when the cheapest English one was $43.
 The id itself never changes once found, so it's cached to disk
 permanently; a short negative-cache TTL covers a card that isn't listed
 *yet* without hammering the search endpoint for it every single day.
-The price is a live marketplace value that can change throughout the
-day, so it's cached only briefly (in memory, not on disk).
+Listings are live marketplace data that can change throughout the
+day, so they're cached only briefly (in memory, not on disk).
 """
 
 import json
@@ -171,9 +173,9 @@ def _pick_match(results, set_name, set_code=None, collector_number=None, etched=
 
 def lookup_args(card, finish=None, name=None, set_name=None):
     """find_id()/get_price_for_card() arguments for a Scryfall card
-    object, pinned to its exact printing and finish. `finish` ("nonfoil",
-    "foil", "etched") defaults to the card's only finish if it has just
-    one, else nonfoil."""
+    object, pinned to its exact printing, finish and language. `finish`
+    ("nonfoil", "foil", "etched") defaults to the card's only finish if
+    it has just one, else nonfoil."""
     if finish is None:
         finishes = card.get("finishes") or []
         finish = finishes[0] if len(finishes) == 1 else "nonfoil"
@@ -183,15 +185,18 @@ def lookup_args(card, finish=None, name=None, set_name=None):
         card.get("set"),
         card.get("collector_number"),
         finish,
+        card.get("lang"),
     )
 
 
-def find_id(card_name, set_name, set_code=None, collector_number=None, finish=None):
+def find_id(card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None):
     """Find TheTCGMarketplace's internal product id for this exact
     printing, or None if not found/not carried there. Pass set_code +
     collector_number whenever known; without them it can only match by
     set name, which is ambiguous for sets with several printings of the
-    same card (see module docstring). Cached to disk —
+    same card (see module docstring). `lang` doesn't affect the match
+    (every language shares one product) — it's accepted only so a
+    lookup_args() tuple can be passed straight through. Cached to disk —
     positive matches permanently, negative ones for NEGATIVE_CACHE_TTL_
     SECONDS — so repeated lookups (nightly refresh, re-imports) don't
     re-search every time."""
@@ -225,7 +230,7 @@ def find_id(card_name, set_name, set_code=None, collector_number=None, finish=No
 
 def prefetch_ids(lookups, max_workers=10, on_progress=None):
     """Resolve many find_id() argument tuples — (card_name, set_name,
-    set_code, collector_number, finish), trailing ones optional — to
+    set_code, collector_number, finish, lang), trailing ones optional — to
     internal ids concurrently, warming the id cache before a batch of
     get_price_for_card() calls. on_progress(phase, done, total), if given, is called
     as each pair finishes (order not guaranteed — these run concurrently)."""
@@ -246,73 +251,84 @@ def prefetch_ids(lookups, max_workers=10, on_progress=None):
                 on_progress("Looking up TheTCGMarketplace prices", completed, total)
 
 
-def get_price(product_id, foil=False):
-    """Current reference price for this internal product id, for foil or
-    nonfoil copies: their live lowest active listing, falling back to the
-    most recent day's average sale price if nothing's currently listed.
-    None if the id is None or the card has neither. Cached briefly in
-    memory only (not on disk) — unlike the id, this is expected to
-    actually change."""
-    if product_id is None:
-        return None
-    cache_key = (product_id, bool(foil))
+def _get_listings(product_id):
+    """Every active listing for this product id — foil and nonfoil, all
+    languages — or None if they couldn't be fetched. Cached briefly in
+    memory only (not on disk): unlike the id, these actually change."""
     with _price_cache_lock:
-        cached = _price_cache.get(cache_key)
+        cached = _price_cache.get(product_id)
     if cached and (time.time() - cached["fetched_at"] < PRICE_CACHE_TTL_SECONDS):
-        return cached["price"]
+        return cached["listings"]
 
     try:
-        resp = _session.get(
-            f"{BASE_URL}/product/single/{product_id}", params={"foil": 1 if foil else 0}, timeout=15
+        # foil "0" returns every listing; "1" would return foil ones only.
+        resp = _session.post(
+            f"{BASE_URL}/product/listed_item_filter",
+            json={"product_id": str(product_id), "foil": "0"},
+            timeout=15,
         )
         resp.raise_for_status()
-        data = resp.json().get("data", {}).get("data")
+        listings = resp.json().get("data", {}).get("data") or []
     except requests.RequestException as exc:
-        logger.warning("TheTCGMarketplace price fetch failed for id %s: %s", product_id, exc)
-        return cached["price"] if cached else None
-
-    price = None
-    if data:
-        entry = data[0]
-        price_from = entry.get("price_from")
-        day1 = entry.get("day1")
-        if price_from not in (None, ""):
-            price = float(price_from)
-        elif day1 not in (None, ""):
-            price = float(day1)
+        logger.warning("TheTCGMarketplace listings fetch failed for id %s: %s", product_id, exc)
+        return cached["listings"] if cached else None
 
     with _price_cache_lock:
-        _price_cache[cache_key] = {"price": price, "fetched_at": time.time()}
-    return price
+        _price_cache[product_id] = {"listings": listings, "fetched_at": time.time()}
+    return listings
+
+
+def _is_foil_listing(listing):
+    # "0"/"1" for most listings, but some surge foils say "Surge Foil".
+    return str(listing.get("crd_foil") or "0") != "0"
+
+
+def get_price(product_id, foil=False, lang=None):
+    """Lowest live listing price for this product id among copies in the
+    given finish (foil or not) and language (a Scryfall language code
+    like "en" or "ja"; any language if None). None if nothing matching is
+    listed right now — deliberately not falling back to recent sale
+    prices, which mix every language and finish together."""
+    if product_id is None:
+        return None
+    listings = _get_listings(product_id)
+    prices = []
+    for listing in listings or []:
+        if listing.get("suspended") or _is_foil_listing(listing) != bool(foil):
+            continue
+        if lang and (listing.get("crd_language") or "").lower() != lang.lower():
+            continue
+        try:
+            prices.append(float(listing["price"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return min(prices) if prices else None
 
 
 def _is_foil(finish):
     return finish in ("foil", "etched")
 
 
-def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, finish=None):
+def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None):
     """Convenience: find_id + get_price in one call."""
-    return get_price(find_id(card_name, set_name, set_code, collector_number, finish), foil=_is_foil(finish))
+    product_id = find_id(card_name, set_name, set_code, collector_number, finish)
+    return get_price(product_id, foil=_is_foil(finish), lang=lang)
 
 
 def prefetch_prices(lookups, max_workers=10, on_progress=None):
-    """Warm the (short-lived) price cache for many find_id() argument
+    """Warm the (short-lived) listings cache for many find_id() argument
     tuples (see prefetch_ids()) concurrently. Resolving ids via
     prefetch_ids() alone isn't enough to keep a batch of get_price_for_
-    card() calls fast — each still hits product/single once per id and
-    finish unless that's warmed too."""
-    keys = []
-    for lookup in lookups:
-        lookup = tuple(lookup)
-        finish = lookup[4] if len(lookup) > 4 else None
-        keys.append((find_id(*lookup), _is_foil(finish)))
-    keys = list(dict.fromkeys(k for k in keys if k[0] is not None))
-    total = len(keys)
+    card() calls fast — each still fetches its product's listings once
+    unless that's warmed too."""
+    ids = list(dict.fromkeys(find_id(*tuple(lookup)[:5]) for lookup in lookups))
+    ids = [i for i in ids if i is not None]
+    total = len(ids)
     if not total:
         return
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(get_price, product_id, foil) for product_id, foil in keys]
+        futures = [executor.submit(_get_listings, product_id) for product_id in ids]
         for future in as_completed(futures):
             try:
                 future.result()

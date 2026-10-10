@@ -1252,23 +1252,32 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertIsNone(self.tcg.find_id("Some Card", "A Set It's Not In"))
             mock_search.assert_called_once()  # second call served from the negative cache
 
-    def test_get_price_prefers_price_from_then_falls_back_to_day1(self):
-        def fake_response(price_from, day1):
-            resp = type("Resp", (), {})()
-            resp.raise_for_status = lambda: None
-            resp.json = lambda: {"data": {"data": [{"price_from": price_from, "day1": day1}]}}
-            return resp
-
-        with patch.object(self.tcg._session, "get", return_value=fake_response("12.50", "9.00")):
-            self.assertEqual(self.tcg.get_price(111), 12.50)
-
-        self.tcg._price_cache = {}  # bypass the price TTL cache for the next case
-        with patch.object(self.tcg._session, "get", return_value=fake_response(None, "9.00")):
-            self.assertEqual(self.tcg.get_price(222), 9.00)
+    def test_get_price_filters_listings_by_finish_and_language(self):
+        # Real shape: Year of the Dragon Dragon Tempest (foil-only) had 14
+        # Simplified Chinese copies at $18 and English from $43. Foil and
+        # nonfoil copies share a product too (crd_foil "0"/"1", and some
+        # surge foils literally say "Surge Foil").
+        listings = [
+            {"price": "18.00", "crd_language": "ZHS", "crd_foil": "1"},
+            {"price": "43.00", "crd_language": "EN", "crd_foil": "1"},
+            {"price": "45.00", "crd_language": "EN", "crd_foil": "Surge Foil"},
+            {"price": "12.00", "crd_language": "EN", "crd_foil": "0"},
+            {"price": "1.00", "crd_language": "EN", "crd_foil": "0", "suspended": 1},
+        ]
+        resp = type("Resp", (), {})()
+        resp.raise_for_status = lambda: None
+        resp.json = lambda: {"data": {"data": listings}}
+        with patch.object(self.tcg._session, "post", return_value=resp) as mock_post:
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en"), 43.00)
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="zhs"), 18.00)
+            self.assertEqual(self.tcg.get_price(111, foil=False, lang="en"), 12.00)  # suspended one skipped
+            # Nothing listed in that language: no price, not another language's.
+            self.assertIsNone(self.tcg.get_price(111, foil=True, lang="ja"))
+            mock_post.assert_called_once()  # listings fetched once, then cached
 
     def test_prefetch_ids_and_prices_report_progress(self):
         with patch.object(self.tcg, "find_id", side_effect=[10, 20, 10, 10, 10, None]) as mock_find, \
-             patch.object(self.tcg, "get_price", return_value=1.0) as mock_price:
+             patch.object(self.tcg, "_get_listings", return_value=[]) as mock_listings:
             id_calls = []
             self.tcg.prefetch_ids(
                 [("A", "Set A"), ("B", "Set B")],
@@ -1281,27 +1290,15 @@ class TcgMarketplaceTests(unittest.TestCase):
             price_calls = []
             self.tcg.prefetch_prices(
                 [
-                    ("A", "Set A", "a", "1", "nonfoil"),
-                    ("A", "Set A", "a", "1", "foil"),  # same product, but foil is priced separately
-                    ("A", "Set A", "a", "1", "nonfoil"),  # duplicate: fetched once
-                    ("C", "Set C"),  # unresolved id: must be filtered out, not passed to get_price
+                    ("A", "Set A", "a", "1", "nonfoil", "en"),
+                    ("A", "Set A", "a", "1", "foil", "en"),  # same product: listings cover every finish
+                    ("A", "Set A", "a", "1", "nonfoil", "ja"),  # ...and every language
+                    ("C", "Set C"),  # unresolved id: must be filtered out
                 ],
                 on_progress=lambda phase, done, total: price_calls.append((phase, done, total)),
             )
-            self.assertEqual(sorted(c.args for c in mock_price.call_args_list), [(10, False), (10, True)])
-            self.assertEqual(len(price_calls), 2)
-
-    def test_get_price_asks_for_foil_or_nonfoil_listings(self):
-        # Foil and nonfoil copies share one product; without foil=1 the
-        # price is the nonfoil one (e.g. a $14.99 nonfoil Noxious Revival
-        # shown as the price of a foil copy).
-        resp = type("Resp", (), {})()
-        resp.raise_for_status = lambda: None
-        resp.json = lambda: {"data": {"data": [{"price_from": "5.00", "day1": None}]}}
-        with patch.object(self.tcg._session, "get", return_value=resp) as mock_get:
-            self.tcg.get_price(333, foil=True)
-            self.tcg.get_price(333, foil=False)
-        self.assertEqual([c.kwargs["params"] for c in mock_get.call_args_list], [{"foil": 1}, {"foil": 0}])
+            self.assertEqual([c.args for c in mock_listings.call_args_list], [(10,)])
+            self.assertEqual(len(price_calls), 1)
 
 
 def _fake_rss(items):
