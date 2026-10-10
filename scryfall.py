@@ -14,7 +14,11 @@ SEARCH_URL = "https://api.scryfall.com/cards/search"
 AUTOCOMPLETE_URL = "https://api.scryfall.com/cards/autocomplete"
 COLLECTION_URL = "https://api.scryfall.com/cards/collection"
 COLLECTION_CHUNK_SIZE = 75  # the most ids the collection endpoint accepts per request
-REQUEST_PACING_SECONDS = 0.1  # Scryfall asks for ~50-100ms between requests
+# Scryfall rate-limits /cards/collection more tightly than its general
+# ~10 requests/second: 0.1s pacing got the nightly job (~130 requests for
+# ~9,500 cards) a 429 Too Many Requests partway through.
+REQUEST_PACING_SECONDS = 0.5
+MAX_RATE_LIMIT_RETRIES = 5
 HEADERS = {
     "User-Agent": "tcg-price-checker/1.0 (local personal project)",
     "Accept": "application/json",
@@ -76,12 +80,21 @@ def get_cards_by_ids(scryfall_ids, on_progress=None):
         if start > 0:
             time.sleep(REQUEST_PACING_SECONDS)
         chunk = ids[start : start + COLLECTION_CHUNK_SIZE]
-        resp = requests.post(
-            COLLECTION_URL,
-            headers=HEADERS,
-            json={"identifiers": [{"id": i} for i in chunk]},
-            timeout=30,
-        )
+        for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+            resp = requests.post(
+                COLLECTION_URL,
+                headers=HEADERS,
+                json={"identifiers": [{"id": i} for i in chunk]},
+                timeout=30,
+            )
+            if resp.status_code != 429 or attempt == MAX_RATE_LIMIT_RETRIES:
+                break
+            try:
+                wait = float(resp.headers.get("Retry-After", ""))
+            except ValueError:
+                wait = 2 ** (attempt + 1)
+            logger.info("Scryfall rate limit hit; retrying in %.0fs", wait)
+            time.sleep(wait)
         resp.raise_for_status()
         for card in resp.json().get("data", []):
             result[card["id"]] = card
