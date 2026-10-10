@@ -3,68 +3,133 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>MTG Price Tracker</title>
   <style>
     :root {
-      color-scheme: light dark;
+      color-scheme: dark;
       --bg: #0f1115;
       --panel: #171a21;
+      --card: #12141a;
       --border: #2a2e38;
       --text: #e8e9ec;
       --muted: #9096a3;
       --up: #4caf6d;
       --down: #e5534b;
       --ck: #d4a24c;
+      --tcg: #5b8cff;
+      --gog: #8fd18f;
+      --gutter: 32px;
     }
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0;
       font-family: -apple-system, Segoe UI, Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
     }
-    header { padding: 24px 32px 8px; }
+    header { padding: 24px var(--gutter) 8px; }
     header h1 { margin: 0 0 4px; }
     .subtitle { color: var(--muted); margin: 0; }
-    main { padding: 16px 32px 48px; }
+    main { padding: 16px var(--gutter) 48px; }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 0;
+      margin-bottom: 16px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .toolbar input, .toolbar select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 16px; /* 16px+ stops iOS zooming in on focus */
+    }
+    .toolbar input { flex: 1 1 220px; min-width: 0; }
+    .toolbar select { flex: 0 0 auto; }
+
+    nav.jump { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    nav.jump a {
+      color: var(--text);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.9em;
+    }
+
     .card-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 12px;
     }
     .card {
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 12px;
-      background: #12141a;
+      padding: 10px;
+      background: var(--card);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
+      min-width: 0;
     }
-    .card-image { width: 100%; border-radius: 6px; display: block; }
-    .card .name { font-weight: 700; }
-    .card .meta { color: var(--muted); font-size: 0.85em; }
-    .card .price { font-size: 1.3em; font-weight: 700; }
-    .card .delta.up { color: var(--up); }
-    .card .delta.down { color: var(--down); }
-    .card .ck-buylist { color: var(--ck); }
+    .card-image { width: 100%; aspect-ratio: 488 / 680; border-radius: 6px; display: block; background: var(--panel); }
+    .card .name { font-weight: 700; overflow-wrap: anywhere; }
+    .meta { color: var(--muted); font-size: 0.85em; }
+    .card .price { font-size: 1.25em; font-weight: 700; }
+    .delta.up { color: var(--up); }
+    .delta.down { color: var(--down); }
+    .ck-buylist { color: var(--ck); }
+    .tcg-marketplace { color: var(--tcg); }
+    .gog-price { color: var(--gog); }
+    .margin { color: var(--up); }
     .empty { color: var(--muted); }
-    canvas { width: 100%; height: 60px; margin-top: 4px; }
-    section { margin-bottom: 36px; }
-    section h2 { margin: 0 0 4px; font-size: 1.1em; }
+    canvas { width: 100%; height: 50px; margin-top: 4px; }
+
+    section { margin-bottom: 36px; scroll-margin-top: 72px; }
+    section h2 { margin: 0 0 4px; font-size: 1.15em; }
     section .section-sub { color: var(--muted); font-size: 0.85em; margin: 0 0 12px; }
+
+    .more {
+      display: block;
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 1em;
+    }
+
     .movers-columns {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
       gap: 24px;
     }
-    table.movers { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-    table.movers th, table.movers td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .movers-columns h3 { margin: 0 0 8px; font-size: 1em; }
+    table.movers { width: 100%; border-collapse: collapse; font-size: 0.9em; table-layout: fixed; }
+    table.movers th, table.movers td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
     table.movers th { color: var(--muted); font-weight: 600; font-size: 0.85em; }
+    table.movers td:last-child, table.movers th:last-child { width: 38%; text-align: right; }
     table.movers td.pct.up { color: var(--up); font-weight: 700; }
     table.movers td.pct.down { color: var(--down); font-weight: 700; }
-    .mover-name { display: flex; align-items: center; gap: 8px; }
+    table.movers td.pct .meta { display: block; font-weight: 400; }
+    .mover-name { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
     .mover-thumb { width: 32px; border-radius: 4px; flex-shrink: 0; }
+
     #alerts-section {
       border: 1px solid var(--up);
       background: #142016;
@@ -75,13 +140,20 @@
     #alerts-list { list-style: none; padding: 0; margin: 0; }
     #alerts-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
     #alerts-list li:last-child { border-bottom: none; }
-    .owner-select {
-      background: #0f1115;
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: 8px;
-      margin-left: 12px;
+
+    @media (max-width: 600px) {
+      :root { --gutter: 16px; }
+      header { padding-top: 16px; }
+      header h1 { font-size: 1.4em; }
+      .subtitle { font-size: 0.85em; }
+      main { padding-top: 8px; }
+      /* Two cards per row on a phone, rather than one huge card per screen. */
+      .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .card { padding: 8px; }
+      .card .name { font-size: 0.95em; }
+      .card .price { font-size: 1.1em; }
+      .meta { font-size: 0.8em; }
+      #alerts-section { padding: 12px 14px; }
     }
   </style>
 </head>
@@ -91,21 +163,38 @@
     <p class="subtitle" id="subtitle">Card Kingdom market &amp; buylist prices, refreshed nightly</p>
   </header>
   <main>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Search cards or sets" autocomplete="off" enterkeyhint="search">
+      <select id="owner-select" aria-label="Owner"><option value="">All owners</option></select>
+    </div>
+
+    <nav class="jump">
+      <a href="#deals-section">Good deals</a>
+      <a href="#watchlist-section">Watchlist</a>
+      <a href="#movers-section">Market movers</a>
+    </nav>
+
     <section id="alerts-section" hidden>
       <h2>🔔 Price alerts</h2>
       <p class="section-sub" id="alerts-sub"></p>
       <ul id="alerts-list"></ul>
     </section>
 
-    <section>
-      <h2>Watchlist
-        <select id="owner-select" class="owner-select"><option value="">All owners</option></select>
-      </h2>
-      <p class="section-sub" id="portfolio-value"></p>
-      <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
+    <section id="deals-section">
+      <h2>Good deals</h2>
+      <p class="section-sub">Watchlist cards cheaper on TheTCGMarketplace than GOG Cash would pay for them</p>
+      <div id="good-deals" class="card-grid"><p class="empty">Loading…</p></div>
+      <button id="deals-more" class="more" hidden>Show more</button>
     </section>
 
-    <section>
+    <section id="watchlist-section">
+      <h2>Watchlist</h2>
+      <p class="section-sub" id="portfolio-value"></p>
+      <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
+      <button id="watchlist-more" class="more" hidden>Show more</button>
+    </section>
+
+    <section id="movers-section">
       <h2>Market movers</h2>
       <p class="section-sub" id="movers-sub">Across every Card Kingdom-priced card, updated nightly</p>
       <div class="movers-columns">
@@ -136,6 +225,13 @@
   </main>
 
   <script>
+    // Same rule as the local app (static/app.js): GOG pays this multiple
+    // of Card Kingdom's buylist in cash.
+    const GOG_CASH_MULTIPLIER = 1.15;
+    // Cards are rendered a page at a time: drawing all ~9,500 at once
+    // (each with an image and a sparkline) locks up a phone.
+    const PAGE_SIZE = 40;
+
     function formatPrice(price) {
       if (price === null || price === undefined) return "—";
       return `$${Number(price).toFixed(2)}`;
@@ -160,7 +256,13 @@
         .replace(/"/g, "&quot;");
     }
 
-function drawSparkline(canvas, marketHistory, buylistHistory) {
+    // Price lists, oldest first: plain numbers, or {price, recorded_at}
+    // points in snapshots written before refresh_job.py slimmed them down.
+    function pricesOf(history) {
+      return (history || []).map((p) => (p && typeof p === "object" ? p.price : p)).filter((p) => p != null);
+    }
+
+    function drawSparkline(canvas, marketHistory, buylistHistory) {
       const ctx = canvas.getContext("2d");
       canvas.width = canvas.clientWidth * 2;
       canvas.height = canvas.clientHeight * 2;
@@ -168,12 +270,12 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
       ctx.clearRect(0, 0, width, height);
 
       const series = [
-        { data: marketHistory || [], color: "#5b8cff" },
-        { data: buylistHistory || [], color: "#d4a24c" },
+        { data: pricesOf(marketHistory).slice(-30), color: "#5b8cff" },
+        { data: pricesOf(buylistHistory).slice(-30), color: "#d4a24c" },
       ].filter((s) => s.data.length >= 2);
       if (!series.length) return;
 
-      const allPrices = series.flatMap((s) => s.data.map((h) => h.price)).filter((p) => p != null);
+      const allPrices = series.flatMap((s) => s.data);
       const min = Math.min(...allPrices);
       const max = Math.max(...allPrices);
       const range = max - min || 1;
@@ -182,9 +284,9 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
         ctx.beginPath();
-        data.forEach((point, i) => {
+        data.forEach((price, i) => {
           const x = (i / (data.length - 1)) * width;
-          const y = height - ((point.price - min) / range) * height;
+          const y = height - ((price - min) / range) * height;
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
@@ -206,7 +308,7 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
             <tr>
               <td>
                 <div class="mover-name">
-                  ${m.image_url ? `<img class="mover-thumb" src="${escapeHtml(m.image_url)}" alt="">` : ""}
+                  ${m.image_url ? `<img class="mover-thumb" src="${escapeHtml(m.image_url)}" alt="" loading="lazy">` : ""}
                   <span>${escapeHtml(m.name)} <span class="meta">(${escapeHtml(m.set_full_name || m.set || "")})</span></span>
                 </div>
               </td>
@@ -236,6 +338,17 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
 
     let watchlistItems = [];
 
+    function filteredItems() {
+      const owner = document.getElementById("owner-select").value;
+      const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      return watchlistItems.filter((item) => {
+        if (owner && item.owner !== owner) return false;
+        if (!terms.length) return true;
+        const haystack = `${item.name || ""} ${item.set_name || ""}`.toLowerCase();
+        return terms.every((t) => haystack.includes(t));
+      });
+    }
+
     function renderPortfolioValue(items) {
       const total = items.reduce(
         (sum, item) => sum + (item.latest_price != null ? item.latest_price * (item.quantity || 1) : 0),
@@ -246,43 +359,118 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
         `Portfolio value: ${formatPrice(total)} (${totalCards} card${totalCards === 1 ? "" : "s"})`;
     }
 
-    function renderWatchlist() {
-      const container = document.getElementById("watchlist");
-      const owner = document.getElementById("owner-select").value;
-      const items = owner ? watchlistItems.filter((i) => i.owner === owner) : watchlistItems;
+    function cardImageHtml(item) {
+      return item.image_url
+        ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" loading="lazy">`
+        : "";
+    }
 
-      renderPortfolioValue(items);
+    function cardMetaHtml(item) {
+      return `
+        <div class="meta">${escapeHtml(item.set_name || "")}</div>
+        <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
+      `;
+    }
 
-      if (!items.length) {
-        container.innerHTML = '<p class="empty">Nothing tracked yet.</p>';
+    function watchlistCard(item) {
+      const delta = deltaInfo(item.latest_price, item.previous_price);
+      const qty = item.quantity || 1;
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        ${cardImageHtml(item)}
+        <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
+        ${cardMetaHtml(item)}
+        <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
+        ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
+        <div class="meta ck-buylist">CK buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+        ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
+        <canvas></canvas>
+      `;
+      return el;
+    }
+
+    // A card is a "good deal" when buying it on TheTCGMarketplace costs
+    // less than GOG Cash would pay out for it. Needs both prices; a card
+    // missing either is left out rather than guessed at.
+    function goodDealInfo(item) {
+      if (item.tcgmarketplace_price == null || item.cardkingdom_buylist_price == null) return null;
+      const gogCash = item.cardkingdom_buylist_price * GOG_CASH_MULTIPLIER;
+      if (item.tcgmarketplace_price >= gogCash) return null;
+      return { gogCash, margin: gogCash - item.tcgmarketplace_price };
+    }
+
+    function dealCard({ item, deal }) {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        ${cardImageHtml(item)}
+        <div class="name">${escapeHtml(item.name)}</div>
+        ${cardMetaHtml(item)}
+        <div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>
+        <div class="meta gog-price">GOG Cash: ${formatPrice(deal.gogCash)}</div>
+        <div class="price margin">+${formatPrice(deal.margin)}</div>
+      `;
+      return el;
+    }
+
+    // Renders `entries` into `container` PAGE_SIZE at a time, with a
+    // "Show more" button for the rest.
+    function renderPaged(container, button, entries, makeCard, emptyHtml, afterAppend) {
+      container.innerHTML = "";
+      let shown = 0;
+      function showNext() {
+        const page = entries.slice(shown, shown + PAGE_SIZE);
+        page.forEach((entry) => {
+          const el = makeCard(entry);
+          container.appendChild(el);
+          if (afterAppend) afterAppend(el, entry);
+        });
+        shown += page.length;
+        const remaining = entries.length - shown;
+        button.hidden = remaining <= 0;
+        button.textContent = `Show more (${remaining} left)`;
+      }
+      button.onclick = showNext;
+      if (!entries.length) {
+        container.innerHTML = emptyHtml;
+        button.hidden = true;
         return;
       }
+      showNext();
+    }
 
-      container.innerHTML = "";
-      items.forEach((item) => {
-        const delta = deltaInfo(item.latest_price, item.previous_price);
-        const qty = item.quantity || 1;
-        const el = document.createElement("div");
-        el.className = "card";
-        el.innerHTML = `
-          ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
-          <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
-          <div class="meta">${escapeHtml(item.set_name || "")}</div>
-          <div class="meta">${escapeHtml(item.printing || "")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
-          <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
-          ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
-          <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
-          <canvas></canvas>
-        `;
-        container.appendChild(el);
-        if ((item.history && item.history.length > 1) || (item.buylist_history && item.buylist_history.length > 1)) {
-          drawSparkline(el.querySelector("canvas"), item.history, item.buylist_history);
+    function render() {
+      const items = filteredItems();
+      renderPortfolioValue(items);
+
+      const deals = items
+        .map((item) => ({ item, deal: goodDealInfo(item) }))
+        .filter((entry) => entry.deal)
+        .sort((a, b) => b.deal.margin - a.deal.margin);
+      renderPaged(
+        document.getElementById("good-deals"),
+        document.getElementById("deals-more"),
+        deals,
+        dealCard,
+        '<p class="empty">No deals right now.</p>'
+      );
+
+      renderPaged(
+        document.getElementById("watchlist"),
+        document.getElementById("watchlist-more"),
+        items,
+        watchlistCard,
+        '<p class="empty">No matching cards.</p>',
+        (el, item) => {
+          if ((item.history || []).length > 1 || (item.buylist_history || []).length > 1) {
+            drawSparkline(el.querySelector("canvas"), item.history, item.buylist_history);
+          }
         }
-      });
+      );
     }
 
     async function load() {
-      const container = document.getElementById("watchlist");
       try {
         const resp = await fetch("watchlist.json", { cache: "no-store" });
         const data = await resp.json();
@@ -300,11 +488,19 @@ function drawSparkline(canvas, marketHistory, buylistHistory) {
         ownerSelect.innerHTML =
           '<option value="">All owners</option>' +
           owners.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
-        ownerSelect.addEventListener("change", renderWatchlist);
+        ownerSelect.addEventListener("change", render);
 
-        renderWatchlist();
+        let searchTimer;
+        document.getElementById("search").addEventListener("input", () => {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(render, 200);
+        });
+
+        render();
       } catch (err) {
-        container.innerHTML = `<p class="empty">Couldn't load price data: ${escapeHtml(err.message)}</p>`;
+        const message = `<p class="empty">Couldn't load price data: ${escapeHtml(err.message)}</p>`;
+        document.getElementById("watchlist").innerHTML = message;
+        document.getElementById("good-deals").innerHTML = message;
       }
     }
 

@@ -134,13 +134,38 @@ def refresh_watchlist_prices():
     return alerts
 
 
+# Only what docs/index.html actually shows. Writing every column plus
+# each card's full price history (pretty-printed) made this file ~66MB
+# for a ~9,500-card watchlist — far too much for the dashboard to load
+# on a phone, and re-committed to git every night.
+SNAPSHOT_FIELDS = (
+    "name",
+    "set_name",
+    "printing",
+    "condition",
+    "owner",
+    "quantity",
+    "image_url",
+    "latest_price",
+    "previous_price",
+    "cardkingdom_buylist_price",
+    "tcgmarketplace_price",
+)
+SPARKLINE_POINTS = 30
+
+
 def export_snapshot():
     from datetime import datetime, timezone
 
-    items = db.list_watchlist()
-    for item in items:
-        item["history"] = db.get_history(item["variant_id"], kind="market")
-        item["buylist_history"] = db.get_history(item["variant_id"], kind="buylist")
+    items = []
+    for item in db.list_watchlist():
+        entry = {field: item.get(field) for field in SNAPSHOT_FIELDS}
+        # Plain price lists (oldest first) — the dashboard's sparklines
+        # don't use the dates.
+        for key, kind in (("history", "market"), ("buylist_history", "buylist")):
+            history = db.get_history(item["variant_id"], kind=kind)[-SPARKLINE_POINTS:]
+            entry[key] = [point["price"] for point in history]
+        items.append(entry)
 
     DOCS_DIR.mkdir(exist_ok=True)
     SNAPSHOT_FILE.write_text(
@@ -149,7 +174,7 @@ def export_snapshot():
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "items": items,
             },
-            indent=2,
+            separators=(",", ":"),
         )
     )
     logger.info("Wrote snapshot for %d card(s) to %s", len(items), SNAPSHOT_FILE)
