@@ -1263,16 +1263,24 @@ class TcgMarketplaceTests(unittest.TestCase):
             {"price": "45.00", "crd_language": "EN", "crd_foil": "Surge Foil"},
             {"price": "12.00", "crd_language": "EN", "crd_foil": "0"},
             {"price": "1.00", "crd_language": "EN", "crd_foil": "0", "suspended": 1},
+            {"price": "30.00", "crd_language": "EN", "crd_foil": "1", "crd_condition": "SP"},
+            {"price": "20.00", "crd_language": "EN", "crd_foil": "1", "crd_condition": "MP"},
         ]
+        for listing in listings:
+            listing.setdefault("crd_condition", "NM")
         resp = type("Resp", (), {})()
         resp.raise_for_status = lambda: None
         resp.json = lambda: {"data": {"data": listings}}
         with patch.object(self.tcg._session, "post", return_value=resp) as mock_post:
-            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en"), 43.00)
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en"), 20.00)  # any condition
             self.assertEqual(self.tcg.get_price(111, foil=True, lang="zhs"), 18.00)
             self.assertEqual(self.tcg.get_price(111, foil=False, lang="en"), 12.00)  # suspended one skipped
             # Nothing listed in that language: no price, not another language's.
             self.assertIsNone(self.tcg.get_price(111, foil=True, lang="ja"))
+            # Condition: that grade or better only.
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en", condition="Near Mint"), 43.00)
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en", condition="Lightly Played"), 30.00)
+            self.assertEqual(self.tcg.get_price(111, foil=True, lang="en", condition="Moderately Played"), 20.00)
             mock_post.assert_called_once()  # listings fetched once, then cached
 
     def test_prefetch_ids_and_prices_report_progress(self):

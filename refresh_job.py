@@ -68,7 +68,9 @@ def refresh_watchlist_prices():
         if not card:
             return None
         finish = item["variant_id"].split(":")[1] if item["variant_id"].count(":") >= 2 else None
-        return tcgmarketplace.lookup_args(card, finish, name=item["name"], set_name=item["set_name"])
+        return tcgmarketplace.lookup_args(
+            card, finish, name=item["name"], set_name=item["set_name"], condition=item.get("condition")
+        )
 
     tcg_lookups = {item["variant_id"]: _tcg_lookup(item) for item in items}
     tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)

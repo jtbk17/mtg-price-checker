@@ -195,7 +195,9 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
 
     def _tcg_lookup(g):
         name, set_name = _name_and_set(g)
-        return tcgmarketplace.lookup_args(g["card"], g["finish"], name=name, set_name=set_name)
+        return tcgmarketplace.lookup_args(
+            g["card"], g["finish"], name=name, set_name=set_name, condition=g["condition"]
+        )
 
     tcgmarketplace.prefetch_ids((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
     tcgmarketplace.prefetch_prices((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)

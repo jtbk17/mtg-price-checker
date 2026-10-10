@@ -20,7 +20,8 @@ as do every language's copies — so the price is worked out from the
 product's individual listings (POST /product/listed_item_filter), keeping
 only those in the card's own finish and language. Otherwise e.g. an
 English foil Year of the Dragon Dragon Tempest got the $18 price of a
-Simplified Chinese copy, when the cheapest English one was $43.
+Simplified Chinese copy, when the cheapest English one was $43. Listings
+in a worse condition than the card's are left out too.
 The id itself never changes once found, so it's cached to disk
 permanently; a short negative-cache TTL covers a card that isn't listed
 *yet* without hammering the search endpoint for it every single day.
@@ -171,11 +172,12 @@ def _pick_match(results, set_name, set_code=None, collector_number=None, etched=
     return (same_finish or same_set or [None])[0]
 
 
-def lookup_args(card, finish=None, name=None, set_name=None):
+def lookup_args(card, finish=None, name=None, set_name=None, condition=None):
     """find_id()/get_price_for_card() arguments for a Scryfall card
-    object, pinned to its exact printing, finish and language. `finish`
-    ("nonfoil", "foil", "etched") defaults to the card's only finish if
-    it has just one, else nonfoil."""
+    object, pinned to its exact printing, finish, language and condition.
+    `finish` ("nonfoil", "foil", "etched") defaults to the card's only
+    finish if it has just one, else nonfoil; `condition` (one of
+    db.CONDITIONS) defaults to Near Mint."""
     if finish is None:
         finishes = card.get("finishes") or []
         finish = finishes[0] if len(finishes) == 1 else "nonfoil"
@@ -186,17 +188,19 @@ def lookup_args(card, finish=None, name=None, set_name=None):
         card.get("collector_number"),
         finish,
         card.get("lang"),
+        condition or "Near Mint",
     )
 
 
-def find_id(card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None):
+def find_id(card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None, condition=None):
     """Find TheTCGMarketplace's internal product id for this exact
     printing, or None if not found/not carried there. Pass set_code +
     collector_number whenever known; without them it can only match by
     set name, which is ambiguous for sets with several printings of the
-    same card (see module docstring). `lang` doesn't affect the match
-    (every language shares one product) — it's accepted only so a
-    lookup_args() tuple can be passed straight through. Cached to disk —
+    same card (see module docstring). `lang` and `condition` don't
+    affect the match (every language and condition shares one product) —
+    they're accepted only so a lookup_args() tuple can be passed straight
+    through. Cached to disk —
     positive matches permanently, negative ones for NEGATIVE_CACHE_TTL_
     SECONDS — so repeated lookups (nightly refresh, re-imports) don't
     re-search every time."""
@@ -230,7 +234,7 @@ def find_id(card_name, set_name, set_code=None, collector_number=None, finish=No
 
 def prefetch_ids(lookups, max_workers=10, on_progress=None):
     """Resolve many find_id() argument tuples — (card_name, set_name,
-    set_code, collector_number, finish, lang), trailing ones optional — to
+    set_code, collector_number, finish, lang, condition), trailing ones optional — to
     internal ids concurrently, warming the id cache before a batch of
     get_price_for_card() calls. on_progress(phase, done, total), if given, is called
     as each pair finishes (order not guaranteed — these run concurrently)."""
@@ -283,21 +287,40 @@ def _is_foil_listing(listing):
     return str(listing.get("crd_foil") or "0") != "0"
 
 
-def get_price(product_id, foil=False, lang=None):
+# TheTCGMarketplace's condition grades, best first, and the app's names
+# for the same grades (db.CONDITIONS — "Lightly Played" is their "SP").
+CONDITION_RANKS = {"NM": 0, "SP": 1, "MP": 2, "HP": 3, "DMG": 4}
+APP_CONDITION_RANKS = {
+    "Near Mint": 0,
+    "Lightly Played": 1,
+    "Moderately Played": 2,
+    "Heavily Played": 3,
+    "Damaged": 4,
+}
+
+
+def get_price(product_id, foil=False, lang=None, condition=None):
     """Lowest live listing price for this product id among copies in the
-    given finish (foil or not) and language (a Scryfall language code
-    like "en" or "ja"; any language if None). None if nothing matching is
+    given finish (foil or not), language (a Scryfall language code like
+    "en" or "ja"; any language if None) and condition or better (one of
+    db.CONDITIONS; any condition if None). None if nothing matching is
     listed right now — deliberately not falling back to recent sale
-    prices, which mix every language and finish together."""
+    prices, which mix every language, finish and condition together."""
     if product_id is None:
         return None
     listings = _get_listings(product_id)
+    worst_rank = APP_CONDITION_RANKS.get(condition) if condition else None
     prices = []
     for listing in listings or []:
         if listing.get("suspended") or _is_foil_listing(listing) != bool(foil):
             continue
         if lang and (listing.get("crd_language") or "").lower() != lang.lower():
             continue
+        if worst_rank is not None:
+            # An unrecognised grade is treated as worst, never as NM.
+            rank = CONDITION_RANKS.get((listing.get("crd_condition") or "").upper(), len(CONDITION_RANKS))
+            if rank > worst_rank:
+                continue
         try:
             prices.append(float(listing["price"]))
         except (KeyError, TypeError, ValueError):
@@ -309,10 +332,12 @@ def _is_foil(finish):
     return finish in ("foil", "etched")
 
 
-def get_price_for_card(card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None):
+def get_price_for_card(
+    card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None, condition=None
+):
     """Convenience: find_id + get_price in one call."""
     product_id = find_id(card_name, set_name, set_code, collector_number, finish)
-    return get_price(product_id, foil=_is_foil(finish), lang=lang)
+    return get_price(product_id, foil=_is_foil(finish), lang=lang, condition=condition)
 
 
 def prefetch_prices(lookups, max_workers=10, on_progress=None):
