@@ -152,6 +152,8 @@ SNAPSHOT_FIELDS = (
     "previous_price",
     "cardkingdom_buylist_price",
     "tcgmarketplace_price",
+    "purchase_price",
+    "created_at",
 )
 SPARKLINE_POINTS = 30
 

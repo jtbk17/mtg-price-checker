@@ -58,6 +58,18 @@
     }
     .toolbar input { flex: 1 1 220px; min-width: 0; }
     .toolbar select { flex: 0 0 auto; }
+    .section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+    .section-head select, .section-head .filters select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .supply { color: var(--text); font-size: 0.85em; }
+    .section-head .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+    .section-head .filters select { max-width: 100%; }
 
     nav.jump { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
     nav.jump a {
@@ -165,11 +177,11 @@
   <main>
     <div class="toolbar">
       <input id="search" type="search" placeholder="Search cards or sets" autocomplete="off" enterkeyhint="search">
-      <select id="owner-select" aria-label="Owner"><option value="">All owners</option></select>
     </div>
 
     <nav class="jump">
       <a href="#deals-section">Good deals</a>
+      <a href="#market-deals-section" id="market-deals-link">Market deals</a>
       <a href="#watchlist-section">Watchlist</a>
       <a href="#movers-section">Market movers</a>
     </nav>
@@ -187,8 +199,34 @@
       <button id="deals-more" class="more" hidden>Show more</button>
     </section>
 
+    <section id="market-deals-section">
+      <div class="section-head">
+        <h2>Market deals</h2>
+        <select id="market-deals-sort" aria-label="Sort market deals">
+          <option value="margin">Biggest margin per copy</option>
+          <option value="total_profit">Biggest total profit</option>
+          <option value="copies_under_gog_cash">Most copies</option>
+        </select>
+      </div>
+      <p class="section-sub" id="market-deals-sub">Any card Card Kingdom buys, listed on TheTCGMarketplace (Near Mint, same language) for less than GOG Cash</p>
+      <div id="market-deals" class="card-grid"><p class="empty">Loading…</p></div>
+      <button id="market-deals-more" class="more" hidden>Show more</button>
+    </section>
+
     <section id="watchlist-section">
-      <h2>Watchlist</h2>
+      <div class="section-head">
+        <h2>Watchlist</h2>
+        <div class="filters">
+          <select id="owner-select" aria-label="Owner"><option value="">All owners</option></select>
+          <select id="sort-select" aria-label="Sort watchlist">
+            <option value="date">Date added (newest)</option>
+            <option value="name">Name (A-Z)</option>
+            <option value="price">Price (high to low)</option>
+            <option value="value">Total value (high to low)</option>
+            <option value="gain">Gain/loss (best to worst)</option>
+          </select>
+        </div>
+      </div>
       <p class="section-sub" id="portfolio-value"></p>
       <div id="watchlist" class="card-grid"><p class="empty">Loading…</p></div>
       <button id="watchlist-more" class="more" hidden>Show more</button>
@@ -338,6 +376,40 @@
 
     let watchlistItems = [];
 
+    // Remembered per browser; storage can be unavailable (private mode
+    // etc.), in which case choices just aren't remembered.
+    function remembered(key) {
+      try { return localStorage.getItem(key); } catch (err) { return null; }
+    }
+    function remember(key, value) {
+      try { localStorage.setItem(key, value); } catch (err) { /* not remembered */ }
+    }
+
+    function gainPct(item) {
+      if (item.purchase_price == null || item.latest_price == null || !item.purchase_price) return null;
+      return (item.latest_price - item.purchase_price) / item.purchase_price;
+    }
+
+    // Same orders as the local app's sort menu (db._WATCHLIST_SORTS);
+    // missing values sort last. watchlist.json is already newest-first.
+    const WATCHLIST_SORTS = {
+      date: null,
+      name: (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
+      price: (a, b) => nullsLast(a.latest_price, b.latest_price),
+      value: (a, b) => nullsLast(
+        a.latest_price == null ? null : a.latest_price * (a.quantity || 1),
+        b.latest_price == null ? null : b.latest_price * (b.quantity || 1)
+      ),
+      gain: (a, b) => nullsLast(gainPct(a), gainPct(b)),
+    };
+
+    function nullsLast(x, y) {
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return y - x;
+    }
+
     function filteredItems() {
       const owner = document.getElementById("owner-select").value;
       const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -372,6 +444,16 @@
       `;
     }
 
+    function gainLossHtml(item) {
+      const pct = gainPct(item);
+      if (pct == null) return "";
+      const qty = item.quantity || 1;
+      const total = (item.latest_price - item.purchase_price) * qty;
+      const direction = total >= 0 ? "up" : "down";
+      const sign = total >= 0 ? "+" : "";
+      return `<div class="meta">Cost ${formatPrice(item.purchase_price)}/ea · <span class="delta ${direction}">${sign}${total.toFixed(2)} (${sign}${(pct * 100).toFixed(1)}%)</span></div>`;
+    }
+
     function watchlistCard(item) {
       const delta = deltaInfo(item.latest_price, item.previous_price);
       const qty = item.quantity || 1;
@@ -383,6 +465,7 @@
         ${cardMetaHtml(item)}
         <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
         ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
+        ${gainLossHtml(item)}
         <div class="meta ck-buylist">CK buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
         ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
         <canvas></canvas>
@@ -440,6 +523,73 @@
       showNext();
     }
 
+    let marketDeals = [];
+
+    const FINISH_LABELS = { nonfoil: "Normal", foil: "Foil", etched: "Etched Foil" };
+
+    function marketDealCard(deal) {
+      const el = document.createElement("div");
+      el.className = "card";
+      const copies = deal.copies_under_gog_cash;
+      el.innerHTML = `
+        ${cardImageHtml(deal)}
+        <div class="name">${escapeHtml(deal.name)}</div>
+        <div class="meta">${escapeHtml(deal.set_name || "")} #${escapeHtml(deal.collector_number || "")}</div>
+        <div class="meta">${escapeHtml(FINISH_LABELS[deal.finish] || deal.finish)} · NM${deal.lang && deal.lang !== "en" ? ` · ${escapeHtml(deal.lang.toUpperCase())}` : ""}</div>
+        <div class="meta tcg-marketplace">TCGMP from: ${formatPrice(deal.cheapest_price)}</div>
+        <div class="meta gog-price">GOG Cash: ${formatPrice(deal.gog_cash)}</div>
+        <div class="price margin">+${formatPrice(deal.margin)}</div>
+        <div class="supply">${copies} cop${copies === 1 ? "y" : "ies"} under GOG Cash · ${formatPrice(deal.total_profit)} total</div>
+      `;
+      return el;
+    }
+
+    function renderMarketDeals() {
+      const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const sortKey = document.getElementById("market-deals-sort").value;
+      const deals = marketDeals
+        .filter((d) => {
+          const haystack = `${d.name || ""} ${d.set_name || ""}`.toLowerCase();
+          return terms.every((t) => haystack.includes(t));
+        })
+        .sort((a, b) => b[sortKey] - a[sortKey]);
+      renderPaged(
+        document.getElementById("market-deals"),
+        document.getElementById("market-deals-more"),
+        deals,
+        marketDealCard,
+        '<p class="empty">No market deals right now.</p>'
+      );
+    }
+
+    async function loadMarketDeals() {
+      const sub = document.getElementById("market-deals-sub");
+      try {
+        const resp = await fetch("deals.json", { cache: "no-store" });
+        if (resp.status === 404) {
+          // Not generated yet (first nightly run with market_deals.py
+          // hasn't happened) — hide the section rather than show an error.
+          document.getElementById("market-deals-section").hidden = true;
+          document.getElementById("market-deals-link").hidden = true;
+          return;
+        }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        marketDeals = data.deals || [];
+        if (data.generated_at) {
+          const shown = marketDeals.length < (data.total_deals || 0) ? ` (top ${marketDeals.length} shown)` : "";
+          sub.textContent =
+            `${data.total_deals} deal${data.total_deals === 1 ? "" : "s"}${shown} among ${data.checked} cards with GOG Cash ≥ ${formatPrice(data.min_gog_cash)} — ` +
+            `Near Mint, same-language copies only — last updated ${new Date(data.generated_at).toLocaleString()}`;
+        }
+        document.getElementById("market-deals-sort").addEventListener("change", renderMarketDeals);
+        renderMarketDeals();
+      } catch (err) {
+        document.getElementById("market-deals").innerHTML =
+          `<p class="empty">Couldn't load market deals: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+
     function render() {
       const items = filteredItems();
       renderPortfolioValue(items);
@@ -456,10 +606,11 @@
         '<p class="empty">No deals right now.</p>'
       );
 
+      const sorter = WATCHLIST_SORTS[document.getElementById("sort-select").value];
       renderPaged(
         document.getElementById("watchlist"),
         document.getElementById("watchlist-more"),
-        items,
+        sorter ? [...items].sort(sorter) : items,
         watchlistCard,
         '<p class="empty">No matching cards.</p>',
         (el, item) => {
@@ -488,12 +639,28 @@
         ownerSelect.innerHTML =
           '<option value="">All owners</option>' +
           owners.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
-        ownerSelect.addEventListener("change", render);
+        const savedOwner = remembered("dashboardOwner");
+        if (savedOwner && owners.includes(savedOwner)) ownerSelect.value = savedOwner;
+        ownerSelect.addEventListener("change", () => {
+          remember("dashboardOwner", ownerSelect.value);
+          render();
+        });
+
+        const sortSelect = document.getElementById("sort-select");
+        const savedSort = remembered("dashboardSort");
+        if (savedSort && savedSort in WATCHLIST_SORTS) sortSelect.value = savedSort;
+        sortSelect.addEventListener("change", () => {
+          remember("dashboardSort", sortSelect.value);
+          render();
+        });
 
         let searchTimer;
         document.getElementById("search").addEventListener("input", () => {
           clearTimeout(searchTimer);
-          searchTimer = setTimeout(render, 200);
+          searchTimer = setTimeout(() => {
+            render();
+            renderMarketDeals();
+          }, 200);
         });
 
         render();
@@ -535,6 +702,7 @@
     }
 
     load();
+    loadMarketDeals();
     loadMovers();
     loadAlerts();
   </script>
