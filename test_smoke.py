@@ -1431,6 +1431,7 @@ class MarketDealsTests(unittest.TestCase):
         self.assertEqual(tempest["cheapest_price"], 18.0)
         self.assertEqual(tempest["copies_under_gog_cash"], 3)
         self.assertEqual(tempest["total_profit"], round((37.95 - 18) * 2 + (37.95 - 30), 2))
+        self.assertEqual(tempest["listings"], [[18.0, 2], [30.0, 1]])  # only copies under GOG Cash
         self.assertEqual(result["deals"][1]["finish"], "etched")
         # Searched by front face, Near Mint, own language, right finish.
         self.assertIn(("Fire", "Modern Horizons 2", "mh2", "290", "nonfoil"), [c.args for c in mock_find.call_args_list])

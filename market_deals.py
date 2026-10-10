@@ -171,6 +171,10 @@ def find_deals(db_path, on_progress=None):
                 # Supply: every qualifying copy listed below GOG Cash.
                 "copies_under_gog_cash": sum(qty for _, qty in under),
                 "total_profit": round(sum((gog_cash - price) * qty for price, qty in under), 2),
+                # [[price, quantity]] for each qualifying listing, cheapest
+                # first — lets the dashboard re-total for a lower buy
+                # threshold (e.g. below the CK buylist itself).
+                "listings": sorted([price, qty] for price, qty in under),
             }
         )
 
