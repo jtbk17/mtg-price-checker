@@ -83,6 +83,11 @@ def _get_connection(db_path):
         ("scryfall_id", "TEXT"),
         ("is_token", "INTEGER"),
         ("canonical_card_id", "INTEGER"),
+        # For pinning a card to its exact TheTCGMarketplace product and
+        # listings (see market_deals.py).
+        ("collector_number", "TEXT"),
+        ("finishes", "TEXT"),  # JSON list, e.g. ["nonfoil", "foil"]
+        ("lang", "TEXT"),  # Scryfall-style language code, e.g. "en", "ja"
     ):
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE cards ADD COLUMN {column} {coltype}")
@@ -183,8 +188,27 @@ def _load_set_names():
     return names
 
 
+# MTGJSON's language names -> Scryfall's codes (what TheTCGMarketplace
+# listings use too).
+LANGUAGE_CODES = {
+    "English": "en",
+    "Japanese": "ja",
+    "French": "fr",
+    "German": "de",
+    "Italian": "it",
+    "Spanish": "es",
+    "Portuguese (Brazil)": "pt",
+    "Russian": "ru",
+    "Korean": "ko",
+    "Chinese Simplified": "zhs",
+    "Chinese Traditional": "zht",
+    "Phyrexian": "ph",
+}
+
+
 def backfill_names(db_path):
-    """Fill in name/set_code/set_name/scryfall_id/is_token for any card
+    """Fill in name/set_code/set_name/scryfall_id/is_token/collector_number/
+    finishes/lang for any card
     uuids missing a label (either brand new, or — the first time this runs
     after a new field was added — every existing card needing just that
     one field caught up), by streaming MTGJSON's AllIdentifiers.json (full
@@ -197,7 +221,8 @@ def backfill_names(db_path):
     needed = {
         row[0]
         for row in conn.execute(
-            "SELECT mtgjson_uuid FROM cards WHERE name IS NULL OR is_token IS NULL OR set_name IS NULL"
+            "SELECT mtgjson_uuid FROM cards WHERE name IS NULL OR is_token IS NULL OR set_name IS NULL "
+            "OR collector_number IS NULL OR lang IS NULL"
         )
     }
     if not needed:
@@ -216,16 +241,27 @@ def backfill_names(db_path):
                     is_token = 1 if entry.get("layout") == "token" else 0
                     set_code = entry.get("setCode")
                     scryfall_id = entry.get("identifiers", {}).get("scryfallId")
+                    language = entry.get("language") or "English"
                     updates.append(
-                        (entry.get("name"), set_code, set_names.get(set_code, set_code), scryfall_id, is_token, uuid)
+                        (
+                            entry.get("name"),
+                            set_code,
+                            set_names.get(set_code, set_code),
+                            scryfall_id,
+                            is_token,
+                            entry.get("number") or "",
+                            json.dumps(entry.get("finishes") or []),
+                            LANGUAGE_CODES.get(language, language.lower()),
+                            uuid,
+                        )
                     )
                     needed.discard(uuid)
                     if not needed:
                         break
 
     conn.executemany(
-        "UPDATE cards SET name = ?, set_code = ?, set_name = ?, scryfall_id = ?, is_token = ? "
-        "WHERE mtgjson_uuid = ?",
+        "UPDATE cards SET name = ?, set_code = ?, set_name = ?, scryfall_id = ?, is_token = ?, "
+        "collector_number = ?, finishes = ?, lang = ? WHERE mtgjson_uuid = ?",
         updates,
     )
     conn.commit()

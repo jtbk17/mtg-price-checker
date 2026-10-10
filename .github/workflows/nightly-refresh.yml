@@ -52,6 +52,10 @@ jobs:
         run: |
           gh release download data --pattern "tcg_prices.db" --clobber || true
           gh release download data --pattern "all_cards_*.db" --clobber || true
+          # TheTCGMarketplace product-id matches (see tcgmarketplace.py).
+          # Keeping them between runs saves market_deals.py most of its
+          # ~17,000 searches on every night after the first.
+          gh release download data --pattern "tcgmarketplace_id_cache.json" --clobber || true
 
       # refresh_job.py/all_cards_history.py only do idempotent price
       # UPSERTs, and news_signals.py only records rows keyed by article
@@ -74,9 +78,12 @@ jobs:
             echo "--- attempt $attempt ---"
             python refresh_job.py
             python all_cards_history.py
+            # Best-effort: a failure here must not stop tonight's price data
+            # from being pushed.
+            python market_deals.py || echo "::warning::market_deals.py failed — deals.json not updated"
             python news_signals.py
 
-            git add docs/watchlist.json docs/movers.json docs/alerts.json
+            git add docs/watchlist.json docs/movers.json docs/alerts.json docs/deals.json
             git diff --cached --quiet || git commit -m "Nightly price refresh"
 
             if git push; then
@@ -131,6 +138,7 @@ jobs:
         run: |
           gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent tcg_prices.db and all-cards price history (kept out of git history; not the same as source code releases)"
           gh release upload data tcg_prices.db all_cards_*.db --clobber
+          if [ -f tcgmarketplace_id_cache.json ]; then gh release upload data tcgmarketplace_id_cache.json --clobber; fi
 
       # Surfaced last (after alerts/upload already ran regardless) so the
       # price-refresh step's own failure doesn't block them, but still

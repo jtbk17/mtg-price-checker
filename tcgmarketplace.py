@@ -306,12 +306,18 @@ def get_price(product_id, foil=False, lang=None, condition=None):
     db.CONDITIONS; any condition if None). None if nothing matching is
     listed right now — deliberately not falling back to recent sale
     prices, which mix every language, finish and condition together."""
+    prices = [price for price, _ in matching_listings(product_id, foil, lang, condition)]
+    return min(prices) if prices else None
+
+
+def matching_listings(product_id, foil=False, lang=None, condition=None):
+    """[(price, quantity)] for this product id's live listings in the given
+    finish, language and condition or better (see get_price())."""
     if product_id is None:
-        return None
-    listings = _get_listings(product_id)
+        return []
     worst_rank = APP_CONDITION_RANKS.get(condition) if condition else None
-    prices = []
-    for listing in listings or []:
+    matches = []
+    for listing in _get_listings(product_id) or []:
         if listing.get("suspended") or _is_foil_listing(listing) != bool(foil):
             continue
         if lang and (listing.get("crd_language") or "").lower() != lang.lower():
@@ -322,10 +328,15 @@ def get_price(product_id, foil=False, lang=None, condition=None):
             if rank > worst_rank:
                 continue
         try:
-            prices.append(float(listing["price"]))
+            price = float(listing["price"])
         except (KeyError, TypeError, ValueError):
             continue
-    return min(prices) if prices else None
+        try:
+            quantity = max(int(listing.get("quantity") or 1), 1)
+        except (TypeError, ValueError):
+            quantity = 1
+        matches.append((price, quantity))
+    return matches
 
 
 def _is_foil(finish):

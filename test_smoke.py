@@ -1373,6 +1373,70 @@ def _fake_feed_xml(items):
     ).encode()
 
 
+class MarketDealsTests(unittest.TestCase):
+    def setUp(self):
+        import market_deals
+
+        self.md = market_deals
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp_dir.cleanup)
+        self.db_path = Path(self.tmp_dir.name) / "all_cards_test.db"
+        conn = ach._get_connection(self.db_path)
+        rows = [
+            # uuid, name, set_code, set_name, number, finishes, lang
+            ("u-deal", "Dragon Tempest", "PL24", "Year of the Dragon 2024", "7", '["foil"]', "en"),
+            ("u-face-a", "Fire // Ice", "MH2", "Modern Horizons 2", "290", '["nonfoil","foil"]', "en"),
+            ("u-face-b", "Fire // Ice", "MH2", "Modern Horizons 2", "290", '["nonfoil","foil"]', "en"),
+            ("u-etched", "Sol Ring", "SLD", "Secret Lair Drop", "1074", '["etched"]', "en"),
+            ("u-cheap", "Llanowar Elves", "M19", "Core Set 2019", "314", '["nonfoil"]', "en"),
+            ("u-bad", "Nissa, Who Shakes the World", "BLC", "Bloomburrow Commander", "84", '["foil","nonfoil"]', "en"),
+        ]
+        conn.executemany(
+            "INSERT INTO cards (mtgjson_uuid, name, set_code, set_name, collector_number, finishes, lang, is_token) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+            rows,
+        )
+        conn.commit()
+        conn.close()
+
+    def test_finds_deals_with_supply_and_skips_below_threshold(self):
+        prices = {
+            "u-deal": {"buylist_normal": None, "buylist_foil": 33.0},  # GOG Cash 37.95
+            "u-face-a": {"buylist_normal": 10.0, "buylist_foil": None},  # same printing as u-face-b
+            "u-face-b": {"buylist_normal": 10.0, "buylist_foil": None},
+            "u-etched": {"buylist_normal": None, "buylist_foil": 20.0},
+            "u-cheap": {"buylist_normal": 1.0, "buylist_foil": None},  # GOG Cash $1.15: below MIN_GOG_CASH
+            # Bad feed data: buylist above Card Kingdom's own sell price.
+            "u-bad": {"buylist_normal": None, "buylist_foil": 72.0, "retail_foil": 6.99},
+        }
+        listings = {
+            "pid-deal": [(18.0, 2), (30.0, 1), (40.0, 5)],  # $40 is above GOG Cash: not supply
+            "pid-fire": [(20.0, 1)],  # above GOG Cash $11.50: no deal
+            "pid-sol": [(10.0, 3)],
+        }
+        product_ids = {"7": "pid-deal", "290": "pid-fire", "1074": "pid-sol"}
+        listing_calls = []
+
+        def fake_listings(product_id, foil=False, lang=None, condition=None):
+            listing_calls.append((product_id, foil, lang, condition))
+            return listings.get(product_id, [])
+
+        with patch.object(self.md.cardkingdom, "get_all_prices", return_value=prices),              patch.object(self.md.all_cards_history, "backfill_names"),              patch.object(self.md.tcgmarketplace, "prefetch_ids"),              patch.object(self.md.tcgmarketplace, "prefetch_prices"),              patch.object(self.md.tcgmarketplace, "find_id", side_effect=lambda *a: product_ids.get(a[3])) as mock_find,              patch.object(self.md.tcgmarketplace, "matching_listings", side_effect=fake_listings):
+            result = self.md.find_deals(self.db_path)
+
+        self.assertEqual(result["checked"], 3)  # two faces deduped, cheap and bad-data cards skipped
+        self.assertEqual([d["name"] for d in result["deals"]], ["Dragon Tempest", "Sol Ring"])  # by margin
+        tempest = result["deals"][0]
+        self.assertEqual(tempest["gog_cash"], 37.95)
+        self.assertEqual(tempest["cheapest_price"], 18.0)
+        self.assertEqual(tempest["copies_under_gog_cash"], 3)
+        self.assertEqual(tempest["total_profit"], round((37.95 - 18) * 2 + (37.95 - 30), 2))
+        self.assertEqual(result["deals"][1]["finish"], "etched")
+        # Searched by front face, Near Mint, own language, right finish.
+        self.assertIn(("Fire", "Modern Horizons 2", "mh2", "290", "nonfoil"), [c.args for c in mock_find.call_args_list])
+        self.assertIn(("pid-deal", True, "en", "Near Mint"), listing_calls)
+
+
 class MtgNewsFeedTests(unittest.TestCase):
     def _fake_response(self, xml_bytes):
         resp = type("Resp", (), {})()
