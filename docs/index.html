@@ -68,6 +68,17 @@
       font-size: 16px;
     }
     .supply { color: var(--text); font-size: 0.85em; }
+    .refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 0; }
+    .refresh-button {
+      color: var(--text);
+      text-decoration: none;
+      background: var(--panel);
+      border: 1px solid var(--tcg);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.95em;
+      white-space: nowrap;
+    }
     .totals {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -188,6 +199,10 @@
   <header>
     <h1>MTG Price Tracker</h1>
     <p class="subtitle" id="subtitle">Card Kingdom market &amp; buylist prices, refreshed nightly</p>
+    <p class="refresh">
+      <a class="refresh-button" href="https://github.com/jtbk17/mtg-price-checker/actions/workflows/refresh-marketplace.yml" target="_blank" rel="noopener">↻ Refresh marketplace data</a>
+      <span class="meta">Opens GitHub: tap <strong>Run workflow</strong>. Takes ~15–30 min, then reload this page.</span>
+    </p>
   </header>
   <main>
     <div class="toolbar">

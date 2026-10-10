@@ -35,19 +35,11 @@ def _is_foil(finish):
     return finish != "Normal"
 
 
-def refresh_watchlist_prices():
-    """Refresh every tracked card's Card Kingdom price, and return a list
-    of cards whose market price rose by at least ALERT_ABS_THRESHOLD *and*
-    at least ALERT_PCT_THRESHOLD since the last recorded price (increases
-    only). Requiring both (not either) is what suppresses the noise the
-    old "either" logic let through: in one real run, the median alert was
-    a $0.30 move that only cleared the percent side — a cheap card can
-    still alert here (e.g. $5 -> $7.50 clears both), it just can't ride in
-    on a trivial dollar amount the way it could when either threshold
-    alone was enough."""
-    items = db.list_watchlist()
-    logger.info("Refreshing prices for %d watched card(s)", len(items))
-
+def refresh_tcgmarketplace_prices(items):
+    """Re-price every given watchlist row's TheTCGMarketplace price.
+    Independent of Card Kingdom: TheTCGMarketplace is matched by printing,
+    not mtgjson_id, so it applies even to cards Card Kingdom doesn't carry.
+    Also run on its own by refresh_marketplace.py."""
     # TheTCGMarketplace has no bulk price file to cache from like MTGJSON —
     # every card needs a live call. Resolving ids then fetching prices
     # concurrently (same two-pass pattern as /api/search) turns what would
@@ -76,17 +68,31 @@ def refresh_watchlist_prices():
     tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)
     tcgmarketplace.prefetch_prices(lookup for lookup in tcg_lookups.values() if lookup)
 
-    alerts = []
     for item in items:
-        # Independent of the Card Kingdom gate just below: TheTCGMarketplace
-        # is matched by printing, not mtgjson_id, so it applies even to
-        # cards Card Kingdom doesn't carry.
         tcg_lookup = tcg_lookups[item["variant_id"]]
         if tcg_lookup:
             # Written even when None: an exact-printing miss means any
             # stored price came from the wrong printing and must go.
             db.update_tcgmarketplace_price(item["variant_id"], tcgmarketplace.get_price_for_card(*tcg_lookup))
 
+
+def refresh_watchlist_prices():
+    """Refresh every tracked card's Card Kingdom price, and return a list
+    of cards whose market price rose by at least ALERT_ABS_THRESHOLD *and*
+    at least ALERT_PCT_THRESHOLD since the last recorded price (increases
+    only). Requiring both (not either) is what suppresses the noise the
+    old "either" logic let through: in one real run, the median alert was
+    a $0.30 move that only cleared the percent side — a cheap card can
+    still alert here (e.g. $5 -> $7.50 clears both), it just can't ride in
+    on a trivial dollar amount the way it could when either threshold
+    alone was enough."""
+    items = db.list_watchlist()
+    logger.info("Refreshing prices for %d watched card(s)", len(items))
+
+    refresh_tcgmarketplace_prices(items)
+
+    alerts = []
+    for item in items:
         if not item.get("mtgjson_id"):
             continue
 

@@ -1,0 +1,72 @@
+name: Refresh marketplace data
+
+# On demand only — started from the dashboard's "Refresh marketplace
+# data" button (which opens this workflow's page on GitHub, where the
+# repo owner taps "Run workflow"). Re-prices TheTCGMarketplace prices and
+# Market deals only; see refresh_marketplace.py for why the nightly
+# job's Card Kingdom history, movers and alerts are left out.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Same group as nightly-refresh.yml and telegram-webhook-feedback.yml:
+# all three download, edit and re-upload the same tcg_prices.db release
+# asset, so they must queue rather than race.
+concurrency:
+  group: tcg-prices-db
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests ijson
+
+      - name: Download databases and TheTCGMarketplace id cache
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download data --pattern "tcg_prices.db" --clobber
+          gh release download data --pattern "all_cards_*.db" --clobber
+          gh release download data --pattern "tcgmarketplace_id_cache.json" --clobber || true
+
+      - name: Refresh marketplace prices and deals, then push docs (retries on conflict)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          python refresh_marketplace.py
+
+          # Both files are regenerated wholesale, so on a push conflict just
+          # re-apply them on top of whatever landed meanwhile.
+          mkdir -p /tmp/docs-out
+          cp docs/watchlist.json docs/deals.json /tmp/docs-out/
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/docs-out/watchlist.json /tmp/docs-out/deals.json docs/
+            git add docs/watchlist.json docs/deals.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Refresh marketplace data"
+            if git push; then
+              exit 0
+            fi
+          done
+          echo "Could not push docs data after 3 attempts" >&2
+          exit 1
+
+      - name: Upload updated databases and id cache
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload data tcg_prices.db all_cards_*.db --clobber
+          if [ -f tcgmarketplace_id_cache.json ]; then gh release upload data tcgmarketplace_id_cache.json --clobber; fi
