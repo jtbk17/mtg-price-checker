@@ -1,4 +1,68 @@
 {
-  "generated_at": "2026-10-10T13:44:08.693408+00:00",
-  "alerts": []
+  "generated_at": "2026-10-11T13:39:50.434451+00:00",
+  "alerts": [
+    {
+      "name": "Skrelv, Defector Mite",
+      "set_name": "Phyrexia: All Will Be One",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 17.99,
+      "price_now": 19.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Jeska's Will",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Passionate Archaeologist",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Talrand, Sky Summoner",
+      "set_name": "Time Spiral Remastered",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 16.99,
+      "price_now": 19.99,
+      "pct_change": 17.7
+    },
+    {
+      "name": "Lumra, Bellow of the Woods",
+      "set_name": "Bloomburrow",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 39.99,
+      "price_now": 44.99,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Morphic Pool",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 39.99,
+      "price_now": 44.99,
+      "pct_change": 12.5
+    },
+    {
+      "name": "Blood Crypt",
+      "set_name": "Lorwyn Eclipsed Promos",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 12.99,
+      "price_now": 15.99,
+      "pct_change": 23.1
+    }
+  ]
 }
