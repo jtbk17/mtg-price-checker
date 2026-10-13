@@ -748,196 +748,84 @@ class ManaboxImportTests(unittest.TestCase):
         item = db.list_watchlist(owner="ProgressTest")[0]
         db.remove_from_watchlist(item["id"])
 
-    def test_import_syncs_removals_but_spares_ambiguous_matches(self):
-        # Pre-existing state for this owner, as if from an earlier import.
-        sold_item = db.add_to_watchlist(
-            {
-                "variant_id": "sold-card-id:nonfoil:near-mint",
-                "card_id": "sold-card-id",
-                "game": "Magic: The Gathering",
-                "name": "Sold Card",
-                "set_name": "Test Set",
-                "condition": "Near Mint",
-                "printing": "Normal",
-                "owner": "SyncTest",
-                "quantity": 1,
-            }
-        )
-        ambiguous_item = db.add_to_watchlist(
-            {
-                "variant_id": "ambiguous-id:nonfoil:near-mint",
-                "card_id": "ambiguous-id",
-                "game": "Magic: The Gathering",
-                "name": "Ambiguous Card",
-                "set_name": "Test Set",
-                "condition": "Near Mint",
-                "printing": "Normal",
-                "owner": "SyncTest",
-                "quantity": 1,
-            }
-        )
+    def _import_patches(self, scryfall_cards):
+        from contextlib import ExitStack
 
-        new_card = {"id": "new-card-id", "name": "New Card", "set": "tst", "set_name": "Test Set"}
-        rows = [
-            {"Scryfall ID": "new-card-id", "Name": "New Card", "Set code": "tst", "Foil": "normal", "Quantity": "1"},
-            # "ambiguous-id" is present in the CSV but fails to resolve on
-            # Scryfall this time (not in the mocked return dict below) — the
-            # previously-tracked card for it must be spared, not treated as
-            # absent, since we can't confirm it's actually gone.
-            {"Scryfall ID": "ambiguous-id", "Name": "Ambiguous Card", "Set code": "tst", "Foil": "normal", "Quantity": "1"},
-        ]
+        stack = ExitStack()
+        stack.enter_context(patch.object(manabox_import, "_fetch_scryfall_cards", return_value=scryfall_cards))
+        stack.enter_context(patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None))
+        stack.enter_context(patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"))
+        stack.enter_context(patch.object(manabox_import.tcgmarketplace, "prefetch_ids"))
+        stack.enter_context(patch.object(manabox_import.tcgmarketplace, "prefetch_prices"))
+        stack.enter_context(patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None))
+        stack.enter_context(patch.object(manabox_import.tcgmarketplace, "get_wtb_price_for_card", return_value=None))
+        stack.enter_context(patch.object(manabox_import.cardkingdom, "get_prices", return_value=None))
+        return stack
 
-        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"new-card-id": new_card}), \
-             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
-             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
-             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
-             patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
-            # 1 of 2 pre-existing cards (50%) is over REMOVAL_WARNING_THRESHOLD,
-            # so this exercises the confirmed-removal path explicitly.
-            result = manabox_import.import_rows(rows, owner="SyncTest", confirm_removals=True)
-
-        self.assertEqual(result["imported"], 1)
-        self.assertEqual(result["skipped"], 1)
-        self.assertEqual(result["removed"], 1)
-        self.assertFalse(result["needs_confirmation"])
-
-        remaining = {i["variant_id"] for i in db.list_watchlist(owner="SyncTest")}
-        self.assertNotIn("sold-card-id:nonfoil:near-mint", remaining)  # genuinely absent -> removed
-        self.assertIn("ambiguous-id:nonfoil:near-mint", remaining)  # present but unresolved -> spared
-        self.assertIn("new-card-id:nonfoil:near-mint", remaining)  # newly imported
-
-        for item in db.list_watchlist(owner="SyncTest"):
-            db.remove_from_watchlist(item["id"])
-
-    def _setup_owner_with_cards(self, owner, count):
-        items = []
-        for i in range(count):
-            items.append(
-                db.add_to_watchlist(
-                    {
-                        "variant_id": f"existing-{owner}-{i}:nonfoil:near-mint",
-                        "card_id": f"existing-{owner}-{i}",
-                        "game": "Magic: The Gathering",
-                        "name": f"Existing Card {i}",
-                        "set_name": "Test Set",
-                        "condition": "Near Mint",
-                        "printing": "Normal",
-                        "owner": owner,
-                        "quantity": 1,
-                    }
-                )
+    def test_import_never_removes_cards_missing_from_the_csv(self):
+        # Imports used to sync the owner's watchlist to the CSV, untracking
+        # anything absent — a partial CSV once wiped 9,378 of 9,478 cards.
+        # Now they only ever add.
+        owner = "AddOnlyTest"
+        for i in range(10):
+            db.add_to_watchlist(
+                {
+                    "variant_id": f"existing-{owner}-{i}:nonfoil:near-mint",
+                    "card_id": f"existing-{owner}-{i}",
+                    "game": "Magic: The Gathering",
+                    "name": f"Existing Card {i}",
+                    "set_name": "Test Set",
+                    "condition": "Near Mint",
+                    "printing": "Normal",
+                    "owner": owner,
+                    "quantity": 1,
+                }
             )
-        return items
+        new_card = {"id": "brand-new-id", "name": "Brand New", "set": "tst", "set_name": "Test Set"}
+        rows = [{"Scryfall ID": "brand-new-id", "Name": "Brand New", "Set code": "tst", "Foil": "normal", "Quantity": "1"}]
 
-    def test_import_withholds_large_removal_without_confirmation(self):
-        # Confirmed live: a partial/stale CSV silently wiped 9,378 of 9,478
-        # tracked cards with no warning at all. 9 of 10 pre-existing cards
-        # here are missing from the CSV (90% > REMOVAL_WARNING_THRESHOLD),
-        # so nothing should actually be deleted without confirmation.
-        self._setup_owner_with_cards("BigRemovalTest", 10)
-        new_card = {"id": "existing-BigRemovalTest-0", "name": "Existing Card 0", "set": "tst", "set_name": "Test Set"}
-        rows = [
-            {
-                "Scryfall ID": "existing-BigRemovalTest-0",
-                "Name": "Existing Card 0",
-                "Set code": "tst",
-                "Foil": "normal",
-                "Condition": "near_mint",
-                "Quantity": "1",
-            }
-        ]
+        with self._import_patches({"brand-new-id": new_card}):
+            result = manabox_import.import_rows(rows, owner=owner)
 
-        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value={"existing-BigRemovalTest-0": new_card}), \
-             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
-             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
-             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
-             patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
-            result = manabox_import.import_rows(rows, owner="BigRemovalTest")
+        self.assertEqual(result["added_new"], 1)
+        self.assertEqual(result["added_copies"], 0)
+        self.assertNotIn("removed", result)
+        self.assertEqual(len(db.list_watchlist(owner=owner)), 11)  # all 10 kept, 1 added
 
-        self.assertEqual(result["removed"], 0)
-        self.assertTrue(result["needs_confirmation"])
-        self.assertEqual(result["pending_removal_count"], 9)
-        self.assertEqual(len(db.list_watchlist(owner="BigRemovalTest")), 10)  # nothing deleted
-
-        for item in db.list_watchlist(owner="BigRemovalTest"):
+        for item in db.list_watchlist(owner=owner):
             db.remove_from_watchlist(item["id"])
 
-    def test_import_removes_large_batch_once_confirmed(self):
-        self._setup_owner_with_cards("ConfirmedRemovalTest", 10)
-        new_card = {
-            "id": "existing-ConfirmedRemovalTest-0", "name": "Existing Card 0", "set": "tst", "set_name": "Test Set",
-        }
-        rows = [
+    def test_import_adds_copies_to_an_already_tracked_card(self):
+        owner = "AddCopiesTest"
+        db.add_to_watchlist(
             {
-                "Scryfall ID": "existing-ConfirmedRemovalTest-0",
-                "Name": "Existing Card 0",
-                "Set code": "tst",
-                "Foil": "normal",
-                "Condition": "near_mint",
-                "Quantity": "1",
+                "variant_id": "tracked-id:nonfoil:near-mint",
+                "card_id": "tracked-id",
+                "game": "Magic: The Gathering",
+                "name": "Tracked Card",
+                "set_name": "Test Set",
+                "condition": "Near Mint",
+                "printing": "Normal",
+                "owner": owner,
+                "quantity": 2,
+                "purchase_price": 1.00,
             }
-        ]
+        )
+        card = {"id": "tracked-id", "name": "Tracked Card", "set": "tst", "set_name": "Test Set"}
+        rows = [{
+            "Scryfall ID": "tracked-id", "Name": "Tracked Card", "Set code": "tst", "Foil": "normal",
+            "Condition": "near_mint", "Quantity": "3", "Purchase price": "2.00",
+        }]
 
-        with patch.object(
-                 manabox_import, "_fetch_scryfall_cards",
-                 return_value={"existing-ConfirmedRemovalTest-0": new_card},
-             ), \
-             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
-             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
-             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
-             patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
-            result = manabox_import.import_rows(rows, owner="ConfirmedRemovalTest", confirm_removals=True)
+        with self._import_patches({"tracked-id": card}):
+            result = manabox_import.import_rows(rows, owner=owner)
 
-        self.assertEqual(result["removed"], 9)
-        self.assertFalse(result["needs_confirmation"])
-        self.assertEqual(len(db.list_watchlist(owner="ConfirmedRemovalTest")), 1)
+        self.assertEqual((result["added_new"], result["added_copies"]), (0, 1))
+        [item] = db.list_watchlist(owner=owner)
+        self.assertEqual(item["quantity"], 5)  # 2 + 3, not overwritten to 3
+        self.assertAlmostEqual(item["purchase_price"], (2 * 1.00 + 3 * 2.00) / 5)
 
-        for item in db.list_watchlist(owner="ConfirmedRemovalTest"):
-            db.remove_from_watchlist(item["id"])
-
-    def test_import_small_removal_still_proceeds_without_confirmation(self):
-        # Below REMOVAL_WARNING_THRESHOLD — the ordinary "a couple of cards
-        # got sold" case must still work automatically, same as before.
-        self._setup_owner_with_cards("SmallRemovalTest", 10)
-        rows = [
-            {
-                "Scryfall ID": f"existing-SmallRemovalTest-{i}",
-                "Name": f"Existing Card {i}",
-                "Set code": "tst",
-                "Foil": "normal",
-                "Condition": "near_mint",
-                "Quantity": "1",
-            }
-            for i in range(9)  # 9 of 10 present -> only 1 (10%) would be removed
-        ]
-        fake_cards = {
-            f"existing-SmallRemovalTest-{i}": {
-                "id": f"existing-SmallRemovalTest-{i}", "name": f"Existing Card {i}", "set": "tst", "set_name": "Test Set",
-            }
-            for i in range(9)
-        }
-
-        with patch.object(manabox_import, "_fetch_scryfall_cards", return_value=fake_cards), \
-             patch.object(manabox_import.mtgjson_crosswalk, "get_uuid", return_value=None), \
-             patch.object(manabox_import.mtgjson_crosswalk, "prefetch_sets"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_ids"), \
-             patch.object(manabox_import.tcgmarketplace, "prefetch_prices"), \
-             patch.object(manabox_import.tcgmarketplace, "get_price_for_card", return_value=None), \
-             patch.object(manabox_import.cardkingdom, "get_prices", return_value=None):
-            result = manabox_import.import_rows(rows, owner="SmallRemovalTest")
-
-        self.assertEqual(result["removed"], 1)
-        self.assertFalse(result["needs_confirmation"])
-        self.assertEqual(len(db.list_watchlist(owner="SmallRemovalTest")), 9)
-
-        for item in db.list_watchlist(owner="SmallRemovalTest"):
-            db.remove_from_watchlist(item["id"])
+        db.remove_from_watchlist(item["id"])
 
 
 class RefreshJobTests(unittest.TestCase):

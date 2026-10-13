@@ -10,11 +10,13 @@ own Name/Set columns, since it's an unambiguous reference to the exact
 printing — the CSV's text fields are only used as a fallback if a card
 can't be found on Scryfall for some reason.
 
-Each import fully syncs the given owner's watchlist to this CSV: cards
-present get added/updated, and cards previously tracked for that owner
-but genuinely absent from this CSV (e.g. sold and no longer in the real
-collection) get automatically untracked — see the `removed` handling
-near the end of import_rows() for exactly what counts as "absent".
+Imports only ever add: a card not tracked yet for that owner gets a new
+row, and one already tracked gets the CSV's copies added on top of its
+quantity (cost blended into a weighted average). Nothing is ever removed
+or overwritten — an import used to sync the owner's watchlist to the
+CSV, untracking anything missing from it, which meant a partial CSV
+could wipe most of a collection (it did once: 9,378 of 9,478 cards). The
+flip side: importing the same CSV twice counts its cards twice.
 """
 
 import csv
@@ -28,16 +30,6 @@ import scryfall
 import tcgmarketplace
 
 logger = logging.getLogger("tcg-price-checker")
-
-# A partial/stale CSV imported under the same owner as a much bigger
-# collection silently deletes everything not in it (confirmed live: a
-# ~100-card CSV wiped 9,378 of 9,478 tracked cards with no warning,
-# since nothing here previously capped how much of an owner's
-# collection a single import could remove). Above this fraction,
-# import_rows() stops short of deleting and asks for confirmation
-# instead — see confirm_removals.
-REMOVAL_WARNING_THRESHOLD = 0.2
-
 
 def _finish_and_label(foil_value):
     value = (foil_value or "").strip().lower()
@@ -109,23 +101,15 @@ def _parse_price(value):
         return None
 
 
-def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
-    """on_progress(phase, done, total), if given, is called periodically
-    across the import's three phases (Scryfall lookup, Card Kingdom price
-    lookup, saving to the watchlist) — purely for UI feedback, safe to
-    omit. Each phase has its own done/total (they aren't the same count),
-    so a caller rendering a single progress bar should reset it on every
-    phase change rather than treating this as one continuous 0-100%.
-
-    confirm_removals=False (the default) means a removal that would wipe
-    more than REMOVAL_WARNING_THRESHOLD of the owner's current collection
-    is held back — nothing gets deleted, and the result instead reports
-    needs_confirmation=True with how many cards and what fraction would
-    go. The caller should show the user that number and re-call with
-    confirm_removals=True only if they explicitly confirm. Smaller
-    removals (e.g. a few genuinely sold cards) still happen automatically
-    either way, same as before — this only gates the unusual, high-blast-
-    radius case."""
+def import_rows(rows, owner=None, on_progress=None):
+    """Adds the CSV's cards to `owner`'s watchlist (see module docstring:
+    add-only, never removes or overwrites). on_progress(phase, done,
+    total), if given, is called periodically across the import's three
+    phases (Scryfall lookup, Card Kingdom price lookup, saving to the
+    watchlist) — purely for UI feedback, safe to omit. Each phase has its
+    own done/total (they aren't the same count), so a caller rendering a
+    single progress bar should reset it on every phase change rather than
+    treating this as one continuous 0-100%."""
     scryfall_cards = _fetch_scryfall_cards((row.get("Scryfall ID") for row in rows), on_progress=on_progress)
 
     # ManaBox splits the same card+finish across multiple rows when you own
@@ -204,7 +188,15 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         (_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress, include_wtb=True
     )
 
+    # Already-tracked rows for this owner (add_to_watchlist normalizes "no
+    # owner" to ''), so their copies get added to rather than overwritten.
+    existing = {
+        item["variant_id"]: item for item in db.list_watchlist() if (item.get("owner") or "") == (owner or "")
+    }
+
     imported = 0
+    added_new = 0
+    added_copies = 0
     total_variants = len(grouped)
     for i, (variant_id, g) in enumerate(grouped.items(), start=1):
         card, row = g["card"], g["row"]
@@ -212,6 +204,13 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         uuid = mtgjson_crosswalk.get_uuid(g["scryfall_id"], set_code)
         ck_prices = cardkingdom.get_prices(uuid, foil=(g["finish"] != "nonfoil")) if uuid else None
         avg_purchase_price = g["_cost_total"] / g["_cost_qty"] if g["_cost_qty"] else None
+        if variant_id in existing:
+            db.add_copies(existing[variant_id]["id"], g["quantity"], avg_purchase_price)
+            imported += 1
+            added_copies += 1
+            if on_progress:
+                on_progress("Saving to your watchlist", i, total_variants)
+            continue
         name, set_name = _name_and_set(g)
         tcg_market_price = tcgmarketplace.get_price_for_card(*_tcg_lookup(g))
         tcg_wtb_price = tcgmarketplace.get_wtb_price_for_card(*_tcg_lookup(g))
@@ -238,48 +237,14 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         }
         db.add_to_watchlist(watchlist_card)
         imported += 1
+        added_new += 1
         if on_progress:
             on_progress("Saving to your watchlist", i, total_variants)
 
-    removed = 0
-    needs_confirmation = False
-    pending_removal_count = 0
-    if owner:
-        # Treat this CSV as the source of truth for the owner's collection:
-        # anything previously tracked for them that's genuinely absent here
-        # (e.g. a sold card) gets untracked automatically. Scoped by owner
-        # so this never touches anyone else's cards, and — since this is a
-        # destructive action — deliberately conservative about what counts
-        # as "absent": a card whose Scryfall ID appears *anywhere* in this
-        # CSV (even under a finish/condition combo that didn't end up in
-        # `grouped`, e.g. a transient per-row lookup failure) is left alone
-        # rather than risk deleting a real card over an ambiguous partial
-        # match.
-        csv_scryfall_ids = {row.get("Scryfall ID") for row in rows if row.get("Scryfall ID")}
-        present_variant_ids = set(grouped.keys())
-        current_items = db.list_watchlist(owner=owner)
-        to_remove = [
-            item
-            for item in current_items
-            if item["variant_id"] not in present_variant_ids and item["card_id"] not in csv_scryfall_ids
-        ]
-
-        if to_remove and current_items and len(to_remove) / len(current_items) > REMOVAL_WARNING_THRESHOLD and not confirm_removals:
-            # Big, unusual removal — hold off and let the caller confirm
-            # with the user first, instead of silently deleting most of
-            # their collection over one wrong/stale/partial CSV.
-            needs_confirmation = True
-            pending_removal_count = len(to_remove)
-        else:
-            for item in to_remove:
-                db.remove_from_watchlist(item["id"])
-                removed += 1
-
     return {
         "imported": imported,
+        "added_new": added_new,
+        "added_copies": added_copies,
         "skipped": skipped,
-        "removed": removed,
         "errors": errors[:20],
-        "needs_confirmation": needs_confirmation,
-        "pending_removal_count": pending_removal_count,
     }
