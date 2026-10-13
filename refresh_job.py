@@ -66,7 +66,7 @@ def refresh_tcgmarketplace_prices(items):
 
     tcg_lookups = {item["variant_id"]: _tcg_lookup(item) for item in items}
     tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)
-    tcgmarketplace.prefetch_prices(lookup for lookup in tcg_lookups.values() if lookup)
+    tcgmarketplace.prefetch_prices((lookup for lookup in tcg_lookups.values() if lookup), include_wtb=True)
 
     for item in items:
         tcg_lookup = tcg_lookups[item["variant_id"]]
@@ -74,6 +74,9 @@ def refresh_tcgmarketplace_prices(items):
             # Written even when None: an exact-printing miss means any
             # stored price came from the wrong printing and must go.
             db.update_tcgmarketplace_price(item["variant_id"], tcgmarketplace.get_price_for_card(*tcg_lookup))
+            db.update_tcgmarketplace_wtb_price(
+                item["variant_id"], tcgmarketplace.get_wtb_price_for_card(*tcg_lookup)
+            )
 
 
 def refresh_watchlist_prices():
@@ -158,6 +161,7 @@ SNAPSHOT_FIELDS = (
     "previous_price",
     "cardkingdom_buylist_price",
     "tcgmarketplace_price",
+    "tcgmarketplace_wtb_price",
     "purchase_price",
     "created_at",
 )

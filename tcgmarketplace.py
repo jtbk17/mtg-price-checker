@@ -255,30 +255,37 @@ def prefetch_ids(lookups, max_workers=10, on_progress=None):
                 on_progress("Looking up TheTCGMarketplace prices", completed, total)
 
 
-def _get_listings(product_id):
-    """Every active listing for this product id — foil and nonfoil, all
-    languages — or None if they couldn't be fetched. Cached briefly in
-    memory only (not on disk): unlike the id, these actually change."""
+# Sell listings, and want-to-buy (WTB) offers — same request and row
+# shape, different endpoint.
+LISTING_ENDPOINTS = {"sell": "product/listed_item_filter", "buy": "buy/listed_item_filter"}
+
+
+def _get_listings(product_id, kind="sell"):
+    """Every active sell listing (or, with kind="buy", want-to-buy offer)
+    for this product id — foil and nonfoil, all languages — or None if
+    they couldn't be fetched. Cached briefly in memory only (not on disk):
+    unlike the id, these actually change."""
+    cache_key = product_id if kind == "sell" else (kind, product_id)
     with _price_cache_lock:
-        cached = _price_cache.get(product_id)
+        cached = _price_cache.get(cache_key)
     if cached and (time.time() - cached["fetched_at"] < PRICE_CACHE_TTL_SECONDS):
         return cached["listings"]
 
     try:
         # foil "0" returns every listing; "1" would return foil ones only.
         resp = _session.post(
-            f"{BASE_URL}/product/listed_item_filter",
+            f"{BASE_URL}/{LISTING_ENDPOINTS[kind]}",
             json={"product_id": str(product_id), "foil": "0"},
             timeout=15,
         )
         resp.raise_for_status()
         listings = resp.json().get("data", {}).get("data") or []
     except requests.RequestException as exc:
-        logger.warning("TheTCGMarketplace listings fetch failed for id %s: %s", product_id, exc)
+        logger.warning("TheTCGMarketplace %s listings fetch failed for id %s: %s", kind, product_id, exc)
         return cached["listings"] if cached else None
 
     with _price_cache_lock:
-        _price_cache[product_id] = {"listings": listings, "fetched_at": time.time()}
+        _price_cache[cache_key] = {"listings": listings, "fetched_at": time.time()}
     return listings
 
 
@@ -339,6 +346,30 @@ def matching_listings(product_id, foil=False, lang=None, condition=None):
     return matches
 
 
+def get_wtb_price(product_id, foil=False, lang=None, condition=None):
+    """Highest live want-to-buy offer for this product id that a copy in
+    the given finish, language and condition would satisfy — i.e. from a
+    buyer asking for that condition or worse (a Near Mint copy meets any
+    request). None if there's no such offer."""
+    if product_id is None:
+        return None
+    card_rank = APP_CONDITION_RANKS.get(condition, 0) if condition else 0
+    prices = []
+    for offer in _get_listings(product_id, "buy") or []:
+        if offer.get("suspended") or _is_foil_listing(offer) != bool(foil):
+            continue
+        if lang and (offer.get("crd_language") or "").lower() != lang.lower():
+            continue
+        wanted_rank = CONDITION_RANKS.get((offer.get("crd_condition") or "").upper())
+        if condition and wanted_rank is not None and wanted_rank < card_rank:
+            continue  # buyer wants a better copy than this one
+        try:
+            prices.append(float(offer["price"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return max(prices) if prices else None
+
+
 def _is_foil(finish):
     return finish in ("foil", "etched")
 
@@ -351,20 +382,32 @@ def get_price_for_card(
     return get_price(product_id, foil=_is_foil(finish), lang=lang, condition=condition)
 
 
-def prefetch_prices(lookups, max_workers=10, on_progress=None):
+def get_wtb_price_for_card(
+    card_name, set_name, set_code=None, collector_number=None, finish=None, lang=None, condition=None
+):
+    """Convenience: find_id + get_wtb_price in one call."""
+    product_id = find_id(card_name, set_name, set_code, collector_number, finish)
+    return get_wtb_price(product_id, foil=_is_foil(finish), lang=lang, condition=condition)
+
+
+def prefetch_prices(lookups, max_workers=10, on_progress=None, include_wtb=False):
     """Warm the (short-lived) listings cache for many find_id() argument
     tuples (see prefetch_ids()) concurrently. Resolving ids via
     prefetch_ids() alone isn't enough to keep a batch of get_price_for_
     card() calls fast — each still fetches its product's listings once
-    unless that's warmed too."""
+    unless that's warmed too. include_wtb also warms want-to-buy offers
+    (for get_wtb_price_for_card())."""
     ids = list(dict.fromkeys(find_id(*tuple(lookup)[:5]) for lookup in lookups))
     ids = [i for i in ids if i is not None]
-    total = len(ids)
+    jobs = [(product_id,) for product_id in ids]
+    if include_wtb:
+        jobs += [(product_id, "buy") for product_id in ids]
+    total = len(jobs)
     if not total:
         return
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(_get_listings, product_id) for product_id in ids]
+        futures = [executor.submit(_get_listings, *job) for job in jobs]
         for future in as_completed(futures):
             try:
                 future.result()

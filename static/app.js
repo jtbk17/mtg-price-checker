@@ -68,6 +68,11 @@ function priceSectionHtml(variant, card) {
         ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(variant.tcgMarketplacePrice)}</div>`
         : ""
     }
+    ${
+      variant.tcgMarketplaceWtbPrice != null
+        ? `<div class="meta tcg-wtb">TheTCGMarketplace WTB: ${formatPrice(variant.tcgMarketplaceWtbPrice)}</div>`
+        : ""
+    }
   `;
 }
 
@@ -319,6 +324,7 @@ async function trackCard(card, variant, quantity, condition, cost) {
         cardKingdomPrice: variant.cardKingdomPrice,
         cardKingdomBuylist: variant.cardKingdomBuylist,
         tcgMarketplacePrice: variant.tcgMarketplacePrice,
+        tcgMarketplaceWtbPrice: variant.tcgMarketplaceWtbPrice,
         purchasePrice: cost === "" || cost == null ? null : Number(cost),
         owner: currentOwner(),
         quantity: quantity || 1,
@@ -424,6 +430,7 @@ function renderWatchlist(items) {
       <div class="meta gog-price">GOG Cash: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER))}</div>
       <div class="meta gog-price">GOG Credit: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CREDIT_MULTIPLIER))}</div>
       ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
+      ${item.tcgmarketplace_wtb_price != null ? `<div class="meta tcg-wtb">TheTCGMarketplace WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>` : ""}
       <div class="actions">
         <button type="button" data-action="add-copies">Add more</button>
         <button type="button" data-action="history">History</button>

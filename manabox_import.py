@@ -200,7 +200,9 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         )
 
     tcgmarketplace.prefetch_ids((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
-    tcgmarketplace.prefetch_prices((_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress)
+    tcgmarketplace.prefetch_prices(
+        (_tcg_lookup(g) for g in grouped.values()), on_progress=on_progress, include_wtb=True
+    )
 
     imported = 0
     total_variants = len(grouped)
@@ -212,6 +214,7 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
         avg_purchase_price = g["_cost_total"] / g["_cost_qty"] if g["_cost_qty"] else None
         name, set_name = _name_and_set(g)
         tcg_market_price = tcgmarketplace.get_price_for_card(*_tcg_lookup(g))
+        tcg_wtb_price = tcgmarketplace.get_wtb_price_for_card(*_tcg_lookup(g))
 
         watchlist_card = {
             "variant_id": variant_id,
@@ -228,6 +231,7 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
             "cardkingdom_price": ck_prices["market"] if ck_prices else None,
             "cardkingdom_buylist_price": ck_prices["buylist"] if ck_prices else None,
             "tcgmarketplace_price": tcg_market_price,
+            "tcgmarketplace_wtb_price": tcg_wtb_price,
             "owner": owner,
             "quantity": g["quantity"],
             "purchase_price": avg_purchase_price,

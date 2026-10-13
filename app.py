@@ -56,6 +56,9 @@ def _serialize_card(card):
                 "cardKingdomPrice": ck_prices["market"] if ck_prices else None,
                 "cardKingdomBuylist": ck_prices["buylist"] if ck_prices else None,
                 "tcgMarketplacePrice": tcgmarketplace.get_price_for_card(*tcgmarketplace.lookup_args(card, finish)),
+                "tcgMarketplaceWtbPrice": tcgmarketplace.get_wtb_price_for_card(
+                    *tcgmarketplace.lookup_args(card, finish)
+                ),
             }
         )
 
@@ -116,7 +119,7 @@ def api_search():
             for finish in (c.get("finishes") or ["nonfoil"])
         ]
         tcgmarketplace.prefetch_ids(tcg_lookups)
-        tcgmarketplace.prefetch_prices(tcg_lookups)
+        tcgmarketplace.prefetch_prices(tcg_lookups, include_wtb=True)
         return jsonify([_serialize_card(c) for c in cards])
     except scryfall.ScryfallError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -175,6 +178,7 @@ def api_watchlist_add():
         "cardkingdom_buylist_price": payload.get("cardKingdomBuylist"),
         "purchase_price": purchase_price,
         "tcgmarketplace_price": payload.get("tcgMarketplacePrice"),
+        "tcgmarketplace_wtb_price": payload.get("tcgMarketplaceWtbPrice"),
         "owner": owner,
         "quantity": quantity,
     }

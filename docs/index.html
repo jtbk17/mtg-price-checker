@@ -131,6 +131,7 @@
     .delta.down { color: var(--down); }
     .ck-buylist { color: var(--ck); }
     .tcg-marketplace { color: var(--tcg); }
+    .tcg-wtb { color: #c792ea; }
     .gog-price { color: var(--gog); }
     .margin { color: var(--up); }
     .empty { color: var(--muted); }
@@ -514,6 +515,7 @@
         ${gainLossHtml(item)}
         <div class="meta ck-buylist">CK buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
         ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
+        ${item.tcgmarketplace_wtb_price != null ? `<div class="meta tcg-wtb">TCGMP WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>` : ""}
         <canvas></canvas>
       `;
       return el;

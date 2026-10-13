@@ -1283,6 +1283,21 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertEqual(self.tcg.get_price(111, foil=True, lang="en", condition="Moderately Played"), 20.00)
             mock_post.assert_called_once()  # listings fetched once, then cached
 
+    def test_get_wtb_price_takes_best_offer_this_copy_satisfies(self):
+        offers = [
+            {"price": "10.00", "crd_language": "EN", "crd_foil": "1", "crd_condition": "NM"},
+            {"price": "28.00", "crd_language": "EN", "crd_foil": "1", "crd_condition": "NM"},
+            {"price": "35.00", "crd_language": "ZHS", "crd_foil": "1", "crd_condition": "NM"},  # other language
+            {"price": "40.00", "crd_language": "EN", "crd_foil": "0", "crd_condition": "NM"},  # nonfoil
+            {"price": "20.00", "crd_language": "EN", "crd_foil": "1", "crd_condition": "SP"},
+        ]
+        with patch.object(self.tcg, "_get_listings", return_value=offers) as mock_listings:
+            self.assertEqual(self.tcg.get_wtb_price(5, foil=True, lang="en", condition="Near Mint"), 28.00)
+            # A Lightly Played copy only satisfies buyers asking for SP or worse.
+            self.assertEqual(self.tcg.get_wtb_price(5, foil=True, lang="en", condition="Lightly Played"), 20.00)
+            self.assertIsNone(self.tcg.get_wtb_price(5, foil=True, lang="ja", condition="Near Mint"))
+        self.assertEqual(mock_listings.call_args.args, (5, "buy"))
+
     def test_prefetch_ids_and_prices_report_progress(self):
         with patch.object(self.tcg, "find_id", side_effect=[10, 20, 10, 10, 10, None]) as mock_find, \
              patch.object(self.tcg, "_get_listings", return_value=[]) as mock_listings:
