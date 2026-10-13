@@ -31,6 +31,30 @@
       <div id="search-results" class="card-grid"></div>
     </section>
 
+    <section class="panel" id="sell-plan-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Sell plan</h2>
+          <p class="section-sub">What to do with each card: list just under the cheapest matching TheTCGMarketplace copy (1¢ under, or 10¢ at $10+), but never below GOG Cash + 10% or the best WTB offer; sell to a WTB buyer if they already pay that; sell to GOG if it pays within 15% of the cheapest listing.</p>
+        </div>
+        <div class="panel-actions">
+          <select id="sell-plan-owner" aria-label="Whose cards">
+            <option value="">All owners</option>
+          </select>
+          <select id="sell-plan-route" aria-label="Show">
+            <option value="">All recommendations</option>
+            <option value="list">List on TCGMP</option>
+            <option value="wtb">Sell to WTB buyer</option>
+            <option value="gog">Sell to GOG</option>
+            <option value="review">Manual review</option>
+          </select>
+        </div>
+      </div>
+      <div id="sell-plan-totals" class="totals" hidden></div>
+      <div id="sell-plan" class="card-grid"></div>
+      <button id="sell-plan-more" class="secondary good-deals-toggle" hidden></button>
+    </section>
+
     <section class="panel" id="good-deals-panel">
       <div class="panel-header">
         <div>

@@ -88,11 +88,16 @@ async function loadOwners() {
   try {
     const owners = await fetchJSON("/api/owners");
     knownOwnersList.innerHTML = owners.map((o) => `<option value="${escapeHtml(o)}">`).join("");
-    const selected = ownerFilter.value;
-    ownerFilter.innerHTML =
+    const ownerOptions =
       '<option value="">All owners</option>' +
       owners.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+    const selected = ownerFilter.value;
+    ownerFilter.innerHTML = ownerOptions;
     ownerFilter.value = selected;
+    // Sell plan defaults to the Shared cards (the ones being sold).
+    const planSelected = sellPlanOwner.options.length > 1 ? sellPlanOwner.value : rememberedSellPlanOwner(owners);
+    sellPlanOwner.innerHTML = ownerOptions;
+    sellPlanOwner.value = planSelected;
   } catch (err) {
     // Non-critical — the owner dropdown just stays empty.
   }
@@ -347,6 +352,133 @@ async function loadWatchlist() {
     renderWatchlist(items);
   } catch (err) {
     showError(watchlistError, err.message);
+  }
+  loadSellPlan();
+}
+
+// ---- Sell plan: a recommendation per card (same rules as the dashboard's) ----
+const sellPlanEl = document.getElementById("sell-plan");
+const sellPlanOwner = document.getElementById("sell-plan-owner");
+const sellPlanRoute = document.getElementById("sell-plan-route");
+const sellPlanTotals = document.getElementById("sell-plan-totals");
+const sellPlanMore = document.getElementById("sell-plan-more");
+const SELL_PLAN_PAGE = 40;
+const SELL_RULES = {
+  undercutSmall: 0.01, // under switchPrice
+  undercutBig: 0.1, // at or above switchPrice
+  switchPrice: 10,
+  floorOverGog: 0.1, // never list below GOG Cash + 10%
+  gogWithin: 0.15, // sell to GOG if GOG Cash * 1.15 beats the cheapest listing
+  sanityFactor: 3, // cheapest listing vs CK price beyond 3x either way: likely a data error
+};
+const SELL_ROUTES = {
+  list: { label: "List on TCGMP", className: "tcg-marketplace" },
+  wtb: { label: "Sell to WTB buyer", className: "tcg-wtb" },
+  gog: { label: "Sell to GOG", className: "gog-price" },
+  review: { label: "Manual review", className: "meta" },
+};
+
+function rememberedSellPlanOwner(owners) {
+  let saved = null;
+  try {
+    saved = localStorage.getItem("sellPlanOwner");
+  } catch (err) {
+    // Not remembered.
+  }
+  if (saved !== null && (saved === "" || owners.includes(saved))) return saved;
+  return owners.includes("Shared") ? "Shared" : "";
+}
+
+function sellRecommendation(item) {
+  const cheapest = item.tcgmarketplace_price;
+  const wtb = item.tcgmarketplace_wtb_price;
+  const gog = gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER);
+  const ck = item.latest_price;
+  if (cheapest == null) {
+    return { route: "review", reason: "No matching Near Mint copy listed to price against" };
+  }
+  if (ck && (cheapest > ck * SELL_RULES.sanityFactor || cheapest < ck / SELL_RULES.sanityFactor)) {
+    return { route: "review", reason: `Listing ${formatPrice(cheapest)} vs CK ${formatPrice(ck)} looks off` };
+  }
+  const undercut = cheapest >= SELL_RULES.switchPrice ? SELL_RULES.undercutBig : SELL_RULES.undercutSmall;
+  const floor = Math.max(gog == null ? 0 : gog * (1 + SELL_RULES.floorOverGog), wtb == null ? 0 : wtb);
+  const price = Math.round(Math.max(cheapest - undercut, floor, 0.01) * 100) / 100;
+  if (wtb != null && wtb >= price) return { route: "wtb", price: wtb };
+  if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest) return { route: "gog", price: gog };
+  return { route: "list", price };
+}
+
+function sellPlanCardEl({ item, rec }) {
+  const el = document.createElement("div");
+  el.className = "card";
+  const qty = item.quantity || 1;
+  const route = SELL_ROUTES[rec.route];
+  const gainLoss = gainLossInfo(item);
+  const action =
+    rec.route === "review"
+      ? `<div class="meta">${escapeHtml(rec.reason)}</div>`
+      : `<div class="price">${rec.route === "list" ? "List at " : ""}${formatPrice(rec.price)}${qty > 1 ? ` <span class="meta">×${qty} = ${formatPrice(rec.price * qty)}</span>` : ""}</div>`;
+  el.innerHTML = `
+    ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" loading="lazy">` : ""}
+    <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
+    <div class="meta">${escapeHtml(item.set_name || "")}</div>
+    <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
+    <div class="${route.className}"><strong>${route.label}</strong></div>
+    ${action}
+    <div class="meta">Card Kingdom price: ${formatPrice(item.latest_price)}</div>
+    ${gainLoss ? `<div class="delta ${gainLoss.direction}">${gainLoss.text}</div>` : ""}
+    <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+    <div class="meta gog-price">GOG Cash: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER))}</div>
+    <div class="meta gog-price">GOG Credit: ${formatPrice(gogPrice(item.cardkingdom_buylist_price, GOG_CREDIT_MULTIPLIER))}</div>
+    <div class="meta tcg-marketplace">TheTCGMarketplace: ${formatPrice(item.tcgmarketplace_price)}</div>
+    <div class="meta tcg-wtb">TheTCGMarketplace WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>
+  `;
+  return el;
+}
+
+let sellPlanEntries = [];
+
+function renderSellPlan() {
+  // Totals per route for the whole selection, regardless of the route filter.
+  const money = (n) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  sellPlanTotals.innerHTML = Object.entries(SELL_ROUTES)
+    .map(([key, { label }]) => {
+      const group = sellPlanEntries.filter((e) => e.rec.route === key);
+      const copies = group.reduce((n, e) => n + (e.item.quantity || 1), 0);
+      const value = group.reduce((n, e) => n + (e.rec.price || 0) * (e.item.quantity || 1), 0);
+      return `<div><div class="label">${escapeHtml(label)}</div><div class="value">${group.length}</div><div class="label">${copies} copies${key === "review" ? "" : ` · ${money(value)}`}</div></div>`;
+    })
+    .join("");
+  sellPlanTotals.hidden = !sellPlanEntries.length;
+
+  const shown = sellPlanEntries
+    .filter((e) => !sellPlanRoute.value || e.rec.route === sellPlanRoute.value)
+    .sort((a, b) => (b.rec.price || 0) * (b.item.quantity || 1) - (a.rec.price || 0) * (a.item.quantity || 1));
+  sellPlanEl.innerHTML = "";
+  if (!shown.length) {
+    sellPlanEl.innerHTML = '<p class="empty">No cards for these filters.</p>';
+    sellPlanMore.hidden = true;
+    return;
+  }
+  let count = 0;
+  const showNext = () => {
+    shown.slice(count, count + SELL_PLAN_PAGE).forEach((entry) => sellPlanEl.appendChild(sellPlanCardEl(entry)));
+    count = Math.min(count + SELL_PLAN_PAGE, shown.length);
+    sellPlanMore.hidden = count >= shown.length;
+    sellPlanMore.textContent = `Show more (${shown.length - count} left)`;
+  };
+  sellPlanMore.onclick = showNext;
+  showNext();
+}
+
+async function loadSellPlan() {
+  try {
+    const owner = sellPlanOwner.value;
+    const items = await fetchJSON(`/api/watchlist${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`);
+    sellPlanEntries = items.map((item) => ({ item, rec: sellRecommendation(item) }));
+    renderSellPlan();
+  } catch (err) {
+    sellPlanEl.innerHTML = `<p class="empty">Couldn't load the sell plan: ${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -769,6 +901,15 @@ importInput.addEventListener("change", () => {
 });
 ownerFilter.addEventListener("change", loadWatchlist);
 sortSelect.addEventListener("change", loadWatchlist);
+sellPlanOwner.addEventListener("change", () => {
+  try {
+    localStorage.setItem("sellPlanOwner", sellPlanOwner.value);
+  } catch (err) {
+    // Non-critical.
+  }
+  loadSellPlan();
+});
+sellPlanRoute.addEventListener("change", renderSellPlan);
 
 try {
   currentOwnerInput.value = localStorage.getItem("currentOwner") || "";
@@ -783,6 +924,7 @@ currentOwnerInput.addEventListener("change", () => {
   }
 });
 
-loadOwners();
+// Owners first, so the Sell plan's owner (default Shared) is set before
+// the first loadWatchlist() -> loadSellPlan().
+loadOwners().then(loadWatchlist);
 const conditionsLoaded = loadConditions();
-loadWatchlist();

@@ -198,6 +198,24 @@ button.secondary {
 
 .good-deals-toggle[hidden] { display: none; }
 
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.totals[hidden] { display: none; }
+
+.totals > div {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.totals .label { color: var(--muted); font-size: 0.8em; }
+.totals .value { font-weight: 700; font-size: 1.2em; }
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
