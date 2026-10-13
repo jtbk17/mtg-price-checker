@@ -356,6 +356,13 @@ function goodDealInfo(item) {
   return { gogCash, margin: gogCash - item.tcgmarketplace_price };
 }
 
+// Only the best few deals are shown until expanded: with a large
+// watchlist there can be 100+ (many worth cents), which pushed the
+// watchlist itself far down the page.
+const GOOD_DEALS_PREVIEW = 10;
+let goodDealsExpanded = false;
+const goodDealsToggle = document.getElementById("good-deals-toggle");
+
 function renderGoodDeals(items) {
   const deals = items
     .map((item) => ({ item, deal: goodDealInfo(item) }))
@@ -363,12 +370,18 @@ function renderGoodDeals(items) {
     .sort((a, b) => b.deal.margin - a.deal.margin);
 
   goodDealsEl.innerHTML = "";
+  goodDealsToggle.hidden = deals.length <= GOOD_DEALS_PREVIEW;
+  goodDealsToggle.textContent = goodDealsExpanded ? "Show top 10 only" : `Show all ${deals.length} deals`;
+  goodDealsToggle.onclick = () => {
+    goodDealsExpanded = !goodDealsExpanded;
+    renderGoodDeals(items);
+  };
   if (!deals.length) {
     goodDealsEl.innerHTML = '<p class="empty">No deals right now — nothing in your watchlist is currently cheaper on TheTCGMarketplace than GOG Cash.</p>';
     return;
   }
 
-  deals.forEach(({ item, deal }) => {
+  (goodDealsExpanded ? deals : deals.slice(0, GOOD_DEALS_PREVIEW)).forEach(({ item, deal }) => {
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `

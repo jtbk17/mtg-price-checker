@@ -190,6 +190,14 @@ button.secondary {
   color: var(--text);
 }
 
+.good-deals-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.good-deals-toggle[hidden] { display: none; }
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
