@@ -190,7 +190,7 @@ _import_jobs = {}
 _import_jobs_lock = threading.Lock()
 
 
-def _run_import_job(job_id, rows, owner):
+def _run_import_job(job_id, rows, owner, confirm_removals):
     def on_progress(phase, done, total):
         with _import_jobs_lock:
             job = _import_jobs.get(job_id)
@@ -200,7 +200,7 @@ def _run_import_job(job_id, rows, owner):
     try:
         result = _db_sync(
             lambda: manabox_import.import_rows(
-                rows, owner=owner, on_progress=on_progress
+                rows, owner=owner, on_progress=on_progress, confirm_removals=confirm_removals
             )
         )
         with _import_jobs_lock:
@@ -225,6 +225,7 @@ def api_watchlist_import():
     if not file:
         return jsonify({"error": "No file uploaded"}), 400
     owner = (request.form.get("owner") or "").strip() or None
+    confirm_removals = (request.form.get("confirmRemovals") or "").lower() == "true"
     try:
         rows = manabox_import.parse_csv(file.read())
     except ValueError as exc:
@@ -247,7 +248,7 @@ def api_watchlist_import():
             "result": None,
             "error": None,
         }
-    threading.Thread(target=_run_import_job, args=(job_id, rows, owner), daemon=True).start()
+    threading.Thread(target=_run_import_job, args=(job_id, rows, owner, confirm_removals), daemon=True).start()
     return jsonify({"jobId": job_id}), 202
 
 

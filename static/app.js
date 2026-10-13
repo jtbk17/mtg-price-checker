@@ -559,7 +559,7 @@ async function refreshPrices() {
   }
 }
 
-async function importCsv(file) {
+async function importCsv(file, confirmRemovals = false) {
   if (!currentOwner()) {
     importStatus.hidden = false;
     importStatus.className = "error";
@@ -577,6 +577,7 @@ async function importCsv(file) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("owner", currentOwner());
+  formData.append("confirmRemovals", String(confirmRemovals));
 
   try {
     const { jobId } = await fetchJSON("/api/watchlist/import", { method: "POST", body: formData });
@@ -609,14 +610,27 @@ async function pollImportJob(jobId, file) {
         importStatus.textContent = job.error;
       } else {
         const result = job.result;
-        // Imports only add (never remove or overwrite): new cards get new
-        // entries, already-tracked ones get these copies added on top.
+        // A CSV that's missing most of what this owner already has
+        // tracked gets held back rather than silently deleted — confirmed
+        // live that an accidental partial/stale import can otherwise wipe
+        // almost an entire collection with no warning. Re-running with
+        // explicit confirmation is the only way those removals go through.
+        if (result.needs_confirmation) {
+          importStatus.className = "error";
+          importStatus.textContent =
+            `This CSV is missing ${result.pending_removal_count} card(s) you're currently tracking as ${currentOwner()} — ` +
+            "importing would untrack all of them. Nothing was removed.";
+          const proceed = window.confirm(
+            `${result.pending_removal_count} card(s) you're tracking as ${currentOwner()} aren't in this CSV.\n\n` +
+              "Untrack all of them and finish this import? This can't be undone from here."
+          );
+          if (proceed) {
+            await importCsv(file, true);
+          }
+          return;
+        }
         importStatus.className = result.skipped ? "error" : "status-info";
-        const summary =
-          `Added ${result.added_new} new card(s)` +
-          (result.added_copies ? `, and more copies to ${result.added_copies} you already track` : "") +
-          (result.skipped ? `, skipped ${result.skipped}` : "") +
-          ". Nothing was removed.";
+        const summary = `Imported ${result.imported} card(s)${result.skipped ? `, skipped ${result.skipped}` : ""}${result.removed ? `, removed ${result.removed} no longer in this CSV` : ""}.`;
         const errorList =
           result.errors && result.errors.length
             ? `<ul class="import-errors">${result.errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("")}</ul>`

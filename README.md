@@ -28,9 +28,7 @@ py app.py
 ```
 Open http://127.0.0.1:5000, search, and hit **Track** (or use **Import
 ManaBox CSV** to bulk-add a whole collection export at once — matched by
-its `Scryfall ID` column). Imports only ever add: cards already tracked get
-the CSV's copies added to their quantity, and nothing is removed — so
-import each CSV once. Tracking, untracking, or importing automatically
+its `Scryfall ID` column). Tracking, untracking, or importing automatically
 syncs `tcg_prices.db` to the GitHub Release asset the nightly job and
 dashboard also read from (see `release_sync.py`), so changes show up there
 without a manual step. If the sync fails (e.g. you're offline), it's logged
