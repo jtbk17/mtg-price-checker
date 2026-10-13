@@ -334,6 +334,7 @@
     // Same rule as the local app (static/app.js): GOG pays this multiple
     // of Card Kingdom's buylist in cash.
     const GOG_CASH_MULTIPLIER = 1.15;
+    const GOG_CREDIT_MULTIPLIER = 1.38;  // same as static/app.js
     // Cards are rendered a page at a time: drawing all ~9,500 at once
     // (each with an image and a sparkline) locks up a phone.
     const PAGE_SIZE = 40;
@@ -535,6 +536,8 @@
         ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
         ${gainLossHtml(item)}
         <div class="meta ck-buylist">CK buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
+        <div class="meta gog-price">GOG Cash: ${formatPrice(item.cardkingdom_buylist_price == null ? null : item.cardkingdom_buylist_price * GOG_CASH_MULTIPLIER)}</div>
+        <div class="meta gog-price">GOG Credit: ${formatPrice(item.cardkingdom_buylist_price == null ? null : item.cardkingdom_buylist_price * GOG_CREDIT_MULTIPLIER)}</div>
         ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
         ${item.tcgmarketplace_wtb_price != null ? `<div class="meta tcg-wtb">TCGMP WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>` : ""}
         <canvas></canvas>
