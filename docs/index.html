@@ -523,6 +523,21 @@
       return `<div class="meta">Cost ${formatPrice(item.purchase_price)}/ea · <span class="delta ${direction}">${sign}${total.toFixed(2)} (${sign}${(pct * 100).toFixed(1)}%)</span></div>`;
     }
 
+    // The price lines every watchlist-based card shows (watchlist, Good
+    // deals, Sell plan) — kept in one place so the sections stay in step.
+    function priceLinesHtml(item, { ckPrice = false } = {}) {
+      const buylist = item.cardkingdom_buylist_price;
+      return `
+        ${ckPrice ? `<div class="meta">CK price: ${formatPrice(item.latest_price)}</div>` : ""}
+        ${gainLossHtml(item)}
+        <div class="meta ck-buylist">CK buylist: ${formatPrice(buylist)}</div>
+        <div class="meta gog-price">GOG Cash: ${formatPrice(buylist == null ? null : buylist * GOG_CASH_MULTIPLIER)}</div>
+        <div class="meta gog-price">GOG Credit: ${formatPrice(buylist == null ? null : buylist * GOG_CREDIT_MULTIPLIER)}</div>
+        <div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>
+        <div class="meta tcg-wtb">TCGMP WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>
+      `;
+    }
+
     function watchlistCard(item) {
       const delta = deltaInfo(item.latest_price, item.previous_price);
       const qty = item.quantity || 1;
@@ -534,12 +549,7 @@
         ${cardMetaHtml(item)}
         <div class="price">${formatPrice(item.latest_price)}${qty > 1 && item.latest_price != null ? ` <span class="meta">(${formatPrice(item.latest_price * qty)} total)</span>` : ""}</div>
         ${delta ? `<div class="delta ${delta.direction}">${delta.text}</div>` : ""}
-        ${gainLossHtml(item)}
-        <div class="meta ck-buylist">CK buylist: ${formatPrice(item.cardkingdom_buylist_price)}</div>
-        <div class="meta gog-price">GOG Cash: ${formatPrice(item.cardkingdom_buylist_price == null ? null : item.cardkingdom_buylist_price * GOG_CASH_MULTIPLIER)}</div>
-        <div class="meta gog-price">GOG Credit: ${formatPrice(item.cardkingdom_buylist_price == null ? null : item.cardkingdom_buylist_price * GOG_CREDIT_MULTIPLIER)}</div>
-        ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
-        ${item.tcgmarketplace_wtb_price != null ? `<div class="meta tcg-wtb">TCGMP WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>` : ""}
+        ${priceLinesHtml(item)}
         <canvas></canvas>
       `;
       return el;
@@ -562,9 +572,8 @@
         ${cardImageHtml(item)}
         <div class="name">${escapeHtml(item.name)}</div>
         ${cardMetaHtml(item)}
-        <div class="meta tcg-marketplace">TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>
-        <div class="meta gog-price">GOG Cash: ${formatPrice(deal.gogCash)}</div>
-        <div class="price margin">+${formatPrice(deal.margin)}</div>
+        <div class="price margin">+${formatPrice(deal.margin)} margin</div>
+        ${priceLinesHtml(item, { ckPrice: true })}
       `;
       return el;
     }
@@ -802,9 +811,7 @@
         ${cardMetaHtml(item)}
         <div class="${route.className}"><strong>${route.label}</strong></div>
         ${action}
-        ${item.tcgmarketplace_price != null ? `<div class="meta tcg-marketplace">Cheapest TCGMP: ${formatPrice(item.tcgmarketplace_price)}</div>` : ""}
-        ${item.tcgmarketplace_wtb_price != null ? `<div class="meta tcg-wtb">Best WTB: ${formatPrice(item.tcgmarketplace_wtb_price)}</div>` : ""}
-        ${rec.gog != null ? `<div class="meta gog-price">GOG Cash: ${formatPrice(rec.gog)}</div>` : ""}
+        ${priceLinesHtml(item, { ckPrice: true })}
       `;
       return el;
     }
