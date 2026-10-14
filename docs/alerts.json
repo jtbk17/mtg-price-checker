@@ -1,23 +1,4 @@
 {
-  "generated_at": "2026-10-13T14:47:03.474809+00:00",
-  "alerts": [
-    {
-      "name": "Phyrexian Tower",
-      "set_name": "Modern Horizons 3",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 49.99,
-      "price_now": 54.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Ruinous Ultimatum",
-      "set_name": "Special Guests",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 19.99,
-      "price_now": 22.99,
-      "pct_change": 15.0
-    }
-  ]
+  "generated_at": "2026-10-14T12:42:23.890304+00:00",
+  "alerts": []
 }
