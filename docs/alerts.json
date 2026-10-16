@@ -1,4 +1,59 @@
 {
-  "generated_at": "2026-10-15T12:25:29.279097+00:00",
-  "alerts": []
+  "generated_at": "2026-10-16T12:08:59.534725+00:00",
+  "alerts": [
+    {
+      "name": "Overlord of the Boilerbilges",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "The Ten Rings",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 17.99,
+      "price_now": 19.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Polluted Delta",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Tamiyo, Inquisitive Student // Tamiyo, Seasoned Scholar",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Oath of Teferi",
+      "set_name": "Dominaria",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 5.99,
+      "price_now": 8.49,
+      "pct_change": 41.7
+    },
+    {
+      "name": "Marrow-Gnawer",
+      "set_name": "Bloomburrow Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    }
+  ]
 }
