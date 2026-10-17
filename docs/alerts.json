@@ -1,59 +1,32 @@
 {
-  "generated_at": "2026-10-16T12:08:59.534725+00:00",
+  "generated_at": "2026-10-17T11:39:12.911472+00:00",
   "alerts": [
     {
-      "name": "Overlord of the Boilerbilges",
-      "set_name": "Duskmourn: House of Horror",
+      "name": "Ganax, Astral Hunter",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
+      "price_before": 10.99,
+      "price_now": 12.99,
+      "pct_change": 18.2
     },
     {
-      "name": "The Ten Rings",
-      "set_name": "Marvel Super Heroes",
+      "name": "Fiery Islet",
+      "set_name": "Assassin's Creed",
       "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 17.99,
-      "price_now": 19.99,
-      "pct_change": 11.1
-    },
-    {
-      "name": "Polluted Delta",
-      "set_name": "Modern Horizons 3",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Tamiyo, Inquisitive Student // Tamiyo, Seasoned Scholar",
-      "set_name": "Modern Horizons 3",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 49.99,
-      "price_now": 54.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Oath of Teferi",
-      "set_name": "Dominaria",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 5.99,
-      "price_now": 8.49,
-      "pct_change": 41.7
-    },
-    {
-      "name": "Marrow-Gnawer",
-      "set_name": "Bloomburrow Commander",
-      "printing": "Normal",
       "owner": "Joel",
       "price_before": 29.99,
       "price_now": 32.99,
       "pct_change": 10.0
+    },
+    {
+      "name": "Unwinding Clock",
+      "set_name": "The Brothers' War Retro Artifacts",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
     }
   ]
 }
