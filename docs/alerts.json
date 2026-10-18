@@ -1,32 +1,32 @@
 {
-  "generated_at": "2026-10-17T11:39:12.911472+00:00",
+  "generated_at": "2026-10-18T12:03:13.077294+00:00",
   "alerts": [
     {
-      "name": "Ganax, Astral Hunter",
-      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "name": "Witch-king of Angmar",
+      "set_name": "The Hobbit Eternal",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 10.99,
-      "price_now": 12.99,
-      "pct_change": 18.2
+      "price_before": 39.99,
+      "price_now": 44.99,
+      "pct_change": 12.5
     },
     {
-      "name": "Fiery Islet",
-      "set_name": "Assassin's Creed",
+      "name": "Walk-In Closet // Forgotten Cellar",
+      "set_name": "Duskmourn: House of Horror",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
     },
     {
-      "name": "Unwinding Clock",
-      "set_name": "The Brothers' War Retro Artifacts",
-      "printing": "Normal",
+      "name": "Parallel Lives",
+      "set_name": "Marvel Universe",
+      "printing": "Foil",
       "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
+      "price_before": 39.99,
+      "price_now": 44.99,
+      "pct_change": 12.5
     }
   ]
 }
