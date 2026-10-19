@@ -1,32 +1,32 @@
 {
-  "generated_at": "2026-10-18T12:03:13.077294+00:00",
+  "generated_at": "2026-10-19T14:19:30.373729+00:00",
   "alerts": [
     {
-      "name": "Witch-king of Angmar",
-      "set_name": "The Hobbit Eternal",
-      "printing": "Foil",
+      "name": "Ultron the Annihilator",
+      "set_name": "Marvel Super Heroes Commander",
+      "printing": "Normal",
       "owner": "Joel",
-      "price_before": 39.99,
-      "price_now": 44.99,
-      "pct_change": 12.5
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
     },
     {
-      "name": "Walk-In Closet // Forgotten Cellar",
-      "set_name": "Duskmourn: House of Horror",
+      "name": "Marsh Flats",
+      "set_name": "Special Guests",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 19.99,
-      "price_now": 22.99,
-      "pct_change": 15.0
+      "price_before": 99.99,
+      "price_now": 109.99,
+      "pct_change": 10.0
     },
     {
-      "name": "Parallel Lives",
-      "set_name": "Marvel Universe",
-      "printing": "Foil",
+      "name": "Jet Medallion",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
       "owner": "Joel",
-      "price_before": 39.99,
-      "price_now": 44.99,
-      "pct_change": 12.5
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
     }
   ]
 }
