@@ -1,32 +1,4 @@
 {
-  "generated_at": "2026-10-19T14:19:30.373729+00:00",
-  "alerts": [
-    {
-      "name": "Ultron the Annihilator",
-      "set_name": "Marvel Super Heroes Commander",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Marsh Flats",
-      "set_name": "Special Guests",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 99.99,
-      "price_now": 109.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Jet Medallion",
-      "set_name": "Modern Horizons 3",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
-    }
-  ]
+  "generated_at": "2026-10-20T12:32:48.467247+00:00",
+  "alerts": []
 }
