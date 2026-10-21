@@ -1,4 +1,59 @@
 {
-  "generated_at": "2026-10-20T12:32:48.467247+00:00",
-  "alerts": []
+  "generated_at": "2026-10-21T12:43:21.586194+00:00",
+  "alerts": [
+    {
+      "name": "Flawless Maneuver",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Forest",
+      "set_name": "Year of the Snake 2025",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Ulamog, the Defiler",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Ulamog, the Defiler",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Victimize",
+      "set_name": "Special Guests",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Ephemerate",
+      "set_name": "Strixhaven Mystical Archive",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 29.99,
+      "pct_change": 20.0
+    }
+  ]
 }
