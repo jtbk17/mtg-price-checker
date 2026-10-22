@@ -112,7 +112,10 @@ def _printing_number(result):
     always match Scryfall's set code (The List is "plist" here, "plst" on
     Scryfall), so the set is checked via _set_code() instead."""
     filename = unquote((result.get("image") or "").rsplit("/", 1)[-1])
-    key = filename.split(" ", 1)[0]
+    # Some images have no card name after the printing ("mh1_40.webp"),
+    # so drop the extension before taking the first word.
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    key = stem.split(" ", 1)[0]
     return key.split("_", 1)[1].lower() if "_" in key else None
 
 

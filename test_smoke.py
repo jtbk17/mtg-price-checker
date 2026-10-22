@@ -1453,6 +1453,78 @@ class MarketDealsTests(unittest.TestCase):
         self.assertIn(("pid-deal", True, "en", "Near Mint"), listing_calls)
 
 
+class AuctionDealsTests(unittest.TestCase):
+    def setUp(self):
+        import auction_deals
+
+        self.ad = auction_deals
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp_dir.cleanup)
+        self.db_path = Path(self.tmp_dir.name) / "all_cards_auctions.db"
+        conn = ach._get_connection(self.db_path)
+        conn.executemany(
+            "INSERT INTO cards (mtgjson_uuid, name, set_code, set_name, collector_number, finishes, lang, is_token) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+            [
+                ("u-wurm", "Impervious Greatwurm", "2X2", "Double Masters 2022", "152", '["nonfoil","foil"]', "en"),
+                # Double-faced: two uuids for one printing, prices on the second.
+                ("u-face-a", "Tithing Blade", "LCI", "Lost Caverns", "128", '["nonfoil","foil"]', "en"),
+                ("u-face-b", "Tithing Blade", "LCI", "Lost Caverns", "128", '["nonfoil","foil"]', "en"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+    def _auction(self, **kw):
+        base = {
+            "new_bidding_id": "CBP-SG-1", "source_region": "SG", "product_id": 1, "crd_language": "EN",
+            "crd_condition": "NM", "crd_foil": "0", "graded": 0, "current_bid": None, "min_price": "2.00",
+            "starting_date": "2999-01-01T00:00:00.000Z", "duration": 3, "quantity": 1,
+            "name": " [2X2] Impervious Greatwurm (V1 - Regular)", "setcode": "2X2", "setname": "Double Masters 2022",
+            "image": "https://x/uploads/products/Magic%20The%20Gathering/Double%20Masters%202022/2x2_152%20Impervious%20Greatwurm.webp",
+        }
+        base.update(kw)
+        return base
+
+    def test_finds_deals_at_next_bid_or_buyout_for_near_mint_only(self):
+        auctions = [
+            self._auction(),  # next bid $2 vs GOG Cash 3.70*1.15 = $4.25: deal
+            self._auction(new_bidding_id="CBP-SG-2", crd_condition="SP"),  # played: never a deal
+            self._auction(new_bidding_id="CBP-SG-3", current_bid="5.00"),  # next bid $5.50: only the buyout could be
+            self._auction(  # image named by printing only, double-faced
+                new_bidding_id="CBP-SG-4", name=" [LCI] Tithing Blade // Consuming Sepulcher", setcode="LCI",
+                crd_foil="1", image="https://x/uploads/products/Magic%20The%20Gathering/LCI/lci_128.webp",
+            ),
+            self._auction(new_bidding_id="CBP-SG-5", starting_date="2000-01-01T00:00:00.000Z"),  # ended: dropped
+        ]
+        details = {
+            "CBP-SG-1": {"buyout_price": 3.5, "bid_increment": 0.5},
+            "CBP-SG-2": {"buyout_price": 3.5, "bid_increment": 0.5},
+            "CBP-SG-3": {"buyout_price": 4.0, "bid_increment": 0.5},
+            "CBP-SG-4": {"buyout_price": 1.0, "bid_increment": 0.25},
+        }
+        prices = {
+            "u-wurm": {"buylist_normal": 3.70, "buylist_foil": None},
+            "u-face-b": {"buylist_normal": None, "buylist_foil": 0.75},
+        }
+        with patch.object(self.ad, "fetch_auctions", return_value=auctions), \
+             patch.object(self.ad, "fetch_details", side_effect=lambda a: details.get(a["new_bidding_id"], {})), \
+             patch.object(self.ad.cardkingdom, "get_all_prices", return_value=prices), \
+             patch.object(self.ad.tcgmarketplace, "matching_listings", return_value=[(3.2, 1)]):
+            rows = {r["id"]: r for r in self.ad.find_auction_deals(self.db_path)}
+
+        self.assertNotIn("CBP-SG-5", rows)
+        self.assertEqual(rows["CBP-SG-1"]["gog_cash"], 4.25)
+        self.assertEqual(rows["CBP-SG-1"]["next_bid"], 2.0)
+        self.assertTrue(rows["CBP-SG-1"]["is_deal"])
+        self.assertEqual(rows["CBP-SG-1"]["cheapest_listing"], 3.2)
+        self.assertFalse(rows["CBP-SG-2"]["is_deal"])
+        self.assertEqual(rows["CBP-SG-3"]["next_bid"], 5.5)
+        self.assertTrue(rows["CBP-SG-3"]["is_deal"])  # buyout $4.00 < $4.25
+        self.assertEqual(rows["CBP-SG-4"]["collector_number"], "128")
+        self.assertEqual(rows["CBP-SG-4"]["cardkingdom_buylist_price"], 0.75)  # the priced face
+
+
 class MtgNewsFeedTests(unittest.TestCase):
     def _fake_response(self, xml_bytes):
         resp = type("Resp", (), {})()

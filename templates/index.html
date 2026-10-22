@@ -20,6 +20,7 @@
       <button type="button" class="tab" data-panel="sell-plan-panel" aria-expanded="false">Sell plan</button>
       <button type="button" class="tab" data-panel="good-deals-panel" aria-expanded="false">Good Deals</button>
       <button type="button" class="tab" data-panel="market-deals-panel" aria-expanded="false">Market deals</button>
+      <button type="button" class="tab" data-panel="auctions-panel" aria-expanded="false">Auctions</button>
       <button type="button" class="tab" data-panel="watchlist-panel" aria-expanded="false">Watchlist</button>
     </nav>
   </header>
@@ -104,6 +105,23 @@
       <div id="market-deals-totals" class="totals" hidden></div>
       <div id="market-deals" class="card-grid"></div>
       <button id="market-deals-more" class="secondary good-deals-toggle" hidden></button>
+    </section>
+
+    <section class="panel" id="auctions-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Auctions</h2>
+          <p class="section-sub" id="auctions-sub">Live TheTCGMarketplace Magic auctions vs what GOG Cash pays for that exact card, checked every 30 minutes</p>
+        </div>
+        <div class="panel-actions">
+          <select id="auctions-filter" aria-label="Show auctions">
+            <option value="deals">Deals only</option>
+            <option value="nm">All Near Mint</option>
+            <option value="all">All auctions</option>
+          </select>
+        </div>
+      </div>
+      <div id="auctions" class="card-grid"></div>
     </section>
 
     <section class="panel" id="watchlist-panel">

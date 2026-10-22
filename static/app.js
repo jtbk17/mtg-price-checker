@@ -1078,6 +1078,94 @@ marketDealsSearch.addEventListener("input", () => {
   marketDealsSearchTimer = setTimeout(renderMarketDeals, 200);
 });
 
+// ---- Auctions (published every 30 minutes by auction_deals.py) ----
+const auctionsEl = document.getElementById("auctions");
+const auctionsSub = document.getElementById("auctions-sub");
+const auctionsFilter = document.getElementById("auctions-filter");
+let auctions = [];
+let auctionsLoaded = false;
+
+function auctionTimeLeft(endsAt) {
+  if (!endsAt) return "";
+  const ms = new Date(endsAt) - Date.now();
+  if (ms <= 0) return "Ended";
+  const mins = Math.floor(ms / 60000);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  return `Ends in ${d ? `${d}d ` : ""}${d || h ? `${h}h ` : ""}${m}m`;
+}
+
+function auctionCardEl(a) {
+  const el = document.createElement("div");
+  el.className = "card";
+  const vsGog = (margin) =>
+    margin == null ? "" : ` <span class="delta ${margin > 0 ? "up" : "down"}">(${margin > 0 ? "+" : "-"}${formatPrice(Math.abs(margin))} vs GOG)</span>`;
+  el.innerHTML = `
+    ${a.image_url ? `<img class="card-image" src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.name || "")}" loading="lazy">` : ""}
+    <div class="name">${escapeHtml(a.name)}</div>
+    <div class="meta">${escapeHtml(a.set_name || "")}${a.collector_number ? ` #${escapeHtml(a.collector_number)}` : ""}</div>
+    <div class="meta">${escapeHtml(FINISH_LABELS[a.finish] || a.finish)} · ${escapeHtml(a.condition || "")}${a.lang && a.lang !== "en" ? ` · ${escapeHtml(a.lang.toUpperCase())}` : ""}${a.graded ? " · Graded" : ""}${a.quantity > 1 ? ` · ×${a.quantity}` : ""}</div>
+    <div class="${a.is_deal ? "delta up" : "meta"}"><strong>${a.is_deal ? "Deal" : a.gog_cash == null ? "No CK price" : "Not a deal"}</strong> · <span class="ends" data-ends="${escapeHtml(a.ends_at || "")}">${auctionTimeLeft(a.ends_at)}</span></div>
+    ${a.next_bid != null ? `<div class="meta">${a.current_bid == null ? "Starting bid" : "Next bid"}: ${formatPrice(a.next_bid)}${vsGog(a.margin)}</div>` : ""}
+    ${a.buyout_price != null ? `<div class="meta">Buyout: ${formatPrice(a.buyout_price)}${vsGog(a.buyout_margin)}</div>` : ""}
+    <div class="meta gog-price">GOG Cash: ${formatPrice(a.gog_cash)}</div>
+    <div class="meta ck-buylist">Card Kingdom buylist: ${formatPrice(a.cardkingdom_buylist_price)}</div>
+    <div class="meta tcg-marketplace">Cheapest TheTCGMarketplace listing: ${formatPrice(a.cheapest_listing)}</div>
+    ${a.seller ? `<div class="meta">Seller: ${escapeHtml(a.seller)}</div>` : ""}
+  `;
+  return el;
+}
+
+function renderAuctions() {
+  const filter = auctionsFilter.value;
+  const shown = auctions.filter(
+    (a) => filter === "all" || (filter === "deals" ? a.is_deal : (a.condition || "").toUpperCase() === "NM")
+  );
+  auctionsEl.innerHTML = "";
+  if (!shown.length) {
+    auctionsEl.innerHTML = `<p class="empty">${filter === "deals" ? "No auction deals right now." : "No matching auctions."}</p>`;
+    return;
+  }
+  shown.forEach((a) => auctionsEl.appendChild(auctionCardEl(a)));
+}
+
+async function loadAuctions() {
+  auctionsEl.innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const data = await fetchJSON("/api/auctions");
+    auctions = data.auctions || [];
+    auctionsLoaded = true;
+    auctionsSub.textContent =
+      `${data.total_deals} deal${data.total_deals === 1 ? "" : "s"} among ${data.total_auctions} live Magic auctions — ` +
+      `a deal is Near Mint and winning at the next bid (or buying out) costs less than GOG Cash — checked ${new Date(data.generated_at).toLocaleString()}`;
+    renderAuctions();
+  } catch (err) {
+    auctionsEl.innerHTML = `<p class="empty">Couldn't load auctions: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+try {
+  const savedAuctionsFilter = localStorage.getItem("auctionsFilter");
+  if (savedAuctionsFilter !== null && [...auctionsFilter.options].some((o) => o.value === savedAuctionsFilter)) {
+    auctionsFilter.value = savedAuctionsFilter;
+  }
+} catch (err) {
+  // Not remembered.
+}
+auctionsFilter.addEventListener("change", () => {
+  try {
+    localStorage.setItem("auctionsFilter", auctionsFilter.value);
+  } catch (err) {
+    // Non-critical.
+  }
+  renderAuctions();
+});
+// Keep the countdowns current without re-rendering the cards.
+setInterval(() => {
+  document.querySelectorAll("#auctions .ends").forEach((el) => (el.textContent = auctionTimeLeft(el.dataset.ends)));
+}, 30000);
+
 // Section buttons at the top: every panel starts closed; a button opens
 // its panel (closing any other), and clicking the open one closes it.
 const sectionTabs = [...document.querySelectorAll(".section-tabs .tab")];
@@ -1090,6 +1178,8 @@ function openSection(panelId) {
   });
   // Market deals are fetched the first time their section is opened.
   if (panelId === "market-deals-panel" && !marketDealsLoaded) loadMarketDeals();
+  // Auctions change every 30 minutes, so they're re-fetched on every open.
+  if (panelId === "auctions-panel") loadAuctions();
 }
 
 sectionTabs.forEach((tab) =>

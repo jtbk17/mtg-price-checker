@@ -214,6 +214,7 @@
       <a href="#sell-plan-section">Sell plan</a>
       <a href="#deals-section">Good deals</a>
       <a href="#market-deals-section" id="market-deals-link">Market deals</a>
+      <a href="#auctions-section" id="auctions-link">Auctions</a>
       <a href="#watchlist-section">Watchlist</a>
       <a href="#movers-section">Market movers</a>
     </nav>
@@ -279,6 +280,22 @@
       <div id="market-deals-totals" class="totals" hidden></div>
       <div id="market-deals" class="card-grid"><p class="empty">Loading…</p></div>
       <button id="market-deals-more" class="more" hidden>Show more</button>
+    </section>
+
+    <section id="auctions-section">
+      <div class="section-head">
+        <h2>Auctions</h2>
+        <div class="filters">
+          <select id="auctions-filter" aria-label="Show auctions">
+            <option value="deals">Deals only</option>
+            <option value="nm">All Near Mint</option>
+            <option value="all">All auctions</option>
+          </select>
+        </div>
+      </div>
+      <p class="section-sub" id="auctions-sub">Live TheTCGMarketplace Magic auctions vs what GOG Cash pays for that exact card, checked every 30 minutes</p>
+      <div id="auctions" class="card-grid"><p class="empty">Loading…</p></div>
+      <button id="auctions-more" class="more" hidden>Show more</button>
     </section>
 
     <section id="watchlist-section">
@@ -850,6 +867,87 @@
       );
     }
 
+    // ---- Auctions (docs/auctions.json, from auction_deals.py every 30 min) ----
+    let auctions = [];
+
+    function timeLeft(endsAt) {
+      if (!endsAt) return "";
+      const ms = new Date(endsAt) - Date.now();
+      if (ms <= 0) return "Ended";
+      const mins = Math.floor(ms / 60000);
+      const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+      return `Ends in ${d ? `${d}d ` : ""}${d || h ? `${h}h ` : ""}${m}m`;
+    }
+
+    function auctionCard(a) {
+      const el = document.createElement("div");
+      el.className = "card";
+      const marginLine = (label, value, margin) =>
+        value == null
+          ? ""
+          : `<div class="meta">${label}: ${formatPrice(value)}${margin != null ? ` <span class="delta ${margin > 0 ? "up" : "down"}">(${margin > 0 ? "+" : ""}${formatPrice(margin).replace("$-", "-$")} vs GOG)</span>` : ""}</div>`;
+      el.innerHTML = `
+        ${cardImageHtml(a)}
+        <div class="name">${escapeHtml(a.name)}</div>
+        <div class="meta">${escapeHtml(a.set_name || "")}${a.collector_number ? ` #${escapeHtml(a.collector_number)}` : ""}</div>
+        <div class="meta">${escapeHtml(FINISH_LABELS[a.finish] || a.finish)} · ${escapeHtml(a.condition || "")}${a.lang && a.lang !== "en" ? ` · ${escapeHtml(a.lang.toUpperCase())}` : ""}${a.graded ? " · Graded" : ""}${a.quantity > 1 ? ` · ×${a.quantity}` : ""}</div>
+        <div class="${a.is_deal ? "margin" : "meta"}"><strong>${a.is_deal ? "Deal" : a.gog_cash == null ? "No CK price" : "Not a deal"}</strong> · <span class="ends" data-ends="${escapeHtml(a.ends_at || "")}">${timeLeft(a.ends_at)}</span></div>
+        ${marginLine(a.current_bid == null ? "Starting bid" : "Next bid", a.next_bid, a.margin)}
+        ${marginLine("Buyout", a.buyout_price, a.buyout_margin)}
+        <div class="meta gog-price">GOG Cash: ${formatPrice(a.gog_cash)}</div>
+        <div class="meta ck-buylist">CK buylist: ${formatPrice(a.cardkingdom_buylist_price)}</div>
+        <div class="meta tcg-marketplace">Cheapest TCGMP listing: ${formatPrice(a.cheapest_listing)}</div>
+        ${a.seller ? `<div class="meta">Seller: ${escapeHtml(a.seller)}</div>` : ""}
+      `;
+      return el;
+    }
+
+    function renderAuctions() {
+      const filter = document.getElementById("auctions-filter").value;
+      const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const shown = auctions
+        .filter((a) => filter === "all" || (filter === "deals" ? a.is_deal : (a.condition || "").toUpperCase() === "NM"))
+        .filter((a) => terms.every((t) => `${a.name || ""} ${a.set_name || ""}`.toLowerCase().includes(t)));
+      renderPaged(
+        document.getElementById("auctions"),
+        document.getElementById("auctions-more"),
+        shown,
+        auctionCard,
+        `<p class="empty">${filter === "deals" ? "No auction deals right now." : "No matching auctions."}</p>`
+      );
+    }
+
+    async function loadAuctions() {
+      try {
+        const resp = await fetch("auctions.json", { cache: "no-store" });
+        if (resp.status === 404) {
+          document.getElementById("auctions-section").hidden = true;
+          document.getElementById("auctions-link").hidden = true;
+          return;
+        }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        auctions = data.auctions || [];
+        document.getElementById("auctions-sub").textContent =
+          `${data.total_deals} deal${data.total_deals === 1 ? "" : "s"} among ${data.total_auctions} live Magic auctions — ` +
+          `a deal is Near Mint and winning at the next bid (or buying out) costs less than GOG Cash — checked ${new Date(data.generated_at).toLocaleString()}`;
+        const select = document.getElementById("auctions-filter");
+        const saved = remembered("auctionsFilter");
+        if (saved !== null && [...select.options].some((o) => o.value === saved)) select.value = saved;
+        select.addEventListener("change", () => {
+          remember("auctionsFilter", select.value);
+          renderAuctions();
+        });
+        renderAuctions();
+        // Keep the countdowns current without re-rendering the cards.
+        setInterval(() => {
+          document.querySelectorAll("#auctions .ends").forEach((el) => (el.textContent = timeLeft(el.dataset.ends)));
+        }, 30000);
+      } catch (err) {
+        document.getElementById("auctions").innerHTML = `<p class="empty">Couldn't load auctions: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+
     function render() {
       const items = filteredItems();
       renderPortfolioValue(items);
@@ -940,6 +1038,7 @@
           searchTimer = setTimeout(() => {
             render();
             renderMarketDeals();
+            renderAuctions();
           }, 200);
         });
 
@@ -983,6 +1082,7 @@
 
     load();
     loadMarketDeals();
+    loadAuctions();
     loadMovers();
     loadAlerts();
   </script>

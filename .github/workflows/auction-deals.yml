@@ -1,0 +1,66 @@
+name: Auction deals
+
+# Checks every live TheTCGMarketplace Magic auction against GOG Cash and
+# publishes docs/auctions.json (see auction_deals.py). Every 30 minutes,
+# since bids move within hours; the whole check takes seconds.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Its own group, not the tcg-prices-db one the database jobs share:
+# GitHub keeps only the newest waiting run per group, so a run every 30
+# minutes there could cancel a waiting Refresh or Telegram-feedback run.
+# It only writes docs/auctions.json, which nothing else touches, so the
+# other jobs' pushes just rebase past it (see nightly-refresh.yml).
+concurrency:
+  group: auction-deals
+  cancel-in-progress: true
+
+jobs:
+  auctions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests ijson
+
+      # Read-only here: the all-cards db supplies each card's labels for
+      # matching (set code, collector number, language) and is not
+      # uploaded back.
+      - name: Download the all-cards database
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download data --pattern "all_cards_*.db" --clobber
+
+      - name: Check auctions and push docs/auctions.json (retries on conflict)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          python auction_deals.py
+
+          # Regenerated wholesale, so on a push conflict just re-apply it
+          # on top of whatever landed meanwhile.
+          cp docs/auctions.json /tmp/auctions.json
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/auctions.json docs/auctions.json
+            git add docs/auctions.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Auction deals"
+            if git push; then
+              exit 0
+            fi
+          done
+          echo "Could not push docs/auctions.json after 3 attempts" >&2
+          exit 1

@@ -129,22 +129,36 @@ MARKET_DEALS_URL = "https://jtbk17.github.io/mtg-price-checker/deals.json"
 MARKET_DEALS_FILE = os.path.join(os.path.dirname(__file__), "docs", "deals.json")
 
 
-@app.route("/api/market-deals")
-def api_market_deals():
-    """Market deals as last published by the nightly / on-demand GitHub
-    jobs (market_deals.py writes docs/deals.json there). Fetched from the
-    live dashboard so it's as fresh as what's published, falling back to
-    this checkout's docs/deals.json when offline."""
+AUCTIONS_URL = "https://jtbk17.github.io/mtg-price-checker/auctions.json"
+AUCTIONS_FILE = os.path.join(os.path.dirname(__file__), "docs", "auctions.json")
+
+
+def _published_json(url, local_path, what):
+    """A docs/*.json file as last published by the GitHub jobs, fetched from
+    the live dashboard so it's as fresh as what's published, falling back
+    to this checkout's copy when offline."""
     try:
-        resp = requests.get(MARKET_DEALS_URL, timeout=10, headers={"Cache-Control": "no-cache"})
+        resp = requests.get(url, timeout=10, headers={"Cache-Control": "no-cache"})
         resp.raise_for_status()
         return jsonify(resp.json())
     except (requests.RequestException, ValueError) as exc:
-        logger.warning("Couldn't fetch published market deals, using local copy: %s", exc)
-    if not os.path.exists(MARKET_DEALS_FILE):
-        return jsonify({"error": "No market deals generated yet."}), 404
-    with open(MARKET_DEALS_FILE, encoding="utf-8") as f:
+        logger.warning("Couldn't fetch published %s, using local copy: %s", what, exc)
+    if not os.path.exists(local_path):
+        return jsonify({"error": f"No {what} generated yet."}), 404
+    with open(local_path, encoding="utf-8") as f:
         return app.response_class(f.read(), mimetype="application/json")
+
+
+@app.route("/api/market-deals")
+def api_market_deals():
+    """Market deals (market_deals.py, nightly / on-demand)."""
+    return _published_json(MARKET_DEALS_URL, MARKET_DEALS_FILE, "market deals")
+
+
+@app.route("/api/auctions")
+def api_auctions():
+    """Auction deals (auction_deals.py, every 30 minutes)."""
+    return _published_json(AUCTIONS_URL, AUCTIONS_FILE, "auction deals")
 
 
 @app.route("/api/owners")

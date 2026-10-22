@@ -92,6 +92,16 @@ jobs:
               break
             fi
 
+            # Usually the push lost to an unrelated docs commit (e.g.
+            # auction-deals.yml's docs/auctions.json every 30 minutes) —
+            # just rebase past it instead of redoing the whole refresh.
+            if git pull --rebase origin main && git push; then
+              echo "Pushed after rebasing on attempt $attempt"
+              pushed=true
+              break
+            fi
+            git rebase --abort 2>/dev/null || true
+
             echo "Push rejected on attempt $attempt — resetting to remote and retrying"
             git fetch origin main
             git reset --hard origin/main
