@@ -924,6 +924,23 @@ currentOwnerInput.addEventListener("change", () => {
   }
 });
 
+// Section buttons at the top: every panel starts closed; a button opens
+// its panel (closing any other), and clicking the open one closes it.
+const sectionTabs = [...document.querySelectorAll(".section-tabs .tab")];
+
+function openSection(panelId) {
+  sectionTabs.forEach((tab) => {
+    const open = tab.dataset.panel === panelId;
+    tab.setAttribute("aria-expanded", String(open));
+    document.getElementById(tab.dataset.panel).hidden = !open;
+  });
+}
+
+sectionTabs.forEach((tab) =>
+  tab.addEventListener("click", () => openSection(tab.getAttribute("aria-expanded") === "true" ? null : tab.dataset.panel))
+);
+openSection(null);
+
 // Owners first, so the Sell plan's owner (default Shared) is set before
 // the first loadWatchlist() -> loadSellPlan().
 loadOwners().then(loadWatchlist);

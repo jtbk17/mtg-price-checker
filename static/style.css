@@ -78,6 +78,30 @@ main {
   gap: 24px;
 }
 
+/* Section buttons: each opens its panel, one at a time; the open one's
+   button closes it again. Panels start closed. */
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.section-tabs .tab {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+}
+
+.section-tabs .tab[aria-expanded="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+main > .panel[hidden] { display: none; }
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
