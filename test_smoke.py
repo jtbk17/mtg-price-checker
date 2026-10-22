@@ -2353,6 +2353,18 @@ class AppRouteTests(unittest.TestCase):
         db.init_db()
         self.client = self.app.test_client()
 
+    def test_market_deals_falls_back_to_local_copy_when_offline(self):
+        import app as flask_app_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "deals.json"
+            local.write_text(json.dumps({"deals": [{"name": "Local Deal"}]}))
+            with patch.object(flask_app_module.requests, "get", side_effect=flask_app_module.requests.ConnectionError("offline")), \
+                 patch.object(flask_app_module, "MARKET_DEALS_FILE", str(local)):
+                resp = self.client.get("/api/market-deals")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.get_json()["deals"][0]["name"], "Local Deal")
+
     def test_watchlist_and_owners_endpoints(self):
         resp = self.client.get("/api/watchlist")
         self.assertEqual(resp.status_code, 200)

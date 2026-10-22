@@ -19,6 +19,7 @@
       <button type="button" class="tab" data-panel="search-panel" aria-expanded="false">Search</button>
       <button type="button" class="tab" data-panel="sell-plan-panel" aria-expanded="false">Sell plan</button>
       <button type="button" class="tab" data-panel="good-deals-panel" aria-expanded="false">Good Deals</button>
+      <button type="button" class="tab" data-panel="market-deals-panel" aria-expanded="false">Market deals</button>
       <button type="button" class="tab" data-panel="watchlist-panel" aria-expanded="false">Watchlist</button>
     </nav>
   </header>
@@ -70,6 +71,39 @@
       </div>
       <div id="good-deals" class="card-grid"></div>
       <button id="good-deals-toggle" class="secondary good-deals-toggle" hidden></button>
+    </section>
+
+    <section class="panel" id="market-deals-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Market deals</h2>
+          <p class="section-sub" id="market-deals-sub">Any card Card Kingdom buys, listed on TheTCGMarketplace (Near Mint, same language) for less than GOG Cash</p>
+        </div>
+        <div class="panel-actions">
+          <input type="search" id="market-deals-search" placeholder="Filter by card or set">
+          <select id="market-deals-threshold" aria-label="Buy copies priced below">
+            <option value="gog">Buy below GOG Cash (1.15×)</option>
+            <option value="ck">Buy below CK buylist (1.00×)</option>
+          </select>
+          <select id="market-deals-min-pct" aria-label="Minimum % profit">
+            <option value="0">Any % profit</option>
+            <option value="10">10%+ profit</option>
+            <option value="20">20%+ profit</option>
+            <option value="30">30%+ profit</option>
+            <option value="50">50%+ profit</option>
+            <option value="100">100%+ profit</option>
+          </select>
+          <select id="market-deals-sort" aria-label="Sort market deals">
+            <option value="margin">Biggest margin per copy</option>
+            <option value="profit_pct">Highest % profit</option>
+            <option value="total_profit">Biggest total profit</option>
+            <option value="copies_under_gog_cash">Most copies</option>
+          </select>
+        </div>
+      </div>
+      <div id="market-deals-totals" class="totals" hidden></div>
+      <div id="market-deals" class="card-grid"></div>
+      <button id="market-deals-more" class="secondary good-deals-toggle" hidden></button>
     </section>
 
     <section class="panel" id="watchlist-panel">

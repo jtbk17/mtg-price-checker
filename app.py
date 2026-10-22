@@ -125,6 +125,28 @@ def api_search():
         return jsonify({"error": str(exc)}), 400
 
 
+MARKET_DEALS_URL = "https://jtbk17.github.io/mtg-price-checker/deals.json"
+MARKET_DEALS_FILE = os.path.join(os.path.dirname(__file__), "docs", "deals.json")
+
+
+@app.route("/api/market-deals")
+def api_market_deals():
+    """Market deals as last published by the nightly / on-demand GitHub
+    jobs (market_deals.py writes docs/deals.json there). Fetched from the
+    live dashboard so it's as fresh as what's published, falling back to
+    this checkout's docs/deals.json when offline."""
+    try:
+        resp = requests.get(MARKET_DEALS_URL, timeout=10, headers={"Cache-Control": "no-cache"})
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Couldn't fetch published market deals, using local copy: %s", exc)
+    if not os.path.exists(MARKET_DEALS_FILE):
+        return jsonify({"error": "No market deals generated yet."}), 404
+    with open(MARKET_DEALS_FILE, encoding="utf-8") as f:
+        return app.response_class(f.read(), mimetype="application/json")
+
+
 @app.route("/api/owners")
 def api_owners():
     return jsonify(db.list_owners())

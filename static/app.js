@@ -252,7 +252,7 @@ function renderSearchResults(cards) {
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `
-      ${card.imageUrl ? `<img class="card-image" src="${escapeHtml(card.imageUrl)}" alt="${escapeHtml(card.name || "")}">` : ""}
+      ${card.imageUrl ? `<img class="card-image" src="${escapeHtml(card.imageUrl)}" alt="${escapeHtml(card.name || "")}" loading="lazy">` : ""}
       <div class="name">${escapeHtml(card.name || "Unknown card")}</div>
       <div class="meta">${escapeHtml(cardMeta(card))}</div>
       ${
@@ -523,7 +523,7 @@ function renderGoodDeals(items) {
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `
-      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
+      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" loading="lazy">` : ""}
       <div class="name">${escapeHtml(item.name)}</div>
       <div class="meta">${escapeHtml(item.set_name || "")}</div>
       <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
@@ -551,7 +551,7 @@ function renderWatchlist(items) {
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `
-      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}">` : ""}
+      ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" loading="lazy">` : ""}
       <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
       <div class="meta">${escapeHtml(item.set_name || "")}</div>
       <div class="meta">${escapeHtml(item.printing || "")} · ${escapeHtml(item.condition || "Near Mint")}${item.owner ? ` · ${escapeHtml(item.owner)}` : ""}</div>
@@ -924,6 +924,160 @@ currentOwnerInput.addEventListener("change", () => {
   }
 });
 
+// ---- Market deals: every card Card Kingdom buys (published by the
+// nightly / on-demand GitHub jobs; see market_deals.py) ----
+const marketDealsEl = document.getElementById("market-deals");
+const marketDealsSub = document.getElementById("market-deals-sub");
+const marketDealsTotals = document.getElementById("market-deals-totals");
+const marketDealsMore = document.getElementById("market-deals-more");
+const marketDealsSearch = document.getElementById("market-deals-search");
+const marketDealsThreshold = document.getElementById("market-deals-threshold");
+const marketDealsMinPct = document.getElementById("market-deals-min-pct");
+const marketDealsSort = document.getElementById("market-deals-sort");
+const MARKET_DEALS_PAGE = 40;
+const FINISH_LABELS = { nonfoil: "Normal", foil: "Foil", etched: "Etched Foil" };
+// What you buy below, and sell at: GOG Cash, or Card Kingdom's own buylist.
+const MARKET_THRESHOLDS = {
+  gog: { multiplier: GOG_CASH_MULTIPLIER, label: "GOG Cash" },
+  ck: { multiplier: 1, label: "CK buylist" },
+};
+let marketDeals = [];
+let marketDealsLoaded = false;
+
+function marketThreshold() {
+  return MARKET_THRESHOLDS[marketDealsThreshold.value] || MARKET_THRESHOLDS.gog;
+}
+
+// Re-totals a deal for the chosen threshold from its qualifying listings
+// ([[price, qty]], all under GOG Cash). Null if no copy is under it.
+function marketDealAt(d, threshold) {
+  const sellAt = d.cardkingdom_buylist_price * threshold.multiplier;
+  const listings = d.listings || (threshold.multiplier === GOG_CASH_MULTIPLIER ? [[d.cheapest_price, d.copies_under_gog_cash]] : []);
+  const under = listings.filter(([price]) => price < sellAt);
+  if (!under.length) return null;
+  const cheapest = Math.min(...under.map(([price]) => price));
+  const copies = under.reduce((n, [, qty]) => n + qty, 0);
+  const cost = under.reduce((n, [price, qty]) => n + price * qty, 0);
+  return {
+    ...d,
+    sell_at: sellAt,
+    cheapest_price: cheapest,
+    margin: sellAt - cheapest,
+    profit_pct: cheapest > 0 ? ((sellAt - cheapest) / cheapest) * 100 : 0,
+    copies_under_gog_cash: copies,
+    total_cost: cost,
+    total_payout: sellAt * copies,
+    total_profit: sellAt * copies - cost,
+  };
+}
+
+function marketDealCardEl(deal) {
+  const el = document.createElement("div");
+  el.className = "card";
+  const copies = deal.copies_under_gog_cash;
+  const label = marketThreshold().label;
+  el.innerHTML = `
+    ${deal.image_url ? `<img class="card-image" src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.name || "")}" loading="lazy">` : ""}
+    <div class="name">${escapeHtml(deal.name)}</div>
+    <div class="meta">${escapeHtml(deal.set_name || "")} #${escapeHtml(deal.collector_number || "")}</div>
+    <div class="meta">${escapeHtml(FINISH_LABELS[deal.finish] || deal.finish)} · Near Mint${deal.lang && deal.lang !== "en" ? ` · ${escapeHtml(deal.lang.toUpperCase())}` : ""}</div>
+    <div class="meta tcg-marketplace">TheTCGMarketplace from: ${formatPrice(deal.cheapest_price)}</div>
+    <div class="meta gog-price">${label}: ${formatPrice(deal.sell_at)}</div>
+    <div class="price">+${formatPrice(deal.margin)} <span class="meta">(+${deal.profit_pct.toFixed(0)}%)</span></div>
+    <div class="supply">${copies} cop${copies === 1 ? "y" : "ies"} under ${label} · ${formatPrice(deal.total_profit)} total</div>
+  `;
+  return el;
+}
+
+function renderMarketDeals() {
+  const terms = marketDealsSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const minPct = Number(marketDealsMinPct.value) || 0;
+  const sortKey = marketDealsSort.value;
+  const threshold = marketThreshold();
+  const deals = marketDeals
+    .map((d) => marketDealAt(d, threshold))
+    .filter((d) => d && d.profit_pct >= minPct)
+    .filter((d) => terms.every((t) => `${d.name || ""} ${d.set_name || ""}`.toLowerCase().includes(t)))
+    .sort((a, b) => b[sortKey] - a[sortKey]);
+
+  // Totals for exactly the deals shown: buying every qualifying copy.
+  const money = (n) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const sum = (key) => deals.reduce((n, d) => n + d[key], 0);
+  const cost = sum("total_cost");
+  const profit = sum("total_profit");
+  marketDealsTotals.innerHTML = [
+    ["Cards", deals.length.toLocaleString()],
+    ["Copies", sum("copies_under_gog_cash").toLocaleString()],
+    ["You spend", money(cost)],
+    [`Payout (${threshold.label})`, money(sum("total_payout"))],
+    ["Profit", money(profit)],
+    ["Return", cost > 0 ? `${((profit / cost) * 100).toFixed(0)}%` : "—"],
+  ]
+    .map(([label, value]) => `<div><div class="label">${escapeHtml(label)}</div><div class="value">${value}</div></div>`)
+    .join("");
+  marketDealsTotals.hidden = !deals.length;
+
+  marketDealsEl.innerHTML = "";
+  if (!deals.length) {
+    marketDealsEl.innerHTML = '<p class="empty">No market deals for these filters.</p>';
+    marketDealsMore.hidden = true;
+    return;
+  }
+  let count = 0;
+  const showNext = () => {
+    deals.slice(count, count + MARKET_DEALS_PAGE).forEach((d) => marketDealsEl.appendChild(marketDealCardEl(d)));
+    count = Math.min(count + MARKET_DEALS_PAGE, deals.length);
+    marketDealsMore.hidden = count >= deals.length;
+    marketDealsMore.textContent = `Show more (${deals.length - count} left)`;
+  };
+  marketDealsMore.onclick = showNext;
+  showNext();
+}
+
+async function loadMarketDeals() {
+  marketDealsEl.innerHTML = '<p class="empty">Loading…</p>';
+  try {
+    const data = await fetchJSON("/api/market-deals");
+    marketDeals = data.deals || [];
+    marketDealsLoaded = true;
+    if (data.generated_at) {
+      const shown = marketDeals.length < (data.total_deals || 0) ? ` (top ${marketDeals.length} shown)` : "";
+      marketDealsSub.textContent =
+        `Any card Card Kingdom buys with GOG Cash ≥ ${formatPrice(data.min_gog_cash)} (${data.checked} checked)${shown} — ` +
+        `Near Mint, same-language copies only — last updated ${new Date(data.generated_at).toLocaleString()}`;
+    }
+    renderMarketDeals();
+  } catch (err) {
+    marketDealsEl.innerHTML = `<p class="empty">Couldn't load market deals: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+for (const [select, key] of [
+  [marketDealsThreshold, "marketDealsThreshold"],
+  [marketDealsMinPct, "marketDealsMinPct"],
+  [marketDealsSort, "marketDealsSort"],
+]) {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved !== null && [...select.options].some((o) => o.value === saved)) select.value = saved;
+  } catch (err) {
+    // Not remembered.
+  }
+  select.addEventListener("change", () => {
+    try {
+      localStorage.setItem(key, select.value);
+    } catch (err) {
+      // Non-critical.
+    }
+    renderMarketDeals();
+  });
+}
+let marketDealsSearchTimer;
+marketDealsSearch.addEventListener("input", () => {
+  clearTimeout(marketDealsSearchTimer);
+  marketDealsSearchTimer = setTimeout(renderMarketDeals, 200);
+});
+
 // Section buttons at the top: every panel starts closed; a button opens
 // its panel (closing any other), and clicking the open one closes it.
 const sectionTabs = [...document.querySelectorAll(".section-tabs .tab")];
@@ -934,6 +1088,8 @@ function openSection(panelId) {
     tab.setAttribute("aria-expanded", String(open));
     document.getElementById(tab.dataset.panel).hidden = !open;
   });
+  // Market deals are fetched the first time their section is opened.
+  if (panelId === "market-deals-panel" && !marketDealsLoaded) loadMarketDeals();
 }
 
 sectionTabs.forEach((tab) =>
