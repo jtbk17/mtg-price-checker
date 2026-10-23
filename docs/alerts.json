@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-22T12:51:09.369917+00:00",
+  "generated_at": "2026-10-23T12:38:34.124764+00:00",
   "alerts": [
     {
-      "name": "Shifting Woodland",
-      "set_name": "Modern Horizons 3",
+      "name": "City of Brass",
+      "set_name": "Double Masters 2022",
       "printing": "Foil",
       "owner": "Joel",
       "price_before": 39.99,
@@ -11,13 +11,13 @@
       "pct_change": 12.5
     },
     {
-      "name": "Marvin, Murderous Mimic",
-      "set_name": "Duskmourn: House of Horror",
+      "name": "Ezio Auditore da Firenze",
+      "set_name": "Assassin's Creed",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
     }
   ]
 }
