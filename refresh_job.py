@@ -67,9 +67,21 @@ def refresh_tcgmarketplace_prices(items):
     tcg_lookups = {item["variant_id"]: _tcg_lookup(item) for item in items}
     tcgmarketplace.prefetch_ids(lookup for lookup in tcg_lookups.values() if lookup)
     tcgmarketplace.prefetch_prices((lookup for lookup in tcg_lookups.values() if lookup), include_wtb=True)
+    my_listings = tcgmarketplace.get_my_listings()
 
     for item in items:
         tcg_lookup = tcg_lookups[item["variant_id"]]
+        if tcg_lookup and my_listings is not None:
+            # Which of our own shop's listings (if any) is this card.
+            product_id = tcgmarketplace.find_id(*tcg_lookup[:5])
+            _, _, _, _, finish, lang, condition = tcg_lookup
+            mine = tcgmarketplace.my_listing_for(my_listings, product_id, finish, lang, condition)
+            db.update_tcgmarketplace_listing(
+                item["variant_id"],
+                str(product_id) if product_id is not None else None,
+                mine["quantity"] if mine else None,
+                mine["price"] if mine else None,
+            )
         if tcg_lookup:
             # Written even when None: an exact-printing miss means any
             # stored price came from the wrong printing and must go.
@@ -162,6 +174,8 @@ SNAPSHOT_FIELDS = (
     "cardkingdom_buylist_price",
     "tcgmarketplace_price",
     "tcgmarketplace_wtb_price",
+    "tcgmarketplace_listed_qty",
+    "tcgmarketplace_listed_price",
     "purchase_price",
     "created_at",
 )

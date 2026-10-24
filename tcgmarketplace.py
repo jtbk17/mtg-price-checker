@@ -31,6 +31,7 @@ day, so they're cached only briefly (in memory, not on disk).
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -43,6 +44,12 @@ import requests
 logger = logging.getLogger("tcg-price-checker")
 
 BASE_URL = "https://thetcgmarketplace.com:3501"
+# Our own seller account (shop GUDDEALS): its listings are left out of
+# "cheapest copy" prices — so the Sell plan never says to undercut
+# ourselves — and are read back into the watchlist (get_my_listings()).
+# TheTCGMarketplace has no public lookup by shop name; this id came from
+# the shop's listings (user_id on a listing row).
+SELLER_USER_ID = int(os.environ.get("TCGMP_USER_ID", "250"))
 MTG_CATEGORY_ID = "3"
 HEADERS = {"User-Agent": "tcg-price-checker/1.0 (local personal project)"}
 
@@ -330,6 +337,8 @@ def matching_listings(product_id, foil=False, lang=None, condition=None):
     for listing in _get_listings(product_id) or []:
         if listing.get("suspended") or _is_foil_listing(listing) != bool(foil):
             continue
+        if listing.get("user_id") == SELLER_USER_ID:
+            continue  # our own listing
         if lang and (listing.get("crd_language") or "").lower() != lang.lower():
             continue
         if worst_rank is not None:
@@ -347,6 +356,55 @@ def matching_listings(product_id, foil=False, lang=None, condition=None):
             quantity = 1
         matches.append((price, quantity))
     return matches
+
+
+def get_my_listings(user_id=None):
+    """Our shop's live Magic listings, as {(product_id, foil, lang,
+    condition_code): {"quantity": n, "price": lowest}} — from the public
+    shop listing endpoint (GET /view/user/listing/<user id>), no login
+    needed. None if it couldn't be fetched (so callers can keep what they
+    had rather than wipe it)."""
+    user_id = SELLER_USER_ID if user_id is None else user_id
+    try:
+        resp = _session.get(f"{BASE_URL}/view/user/listing/{user_id}", timeout=20)
+        resp.raise_for_status()
+        categories = resp.json().get("data", {}).get("data") or []
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Couldn't fetch our TheTCGMarketplace listings: %s", exc)
+        return None
+    mine = {}
+    for category in categories:
+        if str(category.get("category_id")) != MTG_CATEGORY_ID:
+            continue
+        for listing in category.get("data") or []:
+            try:
+                price = float(listing["price"])
+                quantity = int(listing.get("quantity") or 0)
+            except (KeyError, TypeError, ValueError):
+                continue
+            key = (
+                str(listing.get("product_id")),
+                _is_foil_listing(listing),
+                (listing.get("crd_language") or "").lower(),
+                (listing.get("crd_condition") or "").upper(),
+            )
+            entry = mine.setdefault(key, {"quantity": 0, "price": price})
+            entry["quantity"] += quantity
+            entry["price"] = min(entry["price"], price)
+    return mine
+
+
+# The app's condition names -> TheTCGMarketplace's grade codes.
+CONDITION_CODES = {name: code for code, rank in CONDITION_RANKS.items() for name, r in APP_CONDITION_RANKS.items() if r == rank}
+
+
+def my_listing_for(my_listings, product_id, finish, lang, condition):
+    """Our listing (quantity and price) for this exact card, or None."""
+    if not my_listings or product_id is None:
+        return None
+    return my_listings.get(
+        (str(product_id), _is_foil(finish), (lang or "en").lower(), CONDITION_CODES.get(condition or "Near Mint", "NM"))
+    )
 
 
 def get_wtb_price(product_id, foil=False, lang=None, condition=None):

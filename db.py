@@ -111,6 +111,10 @@ def init_db():
             ("tcgmarketplace_price", "REAL"),
             # Highest TheTCGMarketplace want-to-buy offer this copy would satisfy.
             ("tcgmarketplace_wtb_price", "REAL"),
+            # Our own TheTCGMarketplace listing of this card, if any.
+            ("tcgmarketplace_product_id", "TEXT"),
+            ("tcgmarketplace_listed_qty", "INTEGER"),
+            ("tcgmarketplace_listed_price", "REAL"),
         ):
             if column not in existing_columns:
                 conn.execute(f"ALTER TABLE watchlist ADD COLUMN {column} {coltype}")
@@ -427,6 +431,19 @@ def update_cardkingdom_price(variant_id, market_price, buylist_price):
         conn.execute(
             "UPDATE watchlist SET cardkingdom_price = ?, cardkingdom_buylist_price = ? WHERE variant_id = ?",
             (market_price, buylist_price, variant_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_tcgmarketplace_listing(variant_id, product_id, listed_qty, listed_price):
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE watchlist SET tcgmarketplace_product_id = ?, tcgmarketplace_listed_qty = ?, "
+            "tcgmarketplace_listed_price = ? WHERE variant_id = ?",
+            (product_id, listed_qty, listed_price, variant_id),
         )
         conn.commit()
     finally:

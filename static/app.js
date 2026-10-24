@@ -372,6 +372,7 @@ const SELL_RULES = {
   sanityFactor: 3, // cheapest listing vs CK price beyond 3x either way: likely a data error
 };
 const SELL_ROUTES = {
+  listed: { label: "Listed on TCGMP", className: "delta up" },
   list: { label: "List on TCGMP", className: "tcg-marketplace" },
   wtb: { label: "Sell to WTB buyer", className: "tcg-wtb" },
   gog: { label: "Sell to GOG", className: "gog-price" },
@@ -390,6 +391,23 @@ function rememberedSellPlanOwner(owners) {
 }
 
 function sellRecommendation(item) {
+  const cheapest = item.tcgmarketplace_price;
+  // Already listed in our shop: report it, and whether someone's undercut us.
+  if (item.tcgmarketplace_listed_qty > 0) {
+    const listedPrice = item.tcgmarketplace_listed_price;
+    const fresh = sellRecommendationFor(item);
+    return {
+      route: "listed",
+      price: listedPrice,
+      listedQty: item.tcgmarketplace_listed_qty,
+      undercutBy: cheapest != null && cheapest < listedPrice ? cheapest : null,
+      suggested: fresh.route === "list" ? fresh.price : null,
+    };
+  }
+  return sellRecommendationFor(item);
+}
+
+function sellRecommendationFor(item) {
   const cheapest = item.tcgmarketplace_price;
   const wtb = item.tcgmarketplace_wtb_price;
   const gog = gogPrice(item.cardkingdom_buylist_price, GOG_CASH_MULTIPLIER);
@@ -417,6 +435,11 @@ function sellPlanCardEl({ item, rec }) {
   const action =
     rec.route === "review"
       ? `<div class="meta">${escapeHtml(rec.reason)}</div>`
+      : rec.route === "listed"
+      ? `<div class="price">Listed ×${rec.listedQty} at ${formatPrice(rec.price)}</div>` +
+        (rec.undercutBy != null
+          ? `<div class="delta down">⚠ Undercut: someone's at ${formatPrice(rec.undercutBy)}${rec.suggested != null ? ` — lower to ${formatPrice(rec.suggested)}` : ""}</div>`
+          : `<div class="meta">Cheapest of the rest: ${formatPrice(item.tcgmarketplace_price)}</div>`)
       : `<div class="price">${rec.route === "list" ? "List at " : ""}${formatPrice(rec.price)}${qty > 1 ? ` <span class="meta">×${qty} = ${formatPrice(rec.price * qty)}</span>` : ""}</div>`;
   el.innerHTML = `
     ${item.image_url ? `<img class="card-image" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name || "")}" loading="lazy">` : ""}
@@ -444,9 +467,11 @@ function renderSellPlan() {
   sellPlanTotals.innerHTML = Object.entries(SELL_ROUTES)
     .map(([key, { label }]) => {
       const group = sellPlanEntries.filter((e) => e.rec.route === key);
-      const copies = group.reduce((n, e) => n + (e.item.quantity || 1), 0);
-      const value = group.reduce((n, e) => n + (e.rec.price || 0) * (e.item.quantity || 1), 0);
-      return `<div><div class="label">${escapeHtml(label)}</div><div class="value">${group.length}</div><div class="label">${copies} copies${key === "review" ? "" : ` · ${money(value)}`}</div></div>`;
+      const qtyOf = (e) => (key === "listed" ? e.rec.listedQty : e.item.quantity || 1);
+      const copies = group.reduce((n, e) => n + qtyOf(e), 0);
+      const value = group.reduce((n, e) => n + (e.rec.price || 0) * qtyOf(e), 0);
+      const undercut = key === "listed" ? group.filter((e) => e.rec.undercutBy != null).length : 0;
+      return `<div><div class="label">${escapeHtml(label)}</div><div class="value">${group.length}</div><div class="label">${copies} copies${key === "review" ? "" : ` · ${money(value)}`}${undercut ? ` · ⚠ ${undercut} undercut` : ""}</div></div>`;
     })
     .join("");
   sellPlanTotals.hidden = !sellPlanEntries.length;

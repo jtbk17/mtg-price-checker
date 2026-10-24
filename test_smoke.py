@@ -1298,6 +1298,30 @@ class TcgMarketplaceTests(unittest.TestCase):
             self.assertIsNone(self.tcg.get_wtb_price(5, foil=True, lang="ja", condition="Near Mint"))
         self.assertEqual(mock_listings.call_args.args, (5, "buy"))
 
+    def test_own_listings_are_read_back_and_left_out_of_cheapest_prices(self):
+        shop = {"data": {"data": [
+            {"category_id": 15, "data": [{"product_id": 9, "price": "2488.00", "quantity": 1, "crd_foil": "1", "crd_language": "EN", "crd_condition": "NM"}]},
+            {"category_id": 3, "data": [
+                {"product_id": 706098, "price": "45.00", "quantity": 1, "crd_foil": "1", "crd_language": "EN", "crd_condition": "NM"},
+                {"product_id": 706098, "price": "44.00", "quantity": 2, "crd_foil": "1", "crd_language": "EN", "crd_condition": "NM"},
+            ]},
+        ]}}
+        resp = type("Resp", (), {})()
+        resp.raise_for_status = lambda: None
+        resp.json = lambda: shop
+        with patch.object(self.tcg._session, "get", return_value=resp):
+            mine = self.tcg.get_my_listings()
+        self.assertEqual(len(mine), 1)  # the Riftbound listing (category 15) is ignored
+        self.assertEqual(self.tcg.my_listing_for(mine, 706098, "foil", "en", "Near Mint"), {"quantity": 3, "price": 44.0})
+        self.assertIsNone(self.tcg.my_listing_for(mine, 706098, "nonfoil", "en", "Near Mint"))
+
+        listings = [
+            {"price": "44.00", "crd_language": "EN", "crd_foil": "1", "user_id": self.tcg.SELLER_USER_ID},  # ours
+            {"price": "48.00", "crd_language": "EN", "crd_foil": "1", "user_id": 999},
+        ]
+        with patch.object(self.tcg, "_get_listings", return_value=listings):
+            self.assertEqual(self.tcg.get_price(706098, foil=True, lang="en"), 48.0)
+
     def test_prefetch_ids_and_prices_report_progress(self):
         with patch.object(self.tcg, "find_id", side_effect=[10, 20, 10, 10, 10, None]) as mock_find, \
              patch.object(self.tcg, "_get_listings", return_value=[]) as mock_listings:
