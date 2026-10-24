@@ -1,23 +1,50 @@
 {
-  "generated_at": "2026-10-23T12:38:34.124764+00:00",
+  "generated_at": "2026-10-24T11:52:56.854052+00:00",
   "alerts": [
     {
-      "name": "City of Brass",
-      "set_name": "Double Masters 2022",
+      "name": "Unholy Heat",
+      "set_name": "Special Guests",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 39.99,
-      "price_now": 44.99,
-      "pct_change": 12.5
+      "price_before": 8.99,
+      "price_now": 10.99,
+      "pct_change": 22.2
     },
     {
-      "name": "Ezio Auditore da Firenze",
-      "set_name": "Assassin's Creed",
+      "name": "Kratos, God of War",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Sylvan Library",
+      "set_name": "Fourth Edition",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Bloodstained Mire",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Cavern of Souls",
+      "set_name": "The Lost Caverns of Ixalan",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 19.99,
-      "price_now": 22.99,
-      "pct_change": 15.0
+      "price_before": 99.99,
+      "price_now": 109.99,
+      "pct_change": 10.0
     }
   ]
 }
