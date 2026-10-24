@@ -857,6 +857,17 @@
       return el;
     }
 
+
+    // Our shop's live listings (docs/my_listings.json, every 30 minutes),
+    // overlaid on each card by its stored listing key — newer than the
+    // nightly snapshot's listed quantity/price.
+    function withLiveListing(item, live) {
+      if (!live || !item.tcgmarketplace_listing_key) return item;
+      const mine = live[item.tcgmarketplace_listing_key];
+      return { ...item, tcgmarketplace_listed_qty: mine ? mine.quantity : null, tcgmarketplace_listed_price: mine ? mine.price : null };
+    }
+    let liveListings = null;
+
     function renderSellPlan() {
       const owner = document.getElementById("sell-plan-owner").value;
       const routeFilter = document.getElementById("sell-plan-route").value;
@@ -864,6 +875,7 @@
       const all = watchlistItems
         .filter((item) => !owner || item.owner === owner)
         .filter((item) => terms.every((t) => `${item.name || ""} ${item.set_name || ""}`.toLowerCase().includes(t)))
+        .map((item) => withLiveListing(item, liveListings))
         .map((item) => ({ item, rec: sellRecommendation(item) }));
 
       // Totals per route for the whole selection, regardless of the route filter.
@@ -1107,6 +1119,15 @@
     }
 
     load();
+    fetch("my_listings.json", { cache: "no-store" })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data) => {
+        if (data && data.listings) {
+          liveListings = data.listings;
+          renderSellPlan();
+        }
+      })
+      .catch(() => {});
     loadMarketDeals();
     loadAuctions();
     loadMovers();

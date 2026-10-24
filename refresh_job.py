@@ -81,6 +81,7 @@ def refresh_tcgmarketplace_prices(items):
                 str(product_id) if product_id is not None else None,
                 mine["quantity"] if mine else None,
                 mine["price"] if mine else None,
+                tcgmarketplace.card_listing_key(product_id, finish, lang, condition),
             )
         if tcg_lookup:
             # Written even when None: an exact-printing miss means any
@@ -176,6 +177,7 @@ SNAPSHOT_FIELDS = (
     "tcgmarketplace_wtb_price",
     "tcgmarketplace_listed_qty",
     "tcgmarketplace_listed_price",
+    "tcgmarketplace_listing_key",
     "purchase_price",
     "created_at",
 )

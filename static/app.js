@@ -496,11 +496,23 @@ function renderSellPlan() {
   showNext();
 }
 
+// Our shop's live listings, overlaid on each card by its stored listing
+// key — fetched fresh every time the Sell plan loads, so a new or changed
+// listing shows up straight away rather than after the next refresh.
+function withLiveListing(item, live) {
+  if (!live || !item.tcgmarketplace_listing_key) return item;
+  const mine = live[item.tcgmarketplace_listing_key];
+  return { ...item, tcgmarketplace_listed_qty: mine ? mine.quantity : null, tcgmarketplace_listed_price: mine ? mine.price : null };
+}
+
 async function loadSellPlan() {
   try {
     const owner = sellPlanOwner.value;
-    const items = await fetchJSON(`/api/watchlist${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`);
-    sellPlanEntries = items.map((item) => ({ item, rec: sellRecommendation(item) }));
+    const [items, live] = await Promise.all([
+      fetchJSON(`/api/watchlist${owner ? `?owner=${encodeURIComponent(owner)}` : ""}`),
+      fetchJSON("/api/my-listings").then((d) => d.listings).catch(() => null),
+    ]);
+    sellPlanEntries = items.map((item) => withLiveListing(item, live)).map((item) => ({ item, rec: sellRecommendation(item) }));
     renderSellPlan();
   } catch (err) {
     sellPlanEl.innerHTML = `<p class="empty">Couldn't load the sell plan: ${escapeHtml(err.message)}</p>`;
@@ -1205,6 +1217,8 @@ function openSection(panelId) {
   if (panelId === "market-deals-panel" && !marketDealsLoaded) loadMarketDeals();
   // Auctions change every 30 minutes, so they're re-fetched on every open.
   if (panelId === "auctions-panel") loadAuctions();
+  // Re-read our shop's listings every time the Sell plan is opened.
+  if (panelId === "sell-plan-panel") loadSellPlan();
 }
 
 sectionTabs.forEach((tab) =>

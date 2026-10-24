@@ -155,6 +155,17 @@ def api_market_deals():
     return _published_json(MARKET_DEALS_URL, MARKET_DEALS_FILE, "market deals")
 
 
+@app.route("/api/my-listings")
+def api_my_listings():
+    """Our shop's live TheTCGMarketplace listings, fetched fresh (one
+    request) — the Sell plan overlays them on each card's stored listing
+    key, so a listing shows up as soon as the plan is opened."""
+    mine = tcgmarketplace.get_my_listings()
+    if mine is None:
+        return jsonify({"error": "Couldn't reach TheTCGMarketplace."}), 502
+    return jsonify({"user_id": tcgmarketplace.SELLER_USER_ID, "listings": mine})
+
+
 @app.route("/api/auctions")
 def api_auctions():
     """Auction deals (auction_deals.py, every 30 minutes)."""

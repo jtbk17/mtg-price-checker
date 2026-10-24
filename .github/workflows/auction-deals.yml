@@ -48,14 +48,16 @@ jobs:
 
           python auction_deals.py
 
-          # Regenerated wholesale, so on a push conflict just re-apply it
+          # Regenerated wholesale, so on a push conflict just re-apply them
           # on top of whatever landed meanwhile.
-          cp docs/auctions.json /tmp/auctions.json
+          mkdir -p /tmp/out
+          cp docs/auctions.json /tmp/out/
+          [ -f docs/my_listings.json ] && cp docs/my_listings.json /tmp/out/
           for attempt in 1 2 3; do
             git fetch origin main
             git reset --hard origin/main
-            cp /tmp/auctions.json docs/auctions.json
-            git add docs/auctions.json
+            cp /tmp/out/*.json docs/
+            git add docs/auctions.json docs/my_listings.json 2>/dev/null || git add docs/auctions.json
             git diff --cached --quiet && exit 0
             git commit -m "Auction deals"
             if git push; then

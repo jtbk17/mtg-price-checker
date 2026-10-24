@@ -1311,7 +1311,7 @@ class TcgMarketplaceTests(unittest.TestCase):
         resp.json = lambda: shop
         with patch.object(self.tcg._session, "get", return_value=resp):
             mine = self.tcg.get_my_listings()
-        self.assertEqual(len(mine), 1)  # the Riftbound listing (category 15) is ignored
+        self.assertEqual(list(mine), ["706098|1|en|NM"])  # the Riftbound listing (category 15) is ignored
         self.assertEqual(self.tcg.my_listing_for(mine, 706098, "foil", "en", "Near Mint"), {"quantity": 3, "price": 44.0})
         self.assertIsNone(self.tcg.my_listing_for(mine, 706098, "nonfoil", "en", "Near Mint"))
 

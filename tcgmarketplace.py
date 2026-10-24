@@ -358,9 +358,17 @@ def matching_listings(product_id, foil=False, lang=None, condition=None):
     return matches
 
 
+def listing_key(product_id, foil, lang, condition_code):
+    """"706098|1|en|NM": identifies one of our listings' exact card —
+    product, finish, language, condition. Stored per watchlist card
+    (tcgmarketplace_listing_key) so the pages can match our shop's live
+    listings to cards without redoing the product lookup."""
+    return f"{product_id}|{1 if foil else 0}|{(lang or 'en').lower()}|{(condition_code or 'NM').upper()}"
+
+
 def get_my_listings(user_id=None):
-    """Our shop's live Magic listings, as {(product_id, foil, lang,
-    condition_code): {"quantity": n, "price": lowest}} — from the public
+    """Our shop's live Magic listings, as {listing_key(...): {"quantity":
+    n, "price": lowest}} — from the public
     shop listing endpoint (GET /view/user/listing/<user id>), no login
     needed. None if it couldn't be fetched (so callers can keep what they
     had rather than wipe it)."""
@@ -382,11 +390,11 @@ def get_my_listings(user_id=None):
                 quantity = int(listing.get("quantity") or 0)
             except (KeyError, TypeError, ValueError):
                 continue
-            key = (
-                str(listing.get("product_id")),
+            key = listing_key(
+                listing.get("product_id"),
                 _is_foil_listing(listing),
-                (listing.get("crd_language") or "").lower(),
-                (listing.get("crd_condition") or "").upper(),
+                listing.get("crd_language"),
+                listing.get("crd_condition"),
             )
             entry = mine.setdefault(key, {"quantity": 0, "price": price})
             entry["quantity"] += quantity
@@ -398,12 +406,34 @@ def get_my_listings(user_id=None):
 CONDITION_CODES = {name: code for code, rank in CONDITION_RANKS.items() for name, r in APP_CONDITION_RANKS.items() if r == rank}
 
 
+def card_listing_key(product_id, finish, lang, condition):
+    """listing_key() for a watchlist card (app finish and condition names)."""
+    if product_id is None:
+        return None
+    return listing_key(product_id, _is_foil(finish), lang, CONDITION_CODES.get(condition or "Near Mint", "NM"))
+
+
 def my_listing_for(my_listings, product_id, finish, lang, condition):
     """Our listing (quantity and price) for this exact card, or None."""
     if not my_listings or product_id is None:
         return None
-    return my_listings.get(
-        (str(product_id), _is_foil(finish), (lang or "en").lower(), CONDITION_CODES.get(condition or "Near Mint", "NM"))
+    return my_listings.get(card_listing_key(product_id, finish, lang, condition))
+
+
+def export_my_listings(path):
+    """Write our shop's live Magic listings to `path` (docs/my_listings.json)
+    for the dashboard's Sell plan. Leaves any existing file alone if the
+    shop couldn't be read."""
+    from datetime import datetime, timezone
+
+    mine = get_my_listings()
+    if mine is None:
+        return
+    Path(path).write_text(
+        json.dumps(
+            {"generated_at": datetime.now(timezone.utc).isoformat(), "user_id": SELLER_USER_ID, "listings": mine},
+            separators=(",", ":"),
+        )
     )
 
 

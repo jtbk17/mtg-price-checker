@@ -200,3 +200,7 @@ def export_auctions(db_path):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     export_auctions(all_cards_history.db_path_for_year(date.today().year))
+    # Our own shop's listings ride along on this 30-minute run, so the
+    # dashboard's Sell plan shows new/changed listings within half an hour
+    # rather than waiting for the nightly refresh.
+    tcgmarketplace.export_my_listings(AUCTIONS_FILE.parent / "my_listings.json")
