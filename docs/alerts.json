@@ -1,32 +1,32 @@
 {
-  "generated_at": "2026-10-25T12:22:02.532258+00:00",
+  "generated_at": "2026-10-26T13:53:36.025268+00:00",
   "alerts": [
     {
-      "name": "Teferi's Protection",
-      "set_name": "Avatar: The Last Airbender Eternal",
+      "name": "Spiked Corridor // Torture Pit",
+      "set_name": "Duskmourn: House of Horror Commander",
       "printing": "Normal",
       "owner": "Joel",
-      "price_before": 49.99,
-      "price_now": 54.99,
-      "pct_change": 10.0
+      "price_before": 11.99,
+      "price_now": 13.99,
+      "pct_change": 16.7
     },
     {
-      "name": "Brainstorm",
-      "set_name": "Strixhaven Mystical Archive",
-      "printing": "Normal",
+      "name": "Simulacrum Synthesizer",
+      "set_name": "Marvel Universe",
+      "printing": "Foil",
       "owner": "Joel",
       "price_before": 24.99,
       "price_now": 27.99,
       "pct_change": 12.0
     },
     {
-      "name": "Emeritus of Abundance // Regrowth",
-      "set_name": "Secrets of Strixhaven",
+      "name": "Reflecting Pool",
+      "set_name": "Edge of Eternities: Stellar Sights",
       "printing": "Normal",
       "owner": "Joel",
-      "price_before": 2.99,
-      "price_now": 4.99,
-      "pct_change": 66.9
+      "price_before": 32.99,
+      "price_now": 37.99,
+      "pct_change": 15.2
     }
   ]
 }
