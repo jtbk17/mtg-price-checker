@@ -369,6 +369,11 @@ const SELL_RULES = {
   switchPrice: 10,
   floorOverGog: 0.1, // never list below GOG Cash + 10%
   gogWithin: 0.15, // sell to GOG if GOG Cash * 1.15 beats the cheapest listing
+  // Sell to a WTB buyer when they pay at least this share of a realistic sale
+  // price: the list price, or Card Kingdom's price if that's lower — a list
+  // price well above CK's (e.g. $19.89 vs $12.99) may not sell for a long
+  // time, while a $12 WTB offer is money now.
+  wtbShareOfSale: 0.9,
   sanityFactor: 3, // cheapest listing vs CK price beyond 3x either way: likely a data error
 };
 const SELL_ROUTES = {
@@ -421,7 +426,8 @@ function sellRecommendationFor(item) {
   const undercut = cheapest >= SELL_RULES.switchPrice ? SELL_RULES.undercutBig : SELL_RULES.undercutSmall;
   const floor = Math.max(gog == null ? 0 : gog * (1 + SELL_RULES.floorOverGog), wtb == null ? 0 : wtb);
   const price = Math.round(Math.max(cheapest - undercut, floor, 0.01) * 100) / 100;
-  if (wtb != null && wtb >= price) return { route: "wtb", price: wtb };
+  const realisticSale = ck ? Math.min(price, ck) : price;
+  if (wtb != null && wtb >= realisticSale * SELL_RULES.wtbShareOfSale) return { route: "wtb", price: wtb };
   if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest) return { route: "gog", price: gog };
   return { route: "list", price };
 }

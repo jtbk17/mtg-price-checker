@@ -240,7 +240,7 @@
           </select>
         </div>
       </div>
-      <p class="section-sub">What to do with each card: list just under the cheapest matching TheTCGMarketplace copy (1¢ under, or 10¢ at $10+), but never below GOG Cash + 10% or the best WTB offer; sell to a WTB buyer if they already pay that; sell to GOG if it pays within 15% of the cheapest listing.</p>
+      <p class="section-sub">What to do with each card: list just under the cheapest matching TheTCGMarketplace copy (1¢ under, or 10¢ at $10+), but never below GOG Cash + 10% or the best WTB offer; sell to a WTB buyer if they pay at least 90% of a realistic sale price (the lower of that list price and Card Kingdom's price); sell to GOG if it pays within 15% of the cheapest listing.</p>
       <div id="sell-plan-totals" class="totals" hidden></div>
       <div id="sell-plan" class="card-grid"><p class="empty">Loading…</p></div>
       <button id="sell-plan-more" class="more" hidden>Show more</button>
@@ -786,6 +786,11 @@
       switchPrice: 10,
       floorOverGog: 0.1,    // never list below GOG Cash + 10%
       gogWithin: 0.15,      // sell to GOG if GOG Cash * 1.15 beats the cheapest listing
+      // Sell to a WTB buyer when they pay at least this share of a realistic
+      // sale price: the list price, or Card Kingdom's price if that's lower —
+      // a list price well above CK's (e.g. $19.89 vs $12.99) may not sell
+      // for a long time, while a $12 WTB offer is money now.
+      wtbShareOfSale: 0.9,
       sanityFactor: 3,      // cheapest listing vs CK price beyond 3x either way: likely a data error
     };
     const ROUTES = {
@@ -827,7 +832,8 @@
       const undercut = cheapest >= SELL_RULES.switchPrice ? SELL_RULES.undercutBig : SELL_RULES.undercutSmall;
       const floor = Math.max(gog == null ? 0 : gog * (1 + SELL_RULES.floorOverGog), wtb == null ? 0 : wtb);
       const price = Math.round(Math.max(cheapest - undercut, floor, 0.01) * 100) / 100;
-      if (wtb != null && wtb >= price) return { route: "wtb", price: wtb, gog, cheapest, wtb };
+      const realisticSale = ck ? Math.min(price, ck) : price;
+      if (wtb != null && wtb >= realisticSale * SELL_RULES.wtbShareOfSale) return { route: "wtb", price: wtb, gog, cheapest, wtb };
       if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest) return { route: "gog", price: gog, gog, cheapest, wtb };
       return { route: "list", price, gog, cheapest, wtb };
     }
