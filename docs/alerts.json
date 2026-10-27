@@ -1,32 +1,59 @@
 {
-  "generated_at": "2026-10-26T13:53:36.025268+00:00",
+  "generated_at": "2026-10-27T13:14:11.997935+00:00",
   "alerts": [
     {
-      "name": "Spiked Corridor // Torture Pit",
-      "set_name": "Duskmourn: House of Horror Commander",
+      "name": "Knuckles the Echidna",
+      "set_name": "Secret Lair Drop",
       "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 11.99,
-      "price_now": 13.99,
-      "pct_change": 16.7
-    },
-    {
-      "name": "Simulacrum Synthesizer",
-      "set_name": "Marvel Universe",
-      "printing": "Foil",
       "owner": "Joel",
       "price_before": 24.99,
       "price_now": 27.99,
       "pct_change": 12.0
     },
     {
-      "name": "Reflecting Pool",
-      "set_name": "Edge of Eternities: Stellar Sights",
+      "name": "Veil of Summer",
+      "set_name": "Secret Lair Drop",
       "printing": "Normal",
       "owner": "Joel",
-      "price_before": 32.99,
-      "price_now": 37.99,
-      "pct_change": 15.2
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Black Market Connections",
+      "set_name": "Assassin's Creed",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Jet Medallion",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Polluted Delta",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Warren Soultrader",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
     }
   ]
 }
