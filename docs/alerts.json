@@ -1,17 +1,8 @@
 {
-  "generated_at": "2026-10-29T13:59:57.088443+00:00",
+  "generated_at": "2026-10-30T13:53:03.512603+00:00",
   "alerts": [
     {
-      "name": "Sigarda's Aid",
-      "set_name": "Secret Lair Drop",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Phyrexian Metamorph",
+      "name": "Aggravated Assault",
       "set_name": "Secret Lair Drop",
       "printing": "Normal",
       "owner": "Joel",
@@ -20,13 +11,103 @@
       "pct_change": 10.0
     },
     {
-      "name": "Teferi's Protection",
-      "set_name": "Double Masters 2022",
+      "name": "Enduring Vitality",
+      "set_name": "Duskmourn: House of Horror",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
+    },
+    {
+      "name": "The Earth Crystal",
+      "set_name": "Final Fantasy Promos",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 29.99,
+      "pct_change": 20.0
+    },
+    {
+      "name": "Miles Morales // Ultimate Spider-Man",
+      "set_name": "Marvel's Spider-Man",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "King T'Challa // Black Panther, Hope Enduring",
+      "set_name": "Marvel Super Heroes",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Underground Mortuary",
+      "set_name": "Murders at Karlov Manor",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 44.99,
+      "price_now": 49.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Ocelot Pride",
+      "set_name": "Modern Horizons 3",
       "printing": "Normal",
       "owner": "Joel",
       "price_before": 49.99,
       "price_now": 54.99,
       "pct_change": 10.0
+    },
+    {
+      "name": "Sword of Feast and Famine",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 44.99,
+      "price_now": 49.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Nurturing Peatland",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 17.99,
+      "price_now": 19.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Toxrill, the Corrosive",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Displacer Kitten",
+      "set_name": "Commander Legends: Battle for Baldur's Gate",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 49.99,
+      "price_now": 54.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Teferi, Time Raveler",
+      "set_name": "Bloomburrow Commander",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
     }
   ]
 }
