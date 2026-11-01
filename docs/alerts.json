@@ -1,27 +1,9 @@
 {
-  "generated_at": "2026-10-31T13:20:55.579305+00:00",
+  "generated_at": "2026-11-01T14:03:24.014493+00:00",
   "alerts": [
     {
-      "name": "Ancient Silver Dragon",
-      "set_name": "Commander Legends: Battle for Baldur's Gate",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 159.99,
-      "price_now": 179.99,
-      "pct_change": 12.5
-    },
-    {
-      "name": "Ulamog, the Defiler",
-      "set_name": "Modern Horizons 3",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Sakashima of a Thousand Faces",
-      "set_name": "Avatar: The Last Airbender Eternal",
+      "name": "Thorin, Company's Leader",
+      "set_name": "The Hobbit Eternal",
       "printing": "Normal",
       "owner": "Joel",
       "price_before": 24.99,
@@ -29,9 +11,45 @@
       "pct_change": 12.0
     },
     {
-      "name": "Super Shredder",
-      "set_name": "Teenage Mutant Ninja Turtles",
+      "name": "Molten Duplication",
+      "set_name": "The Big Score",
       "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 19.99,
+      "price_now": 22.99,
+      "pct_change": 15.0
+    },
+    {
+      "name": "Lu Bu, Master-at-Arms",
+      "set_name": "Portal Three Kingdoms Promos",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Arena of Glory",
+      "set_name": "The List",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 12.99,
+      "price_now": 14.99,
+      "pct_change": 15.4
+    },
+    {
+      "name": "Sword of Truth and Justice",
+      "set_name": "Secret Lair Drop",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Mystic Remora",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
       "owner": "Joel",
       "price_before": 24.99,
       "price_now": 27.99,
