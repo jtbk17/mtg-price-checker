@@ -1,4 +1,50 @@
 {
-  "generated_at": "2026-11-03T14:53:41.562733+00:00",
-  "alerts": []
+  "generated_at": "2026-11-04T15:08:13.662758+00:00",
+  "alerts": [
+    {
+      "name": "Sheoldred, Whispering One",
+      "set_name": "Jumpstart",
+      "printing": "Normal",
+      "owner": "Shared",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Deflecting Swat",
+      "set_name": "Avatar: The Last Airbender Eternal",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 99.99,
+      "price_now": 109.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Polluted Delta",
+      "set_name": "Modern Horizons 3",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Nethergoyf",
+      "set_name": "Modern Horizons 3",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    },
+    {
+      "name": "Rev, Tithe Extractor",
+      "set_name": "Foundations Jumpstart",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    }
+  ]
 }
