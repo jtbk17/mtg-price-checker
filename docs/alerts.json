@@ -1,36 +1,9 @@
 {
-  "generated_at": "2026-11-04T15:08:13.662758+00:00",
+  "generated_at": "2026-11-05T15:21:34.638765+00:00",
   "alerts": [
     {
-      "name": "Sheoldred, Whispering One",
-      "set_name": "Jumpstart",
-      "printing": "Normal",
-      "owner": "Shared",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Deflecting Swat",
-      "set_name": "Avatar: The Last Airbender Eternal",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 99.99,
-      "price_now": 109.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Polluted Delta",
-      "set_name": "Modern Horizons 3",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Nethergoyf",
-      "set_name": "Modern Horizons 3",
+      "name": "Exalted Sunborn",
+      "set_name": "Edge of Eternities",
       "printing": "Foil",
       "owner": "Joel",
       "price_before": 29.99,
@@ -38,13 +11,31 @@
       "pct_change": 10.0
     },
     {
-      "name": "Rev, Tithe Extractor",
-      "set_name": "Foundations Jumpstart",
+      "name": "Toph, Earthbending Master",
+      "set_name": "Avatar: The Last Airbender Eternal",
       "printing": "Normal",
       "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
+      "price_before": 49.99,
+      "price_now": 54.99,
       "pct_change": 10.0
+    },
+    {
+      "name": "Maha, Its Feathers Night",
+      "set_name": "Bloomburrow",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
+    },
+    {
+      "name": "Tiller Engine",
+      "set_name": "Dominaria United Commander",
+      "printing": "Normal",
+      "owner": "Joel",
+      "price_before": 24.99,
+      "price_now": 27.99,
+      "pct_change": 12.0
     }
   ]
 }
