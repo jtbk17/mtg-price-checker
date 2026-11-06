@@ -1,41 +1,4 @@
 {
-  "generated_at": "2026-11-05T15:21:34.638765+00:00",
-  "alerts": [
-    {
-      "name": "Exalted Sunborn",
-      "set_name": "Edge of Eternities",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Toph, Earthbending Master",
-      "set_name": "Avatar: The Last Airbender Eternal",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 49.99,
-      "price_now": 54.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Maha, Its Feathers Night",
-      "set_name": "Bloomburrow",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Tiller Engine",
-      "set_name": "Dominaria United Commander",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    }
-  ]
+  "generated_at": "2026-11-06T14:51:21.709829+00:00",
+  "alerts": []
 }
