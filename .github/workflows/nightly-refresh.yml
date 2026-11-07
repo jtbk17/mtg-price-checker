@@ -57,6 +57,14 @@ jobs:
           # ~17,000 searches on every night after the first.
           gh release download data --pattern "tcgmarketplace_id_cache.json" --clobber || true
 
+      # Pulls the shared Google Sheet inventory into the watchlist so the
+      # price refresh below covers newly added cards. Best-effort: if the
+      # sheet is unreachable or looks wrong, sheet_sync.py aborts without
+      # touching anything and the refresh just uses the existing list.
+      - name: Sync shared inventory from Google Sheet
+        continue-on-error: true
+        run: python sheet_sync.py
+
       # refresh_job.py/all_cards_history.py only do idempotent price
       # UPSERTs, and news_signals.py only records rows keyed by article
       # URL, so redoing any of this on a push conflict (e.g. a manual
