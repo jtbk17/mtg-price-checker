@@ -1,36 +1,18 @@
 {
-  "generated_at": "2026-11-07T13:48:17.782161+00:00",
+  "generated_at": "2026-11-08T18:45:40.596151+00:00",
   "alerts": [
     {
-      "name": "Minas Morgul, Dark Fortress",
-      "set_name": "The Hobbit Eternal",
+      "name": "Sink into Stupor // Soporific Springs",
+      "set_name": "Modern Horizons 3",
       "printing": "Foil",
       "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
+      "price_before": 17.99,
+      "price_now": 19.99,
+      "pct_change": 11.1
     },
     {
-      "name": "The Soul Stone",
-      "set_name": "Marvel's Spider-Man",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 99.99,
-      "price_now": 109.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Raucous Theater",
-      "set_name": "Murders at Karlov Manor",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 24.99,
-      "price_now": 27.99,
-      "pct_change": 12.0
-    },
-    {
-      "name": "Marrow-Gnawer",
-      "set_name": "Bloomburrow Commander",
+      "name": "Crypt Ghast",
+      "set_name": "Secret Lair Drop",
       "printing": "Normal",
       "owner": "Joel",
       "price_before": 29.99,
@@ -38,13 +20,22 @@
       "pct_change": 10.0
     },
     {
-      "name": "Fierce Guardianship",
-      "set_name": "Avatar: The Last Airbender Eternal",
+      "name": "Parallel Lives",
+      "set_name": "Marvel Universe",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 44.99,
+      "price_now": 49.99,
+      "pct_change": 11.1
+    },
+    {
+      "name": "Turbulent Moor",
+      "set_name": "Secrets of Strixhaven Commander",
       "printing": "Normal",
       "owner": "Joel",
-      "price_before": 99.99,
-      "price_now": 109.99,
-      "pct_change": 10.0
+      "price_before": 9.99,
+      "price_now": 11.99,
+      "pct_change": 20.0
     }
   ]
 }
