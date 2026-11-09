@@ -47,23 +47,29 @@ jobs:
       # git's practical size comfort (tcg_prices.db actually hit GitHub's
       # hard 100MB-per-file push limit, failing every push for two nights
       # straight), so both live as release assets instead, downloaded
-      # fresh at the start of each run and uploaded back at the end.
-      - name: Download existing databases, if any
+      # fresh at the start of each run and uploaded back at the end. A
+      # failed database download must stop the run: carrying on would start
+      # from an empty database and upload it over the real one at the end.
+      - name: Download existing databases
+        id: download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download data --pattern "tcg_prices.db" --clobber || true
-          gh release download data --pattern "all_cards_*.db" --clobber || true
+          gh release download data --pattern "tcg_prices.db" --clobber
+          gh release download data --pattern "all_cards_*.db" --clobber
           # TheTCGMarketplace product-id matches (see tcgmarketplace.py).
           # Keeping them between runs saves market_deals.py most of its
           # ~17,000 searches on every night after the first.
           gh release download data --pattern "tcgmarketplace_id_cache.json" --clobber || true
 
       # Pulls the shared Google Sheet inventory into the watchlist so the
-      # price refresh below covers newly added cards. Best-effort: if the
-      # sheet is unreachable or looks wrong, sheet_sync.py aborts without
-      # touching anything and the refresh just uses the existing list.
+      # price refresh below covers newly added cards. If the sheet is
+      # unreachable or fails sheet_sync.py's checks it aborts before writing
+      # anything, the refresh uses the existing list, and the job goes red
+      # at the end (see below) — an error partway through the import can
+      # leave some rows updated, but only ever to the sheet's own values.
       - name: Sync shared inventory from Google Sheet
+        id: sheet_sync
         continue-on-error: true
         run: python sheet_sync.py
 
@@ -150,9 +156,10 @@ jobs:
       # news signals, "already sent today" bookkeeping) still gets
       # persisted — same best-effort spirit the old git-based bookkeeping
       # push had, but as a single unconditional upload instead of a
-      # second git push that could itself conflict.
+      # second git push that could itself conflict. The one exception is a
+      # failed download, where there's nothing real here to persist.
       - name: Upload updated databases
-        if: always()
+        if: always() && steps.download.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -168,6 +175,12 @@ jobs:
         if: steps.refresh.outcome == 'failure'
         run: |
           echo "Docs-data push failed earlier in this run (see 'Refresh price data and news signals, then push docs' step above) — alerts were still sent and the databases were still uploaded." >&2
+          exit 1
+
+      - name: Fail the job if the sheet sync failed
+        if: steps.sheet_sync.outcome == 'failure'
+        run: |
+          echo "sheet_sync.py failed earlier in this run (see 'Sync shared inventory from Google Sheet' step above) — prices were still refreshed against the existing list." >&2
           exit 1
 
       - name: Fail the job if sending alerts/early warnings crashed

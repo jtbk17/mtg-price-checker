@@ -109,7 +109,7 @@ def _parse_price(value):
         return None
 
 
-def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
+def import_rows(rows, owner=None, on_progress=None, confirm_removals=False, remove_absent=True):
     """on_progress(phase, done, total), if given, is called periodically
     across the import's three phases (Scryfall lookup, Card Kingdom price
     lookup, saving to the watchlist) — purely for UI feedback, safe to
@@ -125,8 +125,11 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
     confirm_removals=True only if they explicitly confirm. Smaller
     removals (e.g. a few genuinely sold cards) still happen automatically
     either way, same as before — this only gates the unusual, high-blast-
-    radius case."""
-    scryfall_cards = _fetch_scryfall_cards((row.get("Scryfall ID") for row in rows), on_progress=on_progress)
+    radius case.
+
+    remove_absent=False skips that removal pass entirely, for a caller
+    that works out and applies its own removals (see sheet_sync.py)."""
+    scryfall_cards =_fetch_scryfall_cards((row.get("Scryfall ID") for row in rows), on_progress=on_progress)
 
     # ManaBox splits the same card+finish across multiple rows when you own
     # copies in different conditions (e.g. 2 Near Mint + 1 Lightly Played)
@@ -244,7 +247,7 @@ def import_rows(rows, owner=None, on_progress=None, confirm_removals=False):
     removed = 0
     needs_confirmation = False
     pending_removal_count = 0
-    if owner:
+    if owner and remove_absent:
         # Treat this CSV as the source of truth for the owner's collection:
         # anything previously tracked for them that's genuinely absent here
         # (e.g. a sold card) gets untracked automatically. Scoped by owner

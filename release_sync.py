@@ -56,13 +56,13 @@ def _asset_digest(asset_name):
 
 
 def _download(asset_name):
-    # Non-fatal if the asset doesn't exist yet (e.g. a brand new release)
-    # — leaves whatever local file (or lack of one) is already there,
-    # same as the `|| true` pattern the workflows use for this.
-    subprocess.run(
+    # Returns whether it worked. A failure leaves whatever local file (or
+    # lack of one) is already there, which sync() must then never upload.
+    result = subprocess.run(
         ["gh", "release", "download", RELEASE_TAG, "--pattern", asset_name, "--clobber"],
         capture_output=True, timeout=_TIMEOUT,
     )
+    return result.returncode == 0
 
 
 def _upload(asset_name):
@@ -95,8 +95,14 @@ def sync(asset_name, operation, max_retries=MAX_RETRIES):
     result = None
     for attempt in range(1, max_retries + 1):
         digest_before = _asset_digest(asset_name)
-        _download(asset_name)
+        downloaded = _download(asset_name)
         result = operation()
+
+        # The local file is stale or freshly empty at this point, so
+        # uploading it would overwrite the shared copy with old/no data.
+        if not downloaded:
+            logger.warning("Could not download %s — change saved locally only, not uploaded", asset_name)
+            return result
 
         if _asset_digest(asset_name) != digest_before:
             logger.info(

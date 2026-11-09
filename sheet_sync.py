@@ -11,6 +11,11 @@ already cover that).
 Reuses manabox_import.import_rows by reshaping the sheet's rows into
 ManaBox's column names. Purchase price is deliberately left blank: the
 sheet's "Price (USD)" is the market price when logged, not cost.
+
+Everything that can reject the sheet runs before the first write, so a
+bad sheet changes nothing. Removed cards keep their price history, so a
+card that drops off the sheet by mistake picks its chart back up when
+it returns.
 """
 
 import csv
@@ -45,6 +50,20 @@ def fetch_rows():
     return list(reader)
 
 
+def validate_rows(sheet_rows):
+    """Returns the non-blank rows, or raises if any can't be trusted. A
+    blank "In box" would otherwise import as 1 copy (_parse_quantity's
+    default), and a missing Scryfall ID would look like a removed card."""
+    rows = [r for r in sheet_rows if (r.get("Name") or "").strip() or (r.get("Scryfall ID") or "").strip()]
+    if not rows:
+        raise ValueError("Sheet has no rows — refusing to sync an empty inventory")
+    bad = [r for r in rows if not (r.get("In box") or "").strip().isdigit() or not (r.get("Scryfall ID") or "").strip()]
+    if bad:
+        names = ", ".join((r.get("Name") or "?") for r in bad[:5])
+        raise ValueError(f"{len(bad)} sheet row(s) have an invalid In box or Scryfall ID (e.g. {names})")
+    return rows
+
+
 def to_manabox_rows(sheet_rows):
     return [
         {
@@ -58,17 +77,17 @@ def to_manabox_rows(sheet_rows):
             "Purchase price": "",
         }
         for r in sheet_rows
-        if r.get("Scryfall ID")
     ]
 
 
-def remove_zero_quantity(sheet_rows):
-    """import_rows keeps any card whose Scryfall ID appears anywhere in the
-    CSV, so a card now at In box = 0 would linger with its old quantity.
-    Drop Shared rows that aren't held in any variant the sheet lists."""
+def find_removals(sheet_rows):
+    """Shared rows the sheet no longer holds any copies of, or raises if
+    that's too many to be believable. Checks finish and condition too,
+    unlike import_rows' own pass, which keeps any card whose Scryfall ID
+    appears anywhere in the CSV (so In box = 0 would linger)."""
     held = set()
     for r in sheet_rows:
-        if manabox_import._parse_quantity(r.get("In box")) <= 0:
+        if int(r["In box"]) <= 0:
             continue
         finish, _ = manabox_import._finish_and_label(r["Foil"])
         condition = manabox_import._normalize_condition(r["Condition"])
@@ -78,25 +97,20 @@ def remove_zero_quantity(sheet_rows):
     stale = [item for item in current if item["variant_id"] not in held]
     if current and len(stale) / len(current) > manabox_import.REMOVAL_WARNING_THRESHOLD:
         raise RuntimeError(f"Refusing to remove {len(stale)} of {len(current)} {OWNER} cards — sheet looks wrong")
-    for item in stale:
-        db.remove_from_watchlist(item["id"])
-    return len(stale)
+    return stale
 
 
 def main():
     db.init_db()
-    sheet_rows = fetch_rows()
-    if not sheet_rows:
-        raise ValueError("Sheet has no rows — refusing to sync an empty inventory")
+    sheet_rows = validate_rows(fetch_rows())
+    stale = find_removals(sheet_rows)
 
-    result = manabox_import.import_rows(to_manabox_rows(sheet_rows), owner=OWNER)
-    if result["needs_confirmation"]:
-        raise RuntimeError(f"Sync would remove {result['pending_removal_count']} cards — sheet looks wrong")
-    removed = remove_zero_quantity(sheet_rows)
-    logger.info(
-        "Sheet sync: %d imported, %d skipped, %d removed (+%d zero-quantity)",
-        result["imported"], result["skipped"], result["removed"], removed,
-    )
+    result = manabox_import.import_rows(to_manabox_rows(sheet_rows), owner=OWNER, remove_absent=False)
+    if not result["imported"]:
+        raise RuntimeError(f"Sheet sync imported nothing ({result['skipped']} skipped) — is Scryfall reachable?")
+    for item in stale:
+        db.remove_from_watchlist(item["id"], keep_history=True)
+    logger.info("Sheet sync: %d imported, %d skipped, %d removed", result["imported"], result["skipped"], len(stale))
     for err in result["errors"]:
         logger.warning("Sheet sync: %s", err)
 

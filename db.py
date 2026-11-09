@@ -312,13 +312,20 @@ def add_copies(watchlist_id, added_quantity, added_purchase_price):
         conn.close()
 
 
-def remove_from_watchlist(watchlist_id):
+def remove_from_watchlist(watchlist_id, keep_history=False):
     conn = get_connection()
     try:
         row = conn.execute("SELECT variant_id FROM watchlist WHERE id = ?", (watchlist_id,)).fetchone()
         conn.execute("DELETE FROM watchlist WHERE id = ?", (watchlist_id,))
         if row:
-            conn.execute("DELETE FROM price_history WHERE variant_id = ?", (row["variant_id"],))
+            # price_history is keyed by variant alone, so another owner's
+            # copy of the same card shares these rows — only drop them
+            # once nobody's tracking it anymore.
+            still_tracked = conn.execute(
+                "SELECT 1 FROM watchlist WHERE variant_id = ? LIMIT 1", (row["variant_id"],)
+            ).fetchone()
+            if not keep_history and not still_tracked:
+                conn.execute("DELETE FROM price_history WHERE variant_id = ?", (row["variant_id"],))
         conn.commit()
     finally:
         conn.close()
