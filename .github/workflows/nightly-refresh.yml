@@ -73,6 +73,17 @@ jobs:
         continue-on-error: true
         run: python sheet_sync.py
 
+      # Same sync for Joel's own sheet, kept in a secret rather than in the
+      # (public) repo like Shared's ID.
+      - name: Sync Joel's inventory from Google Sheet
+        id: sheet_sync_joel
+        continue-on-error: true
+        env:
+          INVENTORY_SHEET_ID: ${{ secrets.JOEL_SHEET_ID }}
+          INVENTORY_SHEET_GID: "0"
+          INVENTORY_OWNER: Joel
+        run: python sheet_sync.py
+
       # refresh_job.py/all_cards_history.py only do idempotent price
       # UPSERTs, and news_signals.py only records rows keyed by article
       # URL, so redoing any of this on a push conflict (e.g. a manual
@@ -178,9 +189,9 @@ jobs:
           exit 1
 
       - name: Fail the job if the sheet sync failed
-        if: steps.sheet_sync.outcome == 'failure'
+        if: steps.sheet_sync.outcome == 'failure' || steps.sheet_sync_joel.outcome == 'failure'
         run: |
-          echo "sheet_sync.py failed earlier in this run (see 'Sync shared inventory from Google Sheet' step above) — prices were still refreshed against the existing list." >&2
+          echo "sheet_sync.py failed earlier in this run (see the 'Sync ... inventory from Google Sheet' steps above) — prices were still refreshed against the existing list." >&2
           exit 1
 
       - name: Fail the job if sending alerts/early warnings crashed

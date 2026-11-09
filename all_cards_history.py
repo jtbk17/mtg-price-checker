@@ -341,6 +341,18 @@ def reconcile_canonical_groups(db_path):
         logger.info("Reconciled %d card(s) into canonical groups", len(updates))
 
 
+# A rise only counts as trending past both of these: percentage alone is
+# dominated by penny cards doubling, dollars alone by expensive cards
+# drifting a fraction of a percent.
+TRENDING_MIN_PCT = 10
+TRENDING_MIN_CENTS = 100
+
+
+def _is_trending(now_cents, before_cents):
+    change = now_cents - before_cents
+    return change > TRENDING_MIN_CENTS and change * 100 > TRENDING_MIN_PCT * before_cents
+
+
 def compute_movers(db_path, top_n=15):
     """Biggest day-over-day and week-over-week movers across every card
     Card Kingdom prices, using the history this module has been
@@ -351,7 +363,11 @@ def compute_movers(db_path, top_n=15):
     in MTGJSON), since those are the actual source of meaningless noise
     (e.g. a generic Soldier token blipping between $0.35 and $0.99), not
     low price alone. Also excludes cards with no actual change (padding a
-    short real-movers list with 0% entries isn't useful)."""
+    short real-movers list with 0% entries isn't useful).
+
+    daily_trending/weekly_trending are every rise past the _is_trending
+    thresholds, deliberately not capped at top_n: the capped gainers lists
+    are ranked by percentage, so a real $5 move can be crowded out."""
     conn = _get_connection(db_path)
     today_day = _day_number(date.today())
 
@@ -396,16 +412,23 @@ def compute_movers(db_path, top_n=15):
             (m for m in movers if m["pct_change"] > 0), key=lambda m: m["pct_change"], reverse=True
         )[:top_n]
         losers = sorted((m for m in movers if m["pct_change"] < 0), key=lambda m: m["pct_change"])[:top_n]
-        return gainers, losers
+        trending = sorted(
+            (m for m, row in zip(movers, rows) if _is_trending(row[4], row[5])),
+            key=lambda m: m["pct_change"],
+            reverse=True,
+        )
+        return gainers, losers, trending
 
-    daily_gainers, daily_losers = top_movers(1)
-    weekly_gainers, weekly_losers = top_movers(7)
+    daily_gainers, daily_losers, daily_trending = top_movers(1)
+    weekly_gainers, weekly_losers, weekly_trending = top_movers(7)
     conn.close()
     return {
         "daily_gainers": daily_gainers,
         "daily_losers": daily_losers,
         "weekly_gainers": weekly_gainers,
         "weekly_losers": weekly_losers,
+        "daily_trending": daily_trending,
+        "weekly_trending": weekly_trending,
     }
 
 

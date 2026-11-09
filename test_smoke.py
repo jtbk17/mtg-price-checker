@@ -427,6 +427,34 @@ class AllCardsHistoryTests(unittest.TestCase):
         for key in ("daily_gainers", "daily_losers", "weekly_gainers", "weekly_losers"):
             self.assertEqual(movers[key], [])
 
+    def test_trending_requires_both_percent_and_dollar_thresholds(self):
+        self.assertTrue(ach._is_trending(1200, 1000))  # +20%, +$2
+        self.assertFalse(ach._is_trending(149, 49))  # +204% but exactly +$1
+        self.assertFalse(ach._is_trending(10500, 10000))  # +$5 but only +5%
+        self.assertFalse(ach._is_trending(1100, 1000))  # exactly +10%
+        self.assertFalse(ach._is_trending(1000, 1200))  # falling
+
+    def test_compute_movers_trending_is_not_capped_by_top_n(self):
+        conn = ach._get_connection(self.db_path)
+        today = ach._day_number(__import__("datetime").date.today())
+        for i in range(5):
+            conn.execute(
+                "INSERT INTO cards (mtgjson_uuid, name, set_code, is_token) VALUES (?, ?, 'TST', 0)",
+                (f"t-{i}", f"Card {i}"),
+            )
+            card_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = ?", (f"t-{i}",)).fetchone()[0]
+            conn.executemany(
+                "INSERT INTO price_history (card_id, day, price_cents) VALUES (?, ?, ?)",
+                [(card_id, today - 1, 1000), (card_id, today, 1500 + i)],
+            )
+        conn.commit()
+        conn.close()
+
+        movers = ach.compute_movers(self.db_path, top_n=2)
+        self.assertEqual(len(movers["daily_gainers"]), 2)
+        self.assertEqual(len(movers["daily_trending"]), 5)
+        self.assertEqual(movers["daily_trending"][0]["name"], "Card 4")
+
     def test_compute_movers_excludes_tokens_and_zero_change(self):
         conn = ach._get_connection(self.db_path)
         today = ach._day_number(__import__("datetime").date.today())
@@ -2431,6 +2459,56 @@ class ReleaseSyncTests(unittest.TestCase):
 
         self.assertEqual(operation.call_count, 2)
         self.assertEqual(result, "ok")
+
+
+class SheetSyncTests(unittest.TestCase):
+    def setUp(self):
+        import sheet_sync
+
+        self.ss = sheet_sync
+        self.owner_patch = patch.object(self.ss, "OWNER", "SheetTest")
+        self.owner_patch.start()
+
+    def tearDown(self):
+        self.owner_patch.stop()
+        for item in db.list_watchlist(owner="SheetTest"):
+            db.remove_from_watchlist(item["id"])
+
+    def _track(self):
+        db.add_to_watchlist(
+            {"variant_id": "old:nonfoil:near-mint", "card_id": "old", "name": "Old", "owner": "SheetTest", "quantity": 2}
+        )
+
+    def _row(self, scryfall_id, in_box):
+        return {
+            "Name": "Card", "Set code": "TST", "Foil": "normal", "Condition": "near_mint",
+            "Scryfall ID": scryfall_id, "In box": in_box,
+        }
+
+    def _main(self, rows):
+        result = {"imported": 1, "skipped": 0, "removed": 0, "errors": []}
+        with patch.object(self.ss, "fetch_rows", return_value=rows),              patch.object(self.ss.manabox_import, "import_rows", return_value=result) as mock_import:
+            self.ss.main()
+        return mock_import
+
+    def test_empty_sheet_is_nothing_to_do_for_an_owner_with_no_cards(self):
+        self._main([]).assert_not_called()
+
+    def test_empty_sheet_is_rejected_once_the_owner_has_cards(self):
+        self._track()
+        with self.assertRaises(ValueError):
+            self._main([])
+        self.assertEqual(len(db.list_watchlist(owner="SheetTest")), 1)
+
+    def test_first_batch_imports_for_an_owner_with_no_cards(self):
+        self._main([self._row("new", "1")]).assert_called_once()
+
+    def test_large_removal_is_refused_before_importing(self):
+        self._track()
+        with patch.object(self.ss.manabox_import, "import_rows") as mock_import,              patch.object(self.ss, "fetch_rows", return_value=[self._row("new", "1")]):
+            with self.assertRaises(RuntimeError):
+                self.ss.main()
+        mock_import.assert_not_called()
 
 
 class AppRouteTests(unittest.TestCase):

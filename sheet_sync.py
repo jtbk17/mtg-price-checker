@@ -50,11 +50,15 @@ def fetch_rows():
     return list(reader)
 
 
+def non_blank_rows(sheet_rows):
+    return [r for r in sheet_rows if (r.get("Name") or "").strip() or (r.get("Scryfall ID") or "").strip()]
+
+
 def validate_rows(sheet_rows):
     """Returns the non-blank rows, or raises if any can't be trusted. A
     blank "In box" would otherwise import as 1 copy (_parse_quantity's
     default), and a missing Scryfall ID would look like a removed card."""
-    rows = [r for r in sheet_rows if (r.get("Name") or "").strip() or (r.get("Scryfall ID") or "").strip()]
+    rows = non_blank_rows(sheet_rows)
     if not rows:
         raise ValueError("Sheet has no rows — refusing to sync an empty inventory")
     bad = [r for r in rows if not (r.get("In box") or "").strip().isdigit() or not (r.get("Scryfall ID") or "").strip()]
@@ -102,7 +106,13 @@ def find_removals(sheet_rows):
 
 def main():
     db.init_db()
-    sheet_rows = validate_rows(fetch_rows())
+    sheet_rows = fetch_rows()
+    # Empty is only believable for an owner starting from nothing; an empty
+    # sheet with cards already tracked falls through to validate_rows.
+    if not non_blank_rows(sheet_rows) and not db.list_watchlist(owner=OWNER):
+        logger.info("Sheet sync: %s's sheet has no cards yet — nothing to do", OWNER)
+        return
+    sheet_rows = validate_rows(sheet_rows)
     stale = find_removals(sheet_rows)
 
     result = manabox_import.import_rows(to_manabox_rows(sheet_rows), owner=OWNER, remove_absent=False)
