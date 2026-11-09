@@ -1,41 +1,4 @@
 {
-  "generated_at": "2026-11-08T18:45:40.596151+00:00",
-  "alerts": [
-    {
-      "name": "Sink into Stupor // Soporific Springs",
-      "set_name": "Modern Horizons 3",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 17.99,
-      "price_now": 19.99,
-      "pct_change": 11.1
-    },
-    {
-      "name": "Crypt Ghast",
-      "set_name": "Secret Lair Drop",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 29.99,
-      "price_now": 32.99,
-      "pct_change": 10.0
-    },
-    {
-      "name": "Parallel Lives",
-      "set_name": "Marvel Universe",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 44.99,
-      "price_now": 49.99,
-      "pct_change": 11.1
-    },
-    {
-      "name": "Turbulent Moor",
-      "set_name": "Secrets of Strixhaven Commander",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 9.99,
-      "price_now": 11.99,
-      "pct_change": 20.0
-    }
-  ]
+  "generated_at": "2026-11-09T23:19:52.848921+00:00",
+  "alerts": []
 }
