@@ -183,6 +183,7 @@
     .card-actions button:disabled, .card-actions select:disabled { opacity: 0.5; }
     .card-actions select { flex: 1 1 100%; min-width: 0; }
     .card-actions input { width: 4em; }
+    .card-actions label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85em; }
     .order-error { color: var(--down); font-size: 0.85em; }
     .order-error:empty { display: none; }
     #wtb-connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
@@ -1081,21 +1082,26 @@
       error.className = "order-error";
       el.append(actions, error);
 
-      function showStart() {
-        actions.innerHTML = "";
-        actionButton(actions, "Sold to WTB buyer", showConfirm);
-      }
-      function showConfirm() {
+      // How many copies is up to the buyer's WTB, so ask up front.
+      function showStart(qty = 1) {
         actions.innerHTML = available > 1
-          ? `<input type="number" min="1" max="${available}" value="1" aria-label="Copies sold">`
+          ? `<label>Copies <input type="number" min="1" max="${available}" value="${qty}" inputmode="numeric"></label>`
           : "";
         const qtyInput = actions.querySelector("input");
-        actionButton(actions, `Record at ${formatPrice(item.tcgmarketplace_wtb_price)}`, async () => {
-          const qty = qtyInput ? Number(qtyInput.value) : 1;
-          if (!Number.isInteger(qty) || qty < 1 || qty > available) {
+        actionButton(actions, "Sold to WTB buyer", () => {
+          const chosen = qtyInput ? Number(qtyInput.value) : 1;
+          if (!Number.isInteger(chosen) || chosen < 1 || chosen > available) {
             error.textContent = `Enter 1–${available}`;
             return;
           }
+          error.textContent = "";
+          showConfirm(chosen);
+        });
+      }
+      function showConfirm(qty) {
+        actions.innerHTML = "";
+        const price = item.tcgmarketplace_wtb_price;
+        actionButton(actions, `Record ${qty} at ${formatPrice(price)}${qty > 1 ? ` = ${formatPrice(price * qty)}` : ""}`, async () => {
           const failed = busy(actions, error);
           try {
             await sheetsApi("offer", {
@@ -1111,7 +1117,7 @@
             failed(err);
           }
         }, true);
-        actionButton(actions, "Cancel", showStart);
+        actionButton(actions, "Back", () => showStart(qty));
       }
       showStart();
     }
