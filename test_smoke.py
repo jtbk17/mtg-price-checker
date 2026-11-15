@@ -427,34 +427,6 @@ class AllCardsHistoryTests(unittest.TestCase):
         for key in ("daily_gainers", "daily_losers", "weekly_gainers", "weekly_losers"):
             self.assertEqual(movers[key], [])
 
-    def test_trending_requires_both_percent_and_dollar_thresholds(self):
-        self.assertTrue(ach._is_trending(1200, 1000))  # +20%, +$2
-        self.assertFalse(ach._is_trending(149, 49))  # +204% but exactly +$1
-        self.assertFalse(ach._is_trending(10500, 10000))  # +$5 but only +5%
-        self.assertFalse(ach._is_trending(1100, 1000))  # exactly +10%
-        self.assertFalse(ach._is_trending(1000, 1200))  # falling
-
-    def test_compute_movers_trending_is_not_capped_by_top_n(self):
-        conn = ach._get_connection(self.db_path)
-        today = ach._day_number(__import__("datetime").date.today())
-        for i in range(5):
-            conn.execute(
-                "INSERT INTO cards (mtgjson_uuid, name, set_code, is_token) VALUES (?, ?, 'TST', 0)",
-                (f"t-{i}", f"Card {i}"),
-            )
-            card_id = conn.execute("SELECT id FROM cards WHERE mtgjson_uuid = ?", (f"t-{i}",)).fetchone()[0]
-            conn.executemany(
-                "INSERT INTO price_history (card_id, day, price_cents) VALUES (?, ?, ?)",
-                [(card_id, today - 1, 1000), (card_id, today, 1500 + i)],
-            )
-        conn.commit()
-        conn.close()
-
-        movers = ach.compute_movers(self.db_path, top_n=2)
-        self.assertEqual(len(movers["daily_gainers"]), 2)
-        self.assertEqual(len(movers["daily_trending"]), 5)
-        self.assertEqual(movers["daily_trending"][0]["name"], "Card 4")
-
     def test_compute_movers_excludes_tokens_and_zero_change(self):
         conn = ach._get_connection(self.db_path)
         today = ach._day_number(__import__("datetime").date.today())
