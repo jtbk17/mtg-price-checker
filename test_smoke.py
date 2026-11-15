@@ -2483,6 +2483,86 @@ class SheetSyncTests(unittest.TestCase):
         mock_import.assert_not_called()
 
 
+class ListingSalesTests(unittest.TestCase):
+    def setUp(self):
+        import listing_sales
+
+        self.ls = listing_sales
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.sales_file = Path(self.tmp_dir.name) / "listing_sales.json"
+        self.watchlist_file = Path(self.tmp_dir.name) / "watchlist.json"
+        self.watchlist_file.write_text(json.dumps({"items": [
+            {"name": "Sol Ring", "owner": "Shared", "card_id": "sol", "printing": "Foil", "tcgmarketplace_listing_key": "1|1|en|NM"},
+            {"name": "Sol Ring", "owner": "Joel", "card_id": "sol", "printing": "Foil", "tcgmarketplace_listing_key": "1|1|en|NM"},
+            {"name": "Unlisted", "owner": "Shared", "card_id": "x", "printing": "Normal"},
+        ]}))
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def _record(self, previous, current, now):
+        return self.ls.record_drops(previous, current, now=now, sales_file=self.sales_file, watchlist_file=self.watchlist_file)
+
+    def _saved(self):
+        return json.loads(self.sales_file.read_text())["drops"]
+
+    def test_find_drops_counts_lower_quantity_and_gone_listings_only(self):
+        previous = {"a": {"quantity": 2, "price": 5.0}, "b": {"quantity": 1, "price": 9.0}, "c": {"quantity": 1, "price": 1.0}}
+        current = {"a": {"quantity": 1, "price": 5.0}, "c": {"quantity": 3, "price": 1.0}, "d": {"quantity": 1, "price": 2.0}}
+        drops = {d["key"]: (d["qty_before"], d["qty_after"], d["price"]) for d in self.ls.find_drops(previous, current)}
+        self.assertEqual(drops, {"a": (2, 1, 5.0), "b": (1, 0, 9.0)})
+
+    def test_empty_shop_read_is_held_then_compared_against_what_came_before(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+        before = {"a": {"quantity": 1, "price": 1.0}, "b": {"quantity": 2, "price": 2.0}}
+        self.assertEqual(self._record(before, {}, now), [])
+        self.assertEqual(self._saved(), [])
+        # Listings back: only what really went since before the empty read.
+        drops = self._record({}, {"a": {"quantity": 1, "price": 1.0}, "b": {"quantity": 1, "price": 2.0}}, now)
+        self.assertEqual([(d["key"], d["qty_before"], d["qty_after"]) for d in drops], [("b", 2, 1)])
+        self.assertNotIn("held_before_empty", json.loads(self.sales_file.read_text()))
+
+    def test_empty_shop_read_twice_in_a_row_counts_as_sold_out(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+        self._record({"a": {"quantity": 1, "price": 1.0}}, {}, now)
+        drops = self._record({}, {}, now)
+        self.assertEqual([(d["key"], d["qty_before"], d["qty_after"]) for d in drops], [("a", 1, 0)])
+
+    def test_record_drops_saves_matching_cards_for_every_owner(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+        self._record({"1|1|en|NM": {"quantity": 1, "price": 27.9}, "2|0|en|NM": {"quantity": 1, "price": 1.0}},
+                     {"2|0|en|NM": {"quantity": 1, "price": 1.0}}, now)
+        [drop] = self._saved()
+        self.assertEqual(drop["id"], "1|1|en|NM@" + now.isoformat())
+        self.assertEqual(sorted(c["owner"] for c in drop["cards"]), ["Joel", "Shared"])
+        self.assertEqual(drop["cards"][0]["card_id"], "sol")
+
+    def test_record_drops_prunes_old_entries_and_keeps_recent_ones(self):
+        from datetime import datetime, timedelta, timezone
+
+        start = datetime(2026, 11, 1, tzinfo=timezone.utc)
+        self._record({"1|1|en|NM": {"quantity": 2, "price": 1.0}}, {"1|1|en|NM": {"quantity": 1, "price": 1.0}}, start)
+        self._record({"1|1|en|NM": {"quantity": 1, "price": 1.0}}, {"1|1|en|NM": {"quantity": 0, "price": 1.0}}, start + timedelta(days=10))
+        self.assertEqual(len(self._saved()), 2)
+        self._record({}, {}, start + timedelta(days=self.ls.RECENT_DAYS + 1))
+        self.assertEqual([d["qty_before"] for d in self._saved()], [1])
+
+    def test_record_drops_leaves_file_alone_when_nothing_changed(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 11, 16, tzinfo=timezone.utc)
+        self._record({}, {}, now)
+        before = self.sales_file.stat().st_mtime_ns
+        self.assertEqual(self._record({"a": {"quantity": 1, "price": 1.0}}, {"a": {"quantity": 1, "price": 1.0}}, now), [])
+        self.assertEqual(self.sales_file.stat().st_mtime_ns, before)
+
+
 class AppRouteTests(unittest.TestCase):
     """Exercise the Flask routes that don't need network access
     (Scryfall/Card Kingdom search is out of scope here — no network calls

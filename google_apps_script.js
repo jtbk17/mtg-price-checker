@@ -1,5 +1,6 @@
 // Google Apps Script web app: lets the GitHub Pages dashboard
-// (docs/index.html) record WTB order progress in the two inventory sheets.
+// (docs/index.html) record sales — to WTB buyers or from our TCGMP
+// listings — and their progress in the two inventory sheets.
 // The dashboard is a static page with nowhere safe to keep Google
 // credentials, so this runs inside Google as you, and the dashboard only
 // ever sends it a passcode.
@@ -18,9 +19,11 @@
 // After changing this file: Deploy -> Manage deployments -> edit -> Version:
 // New version, which keeps the same URL.
 //
-// Each spreadsheet gets a "WTB orders" tab (created on first use) logging
-// every order and its progress. Inventory's Sold/Pulled cells only change
-// at these steps:
+// Each spreadsheet gets an "Orders" tab (created on first use; an older
+// "WTB orders" tab is renamed and given any newer columns) logging every
+// order and its progress. "Not a sale" answers to the dashboard's "Looks
+// sold?" listing drops are kept in script properties, not the sheets.
+// Inventory's Sold/Pulled cells only change at these steps:
 //   buyer paid         Pulled + qty on the row the copies came from
 //   dropped off        Pulled - qty, Sold + qty — In box is Qty - Sold -
 //                      Pulled, so adding to Sold alone would count the
@@ -29,11 +32,14 @@
 //   being paid
 
 const INVENTORY_TAB = "Inventory";
-const ORDERS_TAB = "WTB orders";
+const ORDERS_TAB = "Orders";
+const LEGACY_ORDERS_TAB = "WTB orders";
+// New columns only ever go on the end, so older tabs can be extended in place.
 const ORDER_HEADERS = [
   "Order", "Status", "Card", "Set", "Finish", "Scryfall ID", "Qty", "Price (USD)",
-  "Location", "Inventory row", "Offered", "Paid", "Closed",
+  "Location", "Inventory row", "Offered", "Paid", "Closed", "Type", "Source",
 ];
+const ORDER_TYPES = ["WTB", "Listing"];
 const SHEET_PROPERTIES = { Shared: "SHEET_SHARED", Joel: "SHEET_JOEL" };
 const RECENT_DAYS = 14;
 
@@ -51,6 +57,10 @@ function doPost(e) {
       result = { ok: false, auth: true, error: "Wrong passcode" };
     } else if (!ACTIONS.hasOwnProperty(req.action)) {
       result = { ok: false, error: `Unknown action "${req.action}"` };
+    } else if (req.action === "locations") {
+      // Only reads, and the dashboard asks once per open order, so it
+      // mustn't queue behind (or hold up) the lock real changes need.
+      result = Object.assign({ ok: true }, ACTIONS.locations(req));
     } else {
       // One request at a time: two taps landing together must not both
       // read the same Pulled value and each add to it.
@@ -79,7 +89,16 @@ const ACTIONS = {
         if (open || (order.closed && new Date(order.closed).getTime() >= cutoff)) orders.push(order);
       }
     }
-    return { orders };
+    return { orders, dismissed: Object.keys(readDismissed()) };
+  },
+
+  // "Not a sale" for a listing drop the dashboard flagged (its id).
+  dismiss(req) {
+    if (!req.source) throw new Error("Missing which listing drop to dismiss");
+    const dismissed = readDismissed();
+    dismissed[req.source] = new Date().toISOString();
+    PropertiesService.getScriptProperties().setProperty("DISMISSED", JSON.stringify(dismissed));
+    return {};
   },
 
   // Inventory rows holding this printing with copies still in the box.
@@ -95,12 +114,20 @@ const ACTIONS = {
     const qty = Number(req.qty);
     if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a whole number of at least 1");
     if (!req.scryfallId || !req.finish) throw new Error("Missing card details");
+    const type = req.type || "WTB";
+    if (ORDER_TYPES.indexOf(type) < 0) throw new Error(`Unknown order type "${type}"`);
     const sheet = ordersSheet(req.owner);
+    // One order per flagged listing drop, even if "record" is tapped twice —
+    // checked across both sheets, since either owner's copy can be picked.
+    const owners = Object.keys(SHEET_PROPERTIES).filter(sheetIdFor);
+    if (req.source && owners.some((o) => readOrders(o).orders.some((order) => order.source === req.source))) {
+      throw new Error("That sale is already recorded");
+    }
     const id = Utilities.getUuid().slice(0, 8);
     const values = {
       "Order": id, "Status": AWAITING, "Card": req.name || "", "Set": req.set || "", "Finish": req.finish,
       "Scryfall ID": req.scryfallId, "Qty": qty, "Price (USD)": Number(req.price) || "", "Location": "",
-      "Inventory row": "", "Offered": new Date(), "Paid": "", "Closed": "",
+      "Inventory row": "", "Offered": new Date(), "Paid": "", "Closed": "", "Type": type, "Source": req.source || "",
     };
     sheet.appendRow(ORDER_HEADERS.map((h) => values[h]));
     return { order: findOrder(req.owner, id).order };
@@ -214,11 +241,36 @@ function ordersSheet(owner) {
   const ss = spreadsheet(owner);
   let sheet = ss.getSheetByName(ORDERS_TAB);
   if (!sheet) {
+    sheet = ss.getSheetByName(LEGACY_ORDERS_TAB);
+    if (sheet) sheet.setName(ORDERS_TAB);
+  }
+  if (!sheet) {
     sheet = ss.insertSheet(ORDERS_TAB);
     sheet.appendRow(ORDER_HEADERS);
     sheet.setFrozenRows(1);
+    return sheet;
   }
+  // A tab made by an older version of this script lacks the newest columns.
+  const headers = sheet.getDataRange().getValues()[0].map(String);
+  ORDER_HEADERS.filter((h) => headers.indexOf(h) < 0).forEach((h, i) => {
+    sheet.getRange(1, headers.length + i + 1).setValue(h);
+  });
   return sheet;
+}
+
+// {listing drop id: when dismissed}, pruned to the dashboard's window.
+function readDismissed() {
+  let dismissed = {};
+  try {
+    dismissed = JSON.parse(PropertiesService.getScriptProperties().getProperty("DISMISSED") || "{}");
+  } catch (err) {
+    dismissed = {};
+  }
+  const cutoff = Date.now() - 2 * RECENT_DAYS * 24 * 60 * 60 * 1000;
+  for (const [id, when] of Object.entries(dismissed)) {
+    if (new Date(when).getTime() < cutoff) delete dismissed[id];
+  }
+  return dismissed;
 }
 
 function readOrders(owner) {
@@ -242,6 +294,8 @@ function readOrders(owner) {
     offered: iso(r[col["Offered"]]),
     paid: iso(r[col["Paid"]]),
     closed: iso(r[col["Closed"]]),
+    type: String(r[col["Type"]]) || "WTB",
+    source: String(r[col["Source"]]),
   }));
   return { sheet, col, orders };
 }

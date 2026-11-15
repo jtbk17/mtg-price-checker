@@ -422,19 +422,20 @@ def my_listing_for(my_listings, product_id, finish, lang, condition):
 
 def export_my_listings(path):
     """Write our shop's live Magic listings to `path` (docs/my_listings.json)
-    for the dashboard's Sell plan. Leaves any existing file alone if the
-    shop couldn't be read."""
+    for the dashboard's Sell plan, and return them. Leaves any existing
+    file alone, and returns None, if the shop couldn't be read."""
     from datetime import datetime, timezone
 
     mine = get_my_listings()
     if mine is None:
-        return
+        return None
     Path(path).write_text(
         json.dumps(
             {"generated_at": datetime.now(timezone.utc).isoformat(), "user_id": SELLER_USER_ID, "listings": mine},
             separators=(",", ":"),
         )
     )
+    return mine
 
 
 def get_wtb_price(product_id, foil=False, lang=None, condition=None):

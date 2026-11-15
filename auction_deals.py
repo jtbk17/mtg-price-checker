@@ -29,6 +29,7 @@ import requests
 
 import all_cards_history
 import cardkingdom
+import listing_sales
 import tcgmarketplace
 
 logger = logging.getLogger("tcg-price-checker")
@@ -202,5 +203,18 @@ if __name__ == "__main__":
     export_auctions(all_cards_history.db_path_for_year(date.today().year))
     # Our own shop's listings ride along on this 30-minute run, so the
     # dashboard's Sell plan shows new/changed listings within half an hour
-    # rather than waiting for the nightly refresh.
-    tcgmarketplace.export_my_listings(AUCTIONS_FILE.parent / "my_listings.json")
+    # rather than waiting for the nightly refresh. The previous read is
+    # kept first, to spot listings that sold (or were taken down) since.
+    listings_file = AUCTIONS_FILE.parent / "my_listings.json"
+    try:
+        previous = json.loads(listings_file.read_text())["listings"]
+    except (OSError, ValueError, KeyError):
+        previous = None
+    current = tcgmarketplace.export_my_listings(listings_file)
+    if previous is not None and current is not None:
+        # Best-effort: a problem here must not stop auctions.json and
+        # my_listings.json from being pushed.
+        try:
+            listing_sales.record_drops(previous, current)
+        except Exception:
+            logger.exception("Couldn't check listings for sales")

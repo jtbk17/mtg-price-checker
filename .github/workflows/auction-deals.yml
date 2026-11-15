@@ -53,11 +53,14 @@ jobs:
           mkdir -p /tmp/out
           cp docs/auctions.json /tmp/out/
           [ -f docs/my_listings.json ] && cp docs/my_listings.json /tmp/out/
+          [ -f docs/listing_sales.json ] && cp docs/listing_sales.json /tmp/out/
           for attempt in 1 2 3; do
             git fetch origin main
             git reset --hard origin/main
             cp /tmp/out/*.json docs/
-            git add docs/auctions.json docs/my_listings.json 2>/dev/null || git add docs/auctions.json
+            for f in auctions my_listings listing_sales; do
+              if [ -f "docs/$f.json" ]; then git add "docs/$f.json"; fi
+            done
             git diff --cached --quiet && exit 0
             git commit -m "Auction deals"
             if git push; then
