@@ -171,6 +171,25 @@
     .mover-name { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
     .mover-thumb { width: 32px; border-radius: 4px; flex-shrink: 0; }
 
+    .card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .card-actions button, .card-actions select, .card-actions input, #wtb-connect input, #wtb-connect button {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 16px;
+    }
+    .card-actions button.primary, #wtb-connect button { border-color: #c792ea; }
+    .card-actions button:disabled, .card-actions select:disabled { opacity: 0.5; }
+    .card-actions select { flex: 1 1 100%; min-width: 0; }
+    .card-actions input { width: 4em; }
+    .order-error { color: var(--down); font-size: 0.85em; }
+    .order-error:empty { display: none; }
+    #wtb-connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+    #wtb-connect[hidden] { display: none; }
+    #wtb-connect input { flex: 1 1 200px; min-width: 0; }
+
     #alerts-section {
       border: 1px solid var(--up);
       background: #142016;
@@ -214,6 +233,7 @@
 
     <nav class="jump">
       <a href="#trending-section" id="trending-link" hidden>Trending up</a>
+      <a href="#wtb-orders-section" id="wtb-orders-link" hidden>WTB orders</a>
       <a href="#sell-plan-section">Sell plan</a>
       <a href="#deals-section">Good deals</a>
       <a href="#market-deals-section" id="market-deals-link">Market deals</a>
@@ -249,6 +269,17 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section id="wtb-orders-section" hidden>
+      <h2>WTB orders</h2>
+      <p class="section-sub">Cards sold to a TheTCGMarketplace WTB buyer, saved in the inventory sheets. Buyer paid adds the copies to Pulled on the row you take them from; dropped off moves them from Pulled to Sold.</p>
+      <form id="wtb-connect" hidden>
+        <input id="wtb-passcode" type="password" placeholder="Sheets passcode" autocomplete="current-password" aria-label="Sheets passcode">
+        <button type="submit">Connect</button>
+        <span id="wtb-connect-error" class="order-error"></span>
+      </form>
+      <div id="wtb-orders" class="card-grid"></div>
     </section>
 
     <section id="sell-plan-section">
@@ -895,8 +926,239 @@
         ${action}
         ${priceLinesHtml(item, { ckPrice: true })}
       `;
+      if (wtbOrders && item.card_id && item.tcgmarketplace_wtb_price != null) addWtbOfferControls(el, item, rec);
       return el;
     }
+
+    // ---- WTB orders: saved to the inventory sheets through the Apps Script
+    // web app in google_apps_script.js. Blank URL hides all of it. ----
+    const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbyHzEPynfBNbjd6_ZawrW47MmlicWc0BZuznQYO-wJmZ5l49v0enPtAK6tbz0EUzXyT/exec";
+    // Watchlist printing label -> the sheet's Foil column (ManaBox's values).
+    const SHEET_FINISHES = { Normal: "normal", Foil: "foil", "Etched Foil": "etched" };
+    const SHEET_FINISH_LABELS = Object.fromEntries(Object.entries(SHEET_FINISHES).map(([label, value]) => [value, label]));
+    const AWAITING = "Awaiting payment";
+    const ORDER_STATUS_CLASS = { [AWAITING]: "ck-buylist", Paid: "tcg-marketplace", Sold: "margin", Cancelled: "meta" };
+    let wtbOrders = null;  // null until loaded, and while not connected
+
+    async function sheetsApi(action, params = {}) {
+      // A plain string body goes as text/plain, which keeps this a simple
+      // request: Apps Script can't answer a CORS preflight.
+      const resp = await fetch(SHEETS_API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action, passcode: remembered("sheetsPasscode"), ...params }),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        if (data.auth) {
+          remember("sheetsPasscode", "");
+          wtbOrders = null;
+          renderWtbOrders(data.error);
+          renderSellPlan();
+        }
+        throw new Error(data.error || "Request failed");
+      }
+      return data;
+    }
+
+    async function loadWtbOrders() {
+      if (!SHEETS_API_URL) return;
+      document.getElementById("wtb-orders-section").hidden = false;
+      document.getElementById("wtb-orders-link").hidden = false;
+      if (!remembered("sheetsPasscode")) {
+        renderWtbOrders();
+        return;
+      }
+      try {
+        wtbOrders = (await sheetsApi("list")).orders;
+        renderWtbOrders();
+        if (watchlistItems.length) renderSellPlan();
+      } catch (err) {
+        if (remembered("sheetsPasscode")) {
+          document.getElementById("wtb-orders").innerHTML = `<p class="empty">Couldn't load orders: ${escapeHtml(err.message)}</p>`;
+        }
+      }
+    }
+
+    function renderWtbOrders(authError) {
+      const connected = !!remembered("sheetsPasscode");
+      document.getElementById("wtb-connect").hidden = connected;
+      document.getElementById("wtb-connect-error").textContent = authError || "";
+      const container = document.getElementById("wtb-orders");
+      if (!connected) {
+        container.innerHTML = "";
+        return;
+      }
+      if (!wtbOrders) {
+        container.innerHTML = '<p class="empty">Loading…</p>';
+        return;
+      }
+      // Open orders first (awaiting payment, then paid), newest first within each.
+      const rank = (o) => ({ [AWAITING]: 0, Paid: 1 })[o.status] ?? 2;
+      const sorted = [...wtbOrders].sort((a, b) => rank(a) - rank(b) || (b.offered || "").localeCompare(a.offered || ""));
+      container.innerHTML = sorted.length
+        ? ""
+        : '<p class="empty">No orders yet. Tap “Sold to WTB buyer” on a card in the Sell plan once you’ve sold it on TCGMP.</p>';
+      sorted.forEach((order) => container.appendChild(orderCard(order)));
+    }
+
+    // Disables a card's controls while a request is in flight; returns the
+    // undo for when it fails.
+    function busy(actions, error) {
+      error.textContent = "";
+      const controls = [...actions.querySelectorAll("button, select, input")];
+      controls.forEach((c) => (c.disabled = true));
+      return (err) => {
+        error.textContent = err.message;
+        controls.forEach((c) => (c.disabled = false));
+      };
+    }
+
+    function actionButton(actions, label, onClick, primary = false) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      if (primary) button.className = "primary";
+      button.addEventListener("click", onClick);
+      actions.appendChild(button);
+      return button;
+    }
+
+    function orderCard(order) {
+      const item = watchlistItems.find((i) => i.card_id === order.scryfallId && SHEET_FINISHES[i.printing] === order.finish);
+      const when = (iso) => (iso ? new Date(iso).toLocaleDateString() : "");
+      const status = {
+        [AWAITING]: `Awaiting payment · sold ${when(order.offered)}`,
+        Paid: `Paid · pulled from ${order.location} · drop off next`,
+        Sold: `Sold · dropped off ${when(order.closed)}`,
+        Cancelled: `Cancelled ${when(order.closed)}`,
+      }[order.status] || order.status;
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        ${item ? cardImageHtml(item) : ""}
+        <div class="name">${escapeHtml(order.name)}${order.qty > 1 ? ` <span class="meta">×${order.qty}</span>` : ""}</div>
+        <div class="meta">${escapeHtml(order.set)}</div>
+        <div class="meta">${escapeHtml(SHEET_FINISH_LABELS[order.finish] || order.finish)} · ${escapeHtml(order.owner)}</div>
+        <div class="price">${formatPrice(order.price)}${order.qty > 1 && order.price != null ? ` <span class="meta">×${order.qty} = ${formatPrice(order.price * order.qty)}</span>` : ""}</div>
+        <div class="${ORDER_STATUS_CLASS[order.status] || "meta"}"><strong>${escapeHtml(status)}</strong></div>
+        <div class="card-actions"></div>
+        <div class="order-error"></div>
+      `;
+      const actions = el.querySelector(".card-actions");
+      const error = el.querySelector(".order-error");
+
+      async function run(action, params = {}) {
+        const failed = busy(actions, error);
+        try {
+          await sheetsApi(action, { owner: order.owner, id: order.id, ...params });
+          await loadWtbOrders();
+        } catch (err) {
+          failed(err);
+        }
+      }
+
+      // Which Inventory row to pull from: a card can sit in several batch
+      // locations, and only you know which copy you took.
+      async function choosePullLocation() {
+        const failed = busy(actions, error);
+        try {
+          const { locations } = await sheetsApi("locations", { owner: order.owner, scryfallId: order.scryfallId, finish: order.finish });
+          const enough = locations.filter((l) => l.inBox >= order.qty);
+          if (!enough.length) {
+            throw new Error(locations.length
+              ? `No single location has ${order.qty} in the box — split it in the sheet by hand`
+              : "None of this card left in the box — check the Inventory tab");
+          }
+          actions.innerHTML = `<select aria-label="Pull from">${enough
+            .map((l) => `<option value="${l.row}">${escapeHtml(l.location)} · ${l.inBox} in box · ${escapeHtml(String(l.condition).replace(/_/g, " "))}</option>`)
+            .join("")}</select>`;
+          const select = actions.querySelector("select");
+          actionButton(actions, `Pull ${order.qty} & mark paid`, () => run("paid", { row: Number(select.value) }), true);
+          actionButton(actions, "Back", () => renderWtbOrders());
+        } catch (err) {
+          failed(err);
+        }
+      }
+
+      if (order.status === AWAITING) {
+        actionButton(actions, "Buyer paid", choosePullLocation, true);
+        actionButton(actions, "Buyer cancelled", () => run("cancel"));
+      } else if (order.status === "Paid") {
+        actionButton(actions, "Dropped off", () => run("droppedOff"), true);
+        actionButton(actions, "Cancelled — put back", () => {
+          if (confirm(`Put ${order.qty} back in the box at ${order.location}?`)) run("cancel");
+        });
+      }
+      return el;
+    }
+
+    function addWtbOfferControls(el, item, rec) {
+      const finish = SHEET_FINISHES[item.printing];
+      const mine = (o) => o.owner === item.owner && o.scryfallId === item.card_id && o.finish === finish;
+      const open = wtbOrders.filter((o) => mine(o) && (o.status === AWAITING || o.status === "Paid"));
+      // Paid orders are already out of the box (Pulled), so only orders still
+      // awaiting payment come off the copies left to sell.
+      const awaitingQty = open.filter((o) => o.status === AWAITING).reduce((n, o) => n + o.qty, 0);
+      const available = (item.quantity || 1) - awaitingQty;
+
+      if (open.length) {
+        const note = document.createElement("div");
+        note.className = "meta";
+        note.textContent = `🕓 ${open.reduce((n, o) => n + o.qty, 0)} in WTB orders`;
+        el.appendChild(note);
+      }
+      if (available <= 0) return;
+
+      const actions = document.createElement("div");
+      actions.className = "card-actions";
+      const error = document.createElement("div");
+      error.className = "order-error";
+      el.append(actions, error);
+
+      function showStart() {
+        actions.innerHTML = "";
+        actionButton(actions, "Sold to WTB buyer", showConfirm);
+      }
+      function showConfirm() {
+        actions.innerHTML = available > 1
+          ? `<input type="number" min="1" max="${available}" value="1" aria-label="Copies sold">`
+          : "";
+        const qtyInput = actions.querySelector("input");
+        actionButton(actions, `Record at ${formatPrice(item.tcgmarketplace_wtb_price)}`, async () => {
+          const qty = qtyInput ? Number(qtyInput.value) : 1;
+          if (!Number.isInteger(qty) || qty < 1 || qty > available) {
+            error.textContent = `Enter 1–${available}`;
+            return;
+          }
+          const failed = busy(actions, error);
+          try {
+            await sheetsApi("offer", {
+              owner: item.owner, scryfallId: item.card_id, finish, name: item.name, set: item.set_name,
+              qty, price: item.tcgmarketplace_wtb_price,
+            });
+            wtbOrders = (await sheetsApi("list")).orders;
+            renderWtbOrders();
+            // Swap just this card rather than re-rendering the whole list,
+            // which would lose your place in it.
+            el.replaceWith(sellPlanCard({ item, rec }));
+          } catch (err) {
+            failed(err);
+          }
+        }, true);
+        actionButton(actions, "Cancel", showStart);
+      }
+      showStart();
+    }
+
+    document.getElementById("wtb-connect").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("wtb-passcode");
+      remember("sheetsPasscode", input.value.trim());
+      input.value = "";
+      wtbOrders = null;
+      renderWtbOrders();
+      loadWtbOrders();
+    });
 
 
     // Our shop's live listings (docs/my_listings.json, every 30 minutes),
@@ -1122,6 +1384,8 @@
         });
 
         render();
+        // Order cards borrow images from the watchlist, which may land after the orders.
+        if (wtbOrders) renderWtbOrders();
       } catch (err) {
         const message = `<p class="empty">Couldn't load price data: ${escapeHtml(err.message)}</p>`;
         document.getElementById("watchlist").innerHTML = message;
@@ -1173,6 +1437,7 @@
     loadAuctions();
     loadMovers();
     loadAlerts();
+    loadWtbOrders();
   </script>
 </body>
 </html>

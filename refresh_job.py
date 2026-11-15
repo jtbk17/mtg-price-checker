@@ -163,6 +163,7 @@ def refresh_watchlist_prices():
 # for a ~9,500-card watchlist — far too much for the dashboard to load
 # on a phone, and re-committed to git every night.
 SNAPSHOT_FIELDS = (
+    "card_id",  # Scryfall ID: how the dashboard's WTB orders find the card's sheet rows
     "name",
     "set_name",
     "printing",
