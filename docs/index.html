@@ -183,6 +183,10 @@
     .card-actions button:disabled, .card-actions select:disabled { opacity: 0.5; }
     .card-actions select { flex: 1 1 100%; min-width: 0; }
     .card-actions input { width: 4em; }
+    .card-actions input[type="checkbox"] { width: auto; padding: 0; }
+    .card-actions .pick { display: flex; align-items: center; gap: 6px; flex: 1 1 100%; min-width: 0; }
+    .card-actions .pick label { flex: 1; min-width: 0; flex-wrap: wrap; color: var(--text); font-size: 0.9em; }
+    .pick-total { flex: 1 1 100%; }
     .card-actions label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85em; }
     .order-error { color: var(--down); font-size: 0.85em; }
     .order-error:empty { display: none; }
@@ -915,6 +919,8 @@
     // An Apps Script deployed before listing sales existed can't record
     // them (it drops the order type and which listing drop it came from).
     let scriptKnowsListings = false;
+    // What the deployed Apps Script supports (its VERSION; 0 before it had one).
+    let scriptVersion = 0;
 
     // What a Sell plan card can record: a sale from our own listing if it's
     // listed, otherwise one to the best WTB offer if there is one.
@@ -969,6 +975,7 @@
         const [data, drops] = await Promise.all([sheetsApi("list"), fetchListingDrops()]);
         saleOrders = data.orders;
         scriptKnowsListings = Array.isArray(data.dismissed);
+        scriptVersion = data.version || 0;
         dismissedDrops = new Set(data.dismissed || []);
         listingDrops = drops;
         renderOrders();
@@ -1018,7 +1025,7 @@
     // undo for when it fails.
     function busy(actions, error) {
       error.textContent = "";
-      const controls = [...actions.querySelectorAll("button, select, input")];
+      const controls = [...actions.querySelectorAll("button, select, input")].filter((c) => !c.disabled);
       controls.forEach((c) => (c.disabled = true));
       return (err) => {
         error.textContent = err.message;
@@ -1142,11 +1149,18 @@
       }
     }
 
+    // "B01-02 (row 3)", or each location with its copies for a split pull.
+    function pulledFrom(order) {
+      const pulls = order.pulls || [];
+      if (!pulls.length) return `${order.location}${order.inventoryRow ? ` (row ${order.inventoryRow})` : ""}`;
+      return pulls.map((p) => `${p.location}${pulls.length > 1 ? ` ×${p.qty}` : ""} (row ${p.row})`).join(", ");
+    }
+
     function orderCard(order) {
       const item = watchlistItems.find((i) => i.card_id === order.scryfallId && SHEET_FINISHES[i.printing] === order.finish);
       const status = {
         [AWAITING]: `Awaiting payment · sold ${shortDate(order.offered)}`,
-        Paid: `Paid · pulled from ${order.location}${order.inventoryRow ? ` (row ${order.inventoryRow})` : ""} · drop off next`,
+        Paid: `Paid · pulled from ${pulledFrom(order)} · drop off next`,
         Sold: `Sold · dropped off ${shortDate(order.closed)}`,
         Cancelled: `Cancelled ${shortDate(order.closed)}`,
       }[order.status] || order.status;
@@ -1175,24 +1189,66 @@
         }
       }
 
-      // Which Inventory row to pull from: a card can sit in several batch
-      // locations, and only you know which copy you took.
+      // Which Inventory rows to pull from: a card can sit in several batch
+      // locations, and only you know which copies you took. Pre-filled with
+      // one location holding them all if there is one, otherwise the boxes
+      // in order until the order is covered.
       async function choosePullLocation() {
         const failed = busy(actions, error);
         try {
           const { locations } = await sheetsApi("locations", { owner: order.owner, scryfallId: order.scryfallId, finish: order.finish });
-          const enough = locations.filter((l) => l.inBox >= order.qty);
-          if (!enough.length) {
-            throw new Error(locations.length
-              ? `No single location has ${order.qty} in the box — split it in the sheet by hand`
+          const spots = byLocation(locations);
+          const inBox = spots.reduce((n, l) => n + l.inBox, 0);
+          if (inBox < order.qty) {
+            throw new Error(spots.length
+              ? `Only ${inBox} of the ${order.qty} copies left in the box — check the Inventory tab`
               : "None of this card left in the box — check the Inventory tab");
           }
-          actions.innerHTML = `<select aria-label="Pull from">${byLocation(enough)
-            .map((l) => `<option value="${l.row}">${escapeHtml(l.location)} · ${l.inBox} in box · row ${l.row} · ${escapeHtml(String(l.condition).replace(/_/g, " "))}</option>`)
-            .join("")}</select>`;
-          const select = actions.querySelector("select");
-          actionButton(actions, `Pull ${order.qty} & mark paid`, () => run("paid", { row: Number(select.value) }), true);
+          const whole = spots.find((l) => l.inBox >= order.qty);
+          let left = order.qty;
+          const start = spots.map((l) => {
+            if (whole) return l === whole ? order.qty : 0;
+            const qty = Math.min(l.inBox, left);
+            left -= qty;
+            return qty;
+          });
+          actions.innerHTML = spots
+            .map((l, i) => `
+              <div class="pick">
+                <label><input type="checkbox"${start[i] ? " checked" : ""}> ${escapeHtml(l.location)} <span class="meta">row ${l.row} · ${l.inBox} in box</span></label>
+                <input type="number" min="1" max="${l.inBox}" value="${start[i] || 1}" inputmode="numeric" aria-label="Copies from ${escapeHtml(l.location)}"${start[i] ? "" : " disabled"}>
+              </div>`)
+            .join("") + '<div class="meta pick-total"></div>';
+          const picks = [...actions.querySelectorAll(".pick")].map((div, i) => ({
+            spot: spots[i], box: div.querySelector('[type="checkbox"]'), input: div.querySelector('[type="number"]'),
+          }));
+          const chosen = () => picks.filter((p) => p.box.checked).map((p) => ({ row: p.spot.row, qty: Number(p.input.value), max: p.spot.inBox }));
+          const pull = actionButton(actions, `Pull ${order.qty} & mark paid`, () => {
+            const sel = chosen();
+            if (sel.length > 1 && scriptVersion < 3) {
+              error.textContent = "Update the Apps Script to pull from several locations at once";
+              return;
+            }
+            // `row` too, for an Apps Script from before split pulls.
+            run("paid", { picks: sel.map(({ row, qty }) => ({ row, qty })), ...(sel.length === 1 ? { row: sel[0].row } : {}) });
+          }, true);
+          const total = actions.querySelector(".pick-total");
+          function refresh() {
+            const sel = chosen();
+            const valid = sel.every((p) => Number.isInteger(p.qty) && p.qty >= 1 && p.qty <= p.max);
+            const sum = sel.reduce((n, p) => n + p.qty, 0);
+            total.textContent = valid ? `Picking ${sum} of ${order.qty}` : "Each location: 1 up to what's in the box";
+            pull.disabled = !valid || sum !== order.qty;
+          }
+          picks.forEach((p) => {
+            p.box.addEventListener("change", () => {
+              p.input.disabled = !p.box.checked;
+              refresh();
+            });
+            p.input.addEventListener("input", refresh);
+          });
           actionButton(actions, "Back", () => renderOrders());
+          refresh();
         } catch (err) {
           failed(err);
         }
@@ -1205,7 +1261,7 @@
       } else if (order.status === "Paid") {
         actionButton(actions, "Dropped off", () => run("droppedOff"), true);
         actionButton(actions, "Cancelled — put back", () => {
-          if (confirm(`Put ${order.qty} back in the box at ${order.location}?`)) run("cancel");
+          if (confirm(`Put ${order.qty} back in the box at ${pulledFrom(order)}?`)) run("cancel");
         });
       }
       return el;

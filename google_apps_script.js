@@ -24,7 +24,8 @@
 // order and its progress. "Not a sale" answers to the dashboard's "Looks
 // sold?" listing drops are kept in script properties, not the sheets.
 // Inventory's Sold/Pulled cells only change at these steps:
-//   buyer paid         Pulled + qty on the row the copies came from
+//   buyer paid         Pulled + qty on the row(s) the copies came from (you
+//                      pick each row and how many, when they're spread out)
 //   dropped off        Pulled - qty, Sold + qty — In box is Qty - Sold -
 //                      Pulled, so adding to Sold alone would count the
 //                      copies out twice
@@ -42,6 +43,10 @@ const ORDER_HEADERS = [
 const ORDER_TYPES = ["WTB", "Listing"];
 const SHEET_PROPERTIES = { Shared: "SHEET_SHARED", Joel: "SHEET_JOEL" };
 const RECENT_DAYS = 14;
+
+// Bumped when the dashboard needs to know what this deployment supports
+// (3: an order's copies can be pulled from several Inventory rows).
+const VERSION = 3;
 
 const AWAITING = "Awaiting payment";
 const PAID = "Paid";
@@ -89,7 +94,7 @@ const ACTIONS = {
         if (open || (order.closed && new Date(order.closed).getTime() >= cutoff)) orders.push(order);
       }
     }
-    return { orders, dismissed: Object.keys(readDismissed()) };
+    return { orders, dismissed: Object.keys(readDismissed()), version: VERSION };
   },
 
   // "Not a sale" for a listing drop the dashboard flagged (its id).
@@ -133,17 +138,30 @@ const ACTIONS = {
     return { order: findOrder(req.owner, id).order };
   },
 
+  // req.picks: [{row, qty}] adding up to the order's quantity, since the
+  // copies can come from several box locations. (Older dashboards send
+  // req.row alone, meaning every copy from that row.)
   paid(req) {
     const { order, update } = findOrder(req.owner, req.id);
     if (order.status !== AWAITING) throw new Error(`Order is ${order.status}, not ${AWAITING}`);
+    const picks = (req.picks || [{ row: req.row, qty: order.qty }]).map((p) => ({ row: Number(p.row), qty: Number(p.qty) }));
+    if (picks.some((p) => !Number.isInteger(p.qty) || p.qty < 1)) throw new Error("Each location needs a whole number of copies");
+    if (new Set(picks.map((p) => p.row)).size !== picks.length) throw new Error("The same row was picked twice");
+    const total = picks.reduce((n, p) => n + p.qty, 0);
+    if (total !== order.qty) throw new Error(`Picked ${total} of the ${order.qty} copies`);
+
+    // Check every row before changing any, so a bad pick changes nothing.
     const inv = readInventory(req.owner);
-    const row = inv.rows.find((r) => r.row === Number(req.row));
-    if (!row || row.scryfallId !== order.scryfallId || row.finish !== order.finish) {
-      throw new Error("That Inventory row no longer holds this card — reload and pick again");
-    }
-    if (row.inBox < order.qty) throw new Error(`Only ${row.inBox} in the box at ${row.location}`);
-    inv.add(row, "Pulled", order.qty);
-    update({ "Status": PAID, "Location": row.location, "Inventory row": row.row, "Paid": new Date() });
+    const rows = picks.map((p) => {
+      const row = inv.rows.find((r) => r.row === p.row);
+      if (!row || row.scryfallId !== order.scryfallId || row.finish !== order.finish) {
+        throw new Error("An Inventory row no longer holds this card — reload and pick again");
+      }
+      if (row.inBox < p.qty) throw new Error(`Only ${row.inBox} in the box at ${row.location}`);
+      return row;
+    });
+    picks.forEach((p, i) => inv.add(rows[i], "Pulled", p.qty));
+    update(Object.assign({ "Status": PAID, "Paid": new Date() }, pullsColumns(picks.map((p, i) => ({ row: p.row, location: rows[i].location, qty: p.qty })))));
     return { order: findOrder(req.owner, req.id).order };
   },
 
@@ -151,9 +169,10 @@ const ACTIONS = {
     const { order, update } = findOrder(req.owner, req.id);
     if (order.status !== PAID) throw new Error(`Order is ${order.status}, not ${PAID}`);
     const inv = readInventory(req.owner);
-    const row = pulledRow(inv, order);
-    inv.add(row, "Pulled", -order.qty);
-    inv.add(row, "Sold", order.qty);
+    pulledRows(inv, order).forEach(({ row, qty }) => {
+      inv.add(row, "Pulled", -qty);
+      inv.add(row, "Sold", qty);
+    });
     update({ "Status": SOLD, "Closed": new Date() });
     return { order: findOrder(req.owner, req.id).order };
   },
@@ -162,7 +181,7 @@ const ACTIONS = {
     const { order, update } = findOrder(req.owner, req.id);
     if (order.status === PAID) {
       const inv = readInventory(req.owner);
-      inv.add(pulledRow(inv, order), "Pulled", -order.qty);
+      pulledRows(inv, order).forEach(({ row, qty }) => inv.add(row, "Pulled", -qty));
     } else if (order.status !== AWAITING) {
       throw new Error(`Order is already ${order.status}`);
     }
@@ -171,17 +190,45 @@ const ACTIONS = {
   },
 };
 
-// The row a paid order pulled from, checked against what it recorded —
-// rows are never deleted, but a sort of the Inventory tab would move them.
-function pulledRow(inv, order) {
-  const row = inv.rows.find((r) => r.row === order.inventoryRow);
-  if (!row || row.scryfallId !== order.scryfallId || row.finish !== order.finish || row.location !== order.location) {
-    throw new Error(`Inventory row ${order.inventoryRow} no longer holds this card at ${order.location} — fix Sold/Pulled by hand`);
+// How a paid order records where its copies came from. One row keeps the
+// plain form ("B01-02" / 3); several are listed with their counts
+// ("B01-01 ×3, B01-02 ×7" / "2 ×3, 3 ×7") — "×" so Sheets never reads them
+// as a number or a time.
+function pullsColumns(pulls) {
+  if (pulls.length === 1) return { "Location": pulls[0].location, "Inventory row": pulls[0].row };
+  return {
+    "Location": pulls.map((p) => `${p.location} ×${p.qty}`).join(", "),
+    "Inventory row": pulls.map((p) => `${p.row} ×${p.qty}`).join(", "),
+  };
+}
+
+function parsePulls(location, inventoryRow, qty) {
+  const rows = String(inventoryRow).match(/\d+\s*×\s*\d+/g);
+  if (!rows) {
+    const row = Number(inventoryRow);
+    return row ? [{ row, location: String(location), qty }] : [];
   }
-  if (row.pulled < order.qty) {
-    throw new Error(`Pulled is only ${row.pulled} at ${row.location} — fix Sold/Pulled by hand`);
-  }
-  return row;
+  const locations = String(location).split(",").map((l) => l.replace(/×\s*\d+\s*$/, "").trim());
+  return rows.map((r, i) => {
+    const [row, n] = r.split("×").map((x) => Number(x.trim()));
+    return { row, location: locations[i] || "", qty: n };
+  });
+}
+
+// The rows a paid order pulled from, each checked against what it recorded
+// — rows are never deleted, but a sort of the Inventory tab would move them.
+function pulledRows(inv, order) {
+  if (!order.pulls.length) throw new Error("This order doesn't say which rows it pulled from — fix Sold/Pulled by hand");
+  return order.pulls.map((p) => {
+    const row = inv.rows.find((r) => r.row === p.row);
+    if (!row || row.scryfallId !== order.scryfallId || row.finish !== order.finish || row.location !== p.location) {
+      throw new Error(`Inventory row ${p.row} no longer holds this card at ${p.location} — fix Sold/Pulled by hand`);
+    }
+    if (row.pulled < p.qty) {
+      throw new Error(`Pulled is only ${row.pulled} at ${row.location} — fix Sold/Pulled by hand`);
+    }
+    return { row, qty: p.qty };
+  });
 }
 
 function sheetIdFor(owner) {
@@ -296,6 +343,7 @@ function readOrders(owner) {
     closed: iso(r[col["Closed"]]),
     type: String(r[col["Type"]]) || "WTB",
     source: String(r[col["Source"]]),
+    pulls: parsePulls(r[col["Location"]], r[col["Inventory row"]], Number(r[col["Qty"]]) || 0),
   }));
   return { sheet, col, orders };
 }
