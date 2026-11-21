@@ -973,18 +973,30 @@
       }
       try {
         const [data, drops] = await Promise.all([sheetsApi("list"), fetchListingDrops()]);
-        saleOrders = data.orders;
-        scriptKnowsListings = Array.isArray(data.dismissed);
-        scriptVersion = data.version || 0;
-        dismissedDrops = new Set(data.dismissed || []);
         listingDrops = drops;
-        renderOrders();
-        if (watchlistItems.length) renderSellPlan();
+        takeList(data);
       } catch (err) {
         if (remembered("sheetsPasscode")) {
           document.getElementById("orders-list").innerHTML = `<p class="empty">Couldn't load orders: ${escapeHtml(err.message)}</p>`;
         }
       }
+    }
+
+    function takeList(data) {
+      saleOrders = data.orders;
+      scriptKnowsListings = Array.isArray(data.dismissed);
+      scriptVersion = data.version || 0;
+      dismissedDrops = new Set(data.dismissed || []);
+      renderOrders();
+      if (watchlistItems.length) renderSellPlan();
+    }
+
+    // Sends a change. Apps Script v4+ answers with the fresh list, saving a
+    // second round trip; an older one needs the list fetched after.
+    async function change(action, params) {
+      const data = await sheetsApi(action, params);
+      if (data.orders) takeList(data);
+      else await loadOrders();
     }
 
     function renderOrders(authError) {
@@ -1102,11 +1114,10 @@
           const card = cards[select ? Number(select.value) : 0];
           const failed = busy(actions, error);
           try {
-            await sheetsApi("offer", {
+            await change("offer", {
               owner: card.owner, scryfallId: card.card_id, finish: SHEET_FINISHES[card.printing], name: card.name,
               set: card.set_name, qty, price: drop.price, type: "Listing", source: drop.id,
             });
-            await loadOrders();
           } catch (err) {
             failed(err);
           }
@@ -1117,8 +1128,7 @@
       actionButton(actions, "Not a sale", async () => {
         const failed = busy(actions, error);
         try {
-          await sheetsApi("dismiss", { source: drop.id });
-          await loadOrders();
+          await change("dismiss", { source: drop.id });
         } catch (err) {
           failed(err);
         }
@@ -1131,13 +1141,18 @@
 
     // Where an order's copies are, read live from the Inventory tab, so you
     // know which box and slot to go to before the buyer has even paid.
+    async function locationsFor(order) {
+      if (order.locations) return order.locations;
+      return (await sheetsApi("locations", { owner: order.owner, scryfallId: order.scryfallId, finish: order.finish })).locations;
+    }
+
     async function showWhereToTake(order, before) {
       const where = document.createElement("div");
       where.className = "meta";
       where.textContent = "Finding it in the boxes…";
       before.before(where);
       try {
-        const { locations } = await sheetsApi("locations", { owner: order.owner, scryfallId: order.scryfallId, finish: order.finish });
+        const locations = await locationsFor(order);
         const spots = byLocation(locations).map((l) => `<strong>${escapeHtml(l.location)}</strong> ×${l.inBox} (row ${l.row})`);
         where.innerHTML = !spots.length
           ? "None left in the box — check the Inventory tab"
@@ -1182,8 +1197,7 @@
       async function run(action, params = {}) {
         const failed = busy(actions, error);
         try {
-          await sheetsApi(action, { owner: order.owner, id: order.id, ...params });
-          await loadOrders();
+          await change(action, { owner: order.owner, id: order.id, ...params });
         } catch (err) {
           failed(err);
         }
@@ -1196,8 +1210,7 @@
       async function choosePullLocation() {
         const failed = busy(actions, error);
         try {
-          const { locations } = await sheetsApi("locations", { owner: order.owner, scryfallId: order.scryfallId, finish: order.finish });
-          const spots = byLocation(locations);
+          const spots = byLocation(await locationsFor(order));
           const inBox = spots.reduce((n, l) => n + l.inBox, 0);
           if (inBox < order.qty) {
             throw new Error(spots.length
@@ -1263,6 +1276,8 @@
         actionButton(actions, "Cancelled — put back", () => {
           if (confirm(`Put ${order.qty} back in the box at ${pulledFrom(order)}?`)) run("cancel");
         });
+      } else if (order.status === "Cancelled" && scriptVersion >= 4) {
+        actionButton(actions, "Delete", () => run("remove"));
       }
       return el;
     }
@@ -1306,11 +1321,11 @@
         actionButton(actions, `Record ${qty} at ${formatPrice(sale.price)}${qty > 1 ? ` = ${formatPrice(sale.price * qty)}` : ""}`, async () => {
           const failed = busy(actions, error);
           try {
-            await sheetsApi("offer", {
+            const data = await sheetsApi("offer", {
               owner: item.owner, scryfallId: item.card_id, finish, name: item.name, set: item.set_name,
               qty, price: sale.price, type: sale.type,
             });
-            saleOrders = (await sheetsApi("list")).orders;
+            saleOrders = (data.orders ? data : await sheetsApi("list")).orders;
             renderOrders();
             // Swap just this card rather than re-rendering the whole list,
             // which would lose your place in it.

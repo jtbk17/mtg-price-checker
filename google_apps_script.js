@@ -45,8 +45,10 @@ const SHEET_PROPERTIES = { Shared: "SHEET_SHARED", Joel: "SHEET_JOEL" };
 const RECENT_DAYS = 14;
 
 // Bumped when the dashboard needs to know what this deployment supports
-// (3: an order's copies can be pulled from several Inventory rows).
-const VERSION = 3;
+// (3: an order's copies can be pulled from several Inventory rows; 4: the
+// list carries each waiting order's box locations, every change answers
+// with the fresh list, and cancelled orders can be removed).
+const VERSION = 4;
 
 const AWAITING = "Awaiting payment";
 const PAID = "Paid";
@@ -73,6 +75,9 @@ function doPost(e) {
       lock.waitLock(20000);
       try {
         result = Object.assign({ ok: true }, ACTIONS[req.action](req));
+        // Answer every change with the fresh list, saving the dashboard a
+        // second round trip (each one costs seconds of start-up).
+        if (req.action !== "list") Object.assign(result, ACTIONS.list());
       } finally {
         lock.releaseLock();
       }
@@ -89,12 +94,35 @@ const ACTIONS = {
     const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
     for (const owner of Object.keys(SHEET_PROPERTIES)) {
       if (!sheetIdFor(owner)) continue;
-      for (const order of readOrders(owner).orders) {
+      const mine = readOrders(owner).orders.filter((order) => {
         const open = order.status === AWAITING || order.status === PAID;
-        if (open || (order.closed && new Date(order.closed).getTime() >= cutoff)) orders.push(order);
+        return open || (order.closed && new Date(order.closed).getTime() >= cutoff);
+      });
+      // Where each waiting order's copies are, read once per sheet here
+      // rather than in a call per order.
+      const waiting = mine.filter((o) => o.status === AWAITING);
+      if (waiting.length) {
+        const inv = readInventory(owner);
+        waiting.forEach((o) => (o.locations = locationsOf(inv, o.scryfallId, o.finish)));
       }
+      orders.push(...mine);
     }
     return { orders, dismissed: Object.keys(readDismissed()), version: VERSION };
+  },
+
+  // Deletes a cancelled order's row from the Orders tab. One that came
+  // from a "Looks sold?" listing drop leaves that drop dismissed, so it
+  // doesn't come back asking.
+  remove(req) {
+    const { order, sheet } = findOrder(req.owner, req.id);
+    if (order.status !== CANCELLED) throw new Error(`Only cancelled orders can be deleted (this one is ${order.status})`);
+    if (order.source) {
+      const dismissed = readDismissed();
+      dismissed[order.source] = new Date().toISOString();
+      PropertiesService.getScriptProperties().setProperty("DISMISSED", JSON.stringify(dismissed));
+    }
+    sheet.deleteRow(order.sheetRow);
+    return {};
   },
 
   // "Not a sale" for a listing drop the dashboard flagged (its id).
@@ -108,11 +136,7 @@ const ACTIONS = {
 
   // Inventory rows holding this printing with copies still in the box.
   locations(req) {
-    const inv = readInventory(req.owner);
-    const rows = inv.rows
-      .filter((r) => r.scryfallId === req.scryfallId && r.finish === req.finish && r.inBox > 0)
-      .map((r) => ({ row: r.row, location: r.location, condition: r.condition, inBox: r.inBox }));
-    return { locations: rows };
+    return { locations: locationsOf(readInventory(req.owner), req.scryfallId, req.finish) };
   },
 
   offer(req) {
@@ -189,6 +213,12 @@ const ACTIONS = {
     return { order: findOrder(req.owner, req.id).order };
   },
 };
+
+function locationsOf(inv, scryfallId, finish) {
+  return inv.rows
+    .filter((r) => r.scryfallId === scryfallId && r.finish === finish && r.inBox > 0)
+    .map((r) => ({ row: r.row, location: r.location, condition: r.condition, inBox: r.inBox }));
+}
 
 // How a paid order records where its copies came from. One row keeps the
 // plain form ("B01-02" / 3); several are listed with their counts
@@ -354,6 +384,7 @@ function findOrder(owner, id) {
   if (!order) throw new Error(`No order ${id} in ${owner}'s sheet`);
   return {
     order,
+    sheet,
     update(fields) {
       for (const [name, value] of Object.entries(fields)) {
         sheet.getRange(order.sheetRow, col[name] + 1).setValue(value);
