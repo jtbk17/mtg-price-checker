@@ -215,6 +215,6 @@ if __name__ == "__main__":
         # Best-effort: a problem here must not stop auctions.json and
         # my_listings.json from being pushed.
         try:
-            listing_sales.record_drops(previous, current)
+            listing_sales.notify(listing_sales.record_drops(previous, current))
         except Exception:
             logger.exception("Couldn't check listings for sales")

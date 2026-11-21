@@ -470,6 +470,15 @@ def update_tcgmarketplace_wtb_price(variant_id, price):
         conn.close()
 
 
+def set_quantity(watchlist_id, quantity):
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE watchlist SET quantity = ? WHERE id = ?", (quantity, watchlist_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_tcgmarketplace_price(variant_id, price):
     conn = get_connection()
     try:

@@ -1,0 +1,36 @@
+name: Weekly database backup
+
+# Dated copies of the `data` release's databases on a separate `backups`
+# release, keeping the newest four weeks — the only other copies are
+# whatever happens to be on someone's laptop, and every writer uploads
+# over the same asset with --clobber.
+on:
+  schedule:
+    - cron: "30 3 * * 0"  # Sundays 03:30 UTC (11:30am SGT), clear of the nightly run
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Copy this week's databases and drop ones older than four weeks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view backups >/dev/null 2>&1 || gh release create backups \
+            --title "Database backups" \
+            --notes "Weekly copies of the data release's databases (newest four weeks kept). Not source code."
+          gh release download data --pattern "tcg_prices.db" --pattern "all_cards_*.db"
+          stamp=$(date -u +%Y-%m-%d)
+          for f in tcg_prices.db all_cards_*.db; do mv "$f" "${stamp}_${f}"; done
+          gh release upload backups "${stamp}"_*.db --clobber
+          gh release view backups --json assets --jq '.assets[].name' | cut -d_ -f1 | sort -u | head -n -4 |
+            while read -r old; do
+              gh release view backups --json assets --jq ".assets[].name | select(startswith(\"${old}_\"))" |
+                while read -r name; do gh release delete-asset backups "$name" -y; done
+            done

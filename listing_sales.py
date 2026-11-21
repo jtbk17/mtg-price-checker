@@ -29,6 +29,30 @@ RECENT_DAYS = 14
 CARD_FIELDS = ("owner", "card_id", "name", "set_name", "printing", "condition", "image_url")
 
 
+DASHBOARD_ORDERS_URL = "https://jtbk17.github.io/mtg-price-checker/#orders-section"
+
+
+def notify(drops):
+    """One Telegram message for this run's new drops (a no-op without
+    Telegram set up). Sent once: record_drops only returns a drop the
+    first time it's seen."""
+    import html
+
+    import telegram_notify
+
+    if not drops:
+        return
+    lines = []
+    for d in drops:
+        card = d["cards"][0] if d["cards"] else None
+        name = f"{card['name']} ({card['set_name']}, {card['printing']})" if card else f"listing {d['key']}"
+        lines.append(f"• {html.escape(name)}: {d['qty_before']} → {d['qty_after']} at ${d['price']:.2f}")
+    telegram_notify.send_message(
+        "<b>🛒 Looks sold on TCGMP?</b>\n" + "\n".join(lines)
+        + f'\n\n<a href="{DASHBOARD_ORDERS_URL}">Record or dismiss on the dashboard</a>'
+    )
+
+
 def find_drops(previous, current):
     """Listings whose quantity went down from `previous` to `current`
     (both {listing_key: {"quantity", "price"}}), with the price they were

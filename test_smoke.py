@@ -2475,6 +2475,18 @@ class SheetSyncTests(unittest.TestCase):
     def test_first_batch_imports_for_an_owner_with_no_cards(self):
         self._main([self._row("new", "1")]).assert_called_once()
 
+    def test_count_change_on_a_tracked_card_skips_the_import(self):
+        self._track()
+        self._main([self._row("old", "5")]).assert_not_called()
+        self.assertEqual(db.list_watchlist(owner="SheetTest")[0]["quantity"], 5)
+
+    def test_only_new_cards_are_imported_and_rows_of_one_printing_add_up(self):
+        self._track()
+        mock_import = self._main([self._row("old", "1"), self._row("old", "2"), self._row("new", "1"), self._row("gone", "0")])
+        imported_ids = [r["Scryfall ID"] for r in mock_import.call_args.args[0]]
+        self.assertEqual(imported_ids, ["new"])
+        self.assertEqual(db.list_watchlist(owner="SheetTest")[0]["quantity"], 3)
+
     def test_large_removal_is_refused_before_importing(self):
         self._track()
         with patch.object(self.ss.manabox_import, "import_rows") as mock_import,              patch.object(self.ss, "fetch_rows", return_value=[self._row("new", "1")]):
@@ -2561,6 +2573,49 @@ class ListingSalesTests(unittest.TestCase):
         before = self.sales_file.stat().st_mtime_ns
         self.assertEqual(self._record({"a": {"quantity": 1, "price": 1.0}}, {"a": {"quantity": 1, "price": 1.0}}, now), [])
         self.assertEqual(self.sales_file.stat().st_mtime_ns, before)
+
+
+class OrderRemindersTests(unittest.TestCase):
+    def _order(self, status, offered=None, paid=None, qty=1):
+        return {"status": status, "name": "Card", "owner": "Shared", "qty": qty, "offered": offered, "paid": paid}
+
+    def test_stalled_picks_out_late_unpaid_and_undropped_orders_only(self):
+        from datetime import datetime, timezone
+
+        import order_reminders as orr
+
+        now = datetime(2026, 11, 21, 12, tzinfo=timezone.utc)
+        orders = [
+            self._order("Awaiting payment", offered="2026-11-18T12:00:00.000Z"),  # 3 days: remind
+            self._order("Awaiting payment", offered="2026-11-20T12:00:00.000Z"),  # 1 day: not yet
+            self._order("Paid", offered="2026-11-10T00:00:00Z", paid="2026-11-17T12:00:00.000Z"),  # 4 days: remind
+            self._order("Paid", offered="2026-11-10T00:00:00Z", paid="2026-11-20T12:00:00.000Z"),  # 1 day: not yet
+            self._order("Sold", offered="2026-11-01T00:00:00Z"),
+        ]
+        unpaid, undropped = orr.stalled(orders, now)
+        self.assertEqual((len(unpaid), len(undropped)), (1, 1))
+        text = orr.message(unpaid, undropped, now)
+        self.assertIn("Buyer hasn't paid", text)
+        self.assertIn("Paid, not dropped off", text)
+        self.assertIn("3 days", text)
+
+    def test_no_passcode_means_no_reminder(self):
+        import order_reminders as orr
+
+        with patch.dict(os.environ, {"SHEETS_PASSCODE": ""}), patch.object(orr, "fetch_orders") as mock_fetch:
+            orr.send_reminders()
+        mock_fetch.assert_not_called()
+
+    def test_listing_drop_message_names_the_card(self):
+        import listing_sales
+
+        drop = {"key": "1|1|en|NM", "qty_before": 2, "qty_after": 1, "price": 27.9,
+                "cards": [{"name": "Sol Ring", "set_name": "Set", "printing": "Foil"}]}
+        with patch("telegram_notify.send_message") as mock_send:
+            listing_sales.notify([drop])
+            listing_sales.notify([])
+        mock_send.assert_called_once()
+        self.assertIn("Sol Ring (Set, Foil): 2 → 1 at $27.90", mock_send.call_args.args[0])
 
 
 class AppRouteTests(unittest.TestCase):

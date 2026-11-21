@@ -6,6 +6,9 @@ on:
     paths:
       - "**.py"
       - "requirements.txt"
+      - "docs/index.html"
+      - "google_apps_script.js"
+      - "test_orders_mocks.js"
   workflow_dispatch: {}
 
 jobs:
@@ -21,3 +24,20 @@ jobs:
       - run: pip install -r requirements.txt scikit-learn
 
       - run: python -m unittest test_smoke -v
+
+  # The dashboard's Orders section against the real Apps Script code (see
+  # test_orders_e2e.py) — the part of the system no Python test reaches.
+  orders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - run: pip install playwright
+
+      - run: playwright install chromium --with-deps
+
+      - run: python test_orders_e2e.py

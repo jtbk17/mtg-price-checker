@@ -47,8 +47,14 @@ const RECENT_DAYS = 14;
 // Bumped when the dashboard needs to know what this deployment supports
 // (3: an order's copies can be pulled from several Inventory rows; 4: the
 // list carries each waiting order's box locations, every change answers
-// with the fresh list, and cancelled orders can be removed).
-const VERSION = 4;
+// with the fresh list, and cancelled orders can be removed; 5: undo, several
+// orders dropped off at once, a sales summary, and a cached list).
+const VERSION = 5;
+// A mis-tap can be stepped back for this long.
+const UNDO_HOURS = 24;
+// The list is cached this long between changes (each change refreshes it),
+// so a hand edit in the sheet can take up to a minute to show.
+const LIST_CACHE_SECONDS = 60;
 
 const AWAITING = "Awaiting payment";
 const PAID = "Paid";
@@ -77,7 +83,7 @@ function doPost(e) {
         result = Object.assign({ ok: true }, ACTIONS[req.action](req));
         // Answer every change with the fresh list, saving the dashboard a
         // second round trip (each one costs seconds of start-up).
-        if (req.action !== "list") Object.assign(result, ACTIONS.list());
+        if (req.action !== "list") Object.assign(result, freshList());
       } finally {
         lock.releaseLock();
       }
@@ -90,24 +96,65 @@ function doPost(e) {
 
 const ACTIONS = {
   list() {
-    const orders = [];
-    const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
-    for (const owner of Object.keys(SHEET_PROPERTIES)) {
-      if (!sheetIdFor(owner)) continue;
-      const mine = readOrders(owner).orders.filter((order) => {
-        const open = order.status === AWAITING || order.status === PAID;
-        return open || (order.closed && new Date(order.closed).getTime() >= cutoff);
-      });
-      // Where each waiting order's copies are, read once per sheet here
-      // rather than in a call per order.
-      const waiting = mine.filter((o) => o.status === AWAITING);
-      if (waiting.length) {
-        const inv = readInventory(owner);
-        waiting.forEach((o) => (o.locations = locationsOf(inv, o.scryfallId, o.finish)));
-      }
-      orders.push(...mine);
+    const hit = CacheService.getScriptCache().get("list");
+    return hit ? JSON.parse(hit) : freshList();
+  },
+
+  // Steps an order back one stage, for a mis-tap within UNDO_HOURS: Paid ->
+  // Awaiting payment (copies back in the box), Sold -> Paid (back from Sold
+  // to Pulled), Cancelled -> where it was before.
+  undo(req) {
+    const { order, update } = findOrder(req.owner, req.id);
+    const when = order.status === PAID ? order.paid : order.closed;
+    if (!when || Date.now() - new Date(when).getTime() > UNDO_HOURS * 60 * 60 * 1000) {
+      throw new Error(`Only changes from the last ${UNDO_HOURS} hours can be undone`);
     }
-    return { orders, dismissed: Object.keys(readDismissed()), version: VERSION };
+    const inv = readInventory(req.owner);
+    if (order.status === PAID) {
+      pulledRows(inv, order).forEach(({ row, qty }) => inv.add(row, "Pulled", -qty));
+      update({ "Status": AWAITING, "Location": "", "Inventory row": "", "Paid": "" });
+    } else if (order.status === SOLD) {
+      pulledRows(inv, order, "sold").forEach(({ row, qty }) => {
+        inv.add(row, "Sold", -qty);
+        inv.add(row, "Pulled", qty);
+      });
+      update({ "Status": PAID, "Closed": "" });
+    } else if (order.status === CANCELLED && order.pulls.length) {
+      // Cancelled after being paid: its copies went back in the box.
+      pulledRows(inv, order, "inBox").forEach(({ row, qty }) => inv.add(row, "Pulled", qty));
+      update({ "Status": PAID, "Closed": "" });
+    } else if (order.status === CANCELLED) {
+      update({ "Status": AWAITING, "Closed": "" });
+    } else {
+      throw new Error(`Nothing to undo on an order that's ${order.status}`);
+    }
+    return {};
+  },
+
+  // Several paid orders dropped off together. Every one is checked before
+  // any changes, including two orders that pulled from the same row.
+  droppedOffMany(req) {
+    const found = (req.orders || []).map((o) => Object.assign({ owner: o.owner }, findOrder(o.owner, o.id)));
+    if (!found.length) throw new Error("No orders picked");
+    const invs = {};
+    const need = new Map();
+    const plans = found.map(({ owner, order }) => {
+      if (order.status !== PAID) throw new Error(`${order.name} is ${order.status}, not ${PAID}`);
+      const inv = invs[owner] || (invs[owner] = readInventory(owner));
+      const rows = pulledRows(inv, order);
+      rows.forEach(({ row, qty }) => need.set(row, (need.get(row) || 0) + qty));
+      return { inv, rows };
+    });
+    for (const [row, qty] of need) {
+      if (row.pulled < qty) throw new Error(`Pulled is only ${row.pulled} at ${row.location} — fix Sold/Pulled by hand`);
+    }
+    plans.forEach(({ inv, rows }) => rows.forEach(({ row, qty }) => {
+      inv.add(row, "Pulled", -qty);
+      inv.add(row, "Sold", qty);
+    }));
+    const closed = new Date();
+    found.forEach(({ update }) => update({ "Status": SOLD, "Closed": closed }));
+    return {};
   },
 
   // Deletes a cancelled order's row from the Orders tab. One that came
@@ -214,6 +261,76 @@ const ACTIONS = {
   },
 };
 
+// Recent and open orders (waiting ones with where their copies are), the
+// sales summary, and what this deployment supports — cached until the
+// next change or LIST_CACHE_SECONDS.
+function freshList() {
+  const orders = [];
+  const everySold = [];
+  const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
+  for (const owner of Object.keys(SHEET_PROPERTIES)) {
+    if (!sheetIdFor(owner)) continue;
+    const all = readOrders(owner).orders;
+    everySold.push(...all.filter((o) => o.status === SOLD || o.status === PAID));
+    const mine = all.filter((order) => {
+      const open = order.status === AWAITING || order.status === PAID;
+      return open || (order.closed && new Date(order.closed).getTime() >= cutoff);
+    });
+    // Where each waiting order's copies are, read once per sheet here
+    // rather than in a call per order.
+    const waiting = mine.filter((o) => o.status === AWAITING);
+    if (waiting.length) {
+      const inv = readInventory(owner);
+      waiting.forEach((o) => (o.locations = locationsOf(inv, o.scryfallId, o.finish)));
+    }
+    orders.push(...mine);
+  }
+  const list = { orders, dismissed: Object.keys(readDismissed()), version: VERSION, sales: salesSummary(everySold) };
+  try {
+    CacheService.getScriptCache().put("list", JSON.stringify(list), LIST_CACHE_SECONDS);
+  } catch (err) {
+    // Over the cache's 100KB limit: just serve it uncached.
+  }
+  return list;
+}
+
+// Sales by when they were dropped off (gross, before TCGMP's commission,
+// which the dashboard takes off), plus what paid orders will bring in.
+function salesSummary(orders) {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const periods = {
+    week: (t) => t >= weekAgo,
+    month: (t) => t >= monthStart,
+    lastMonth: (t) => t >= lastMonthStart && t < monthStart,
+    all: () => true,
+  };
+  const blank = () => ({ orders: 0, copies: 0, gross: 0, WTB: 0, Listing: 0 });
+  const out = { pending: blank() };
+  Object.keys(periods).forEach((name) => (out[name] = blank()));
+  const add = (bucket, o) => {
+    const gross = (o.price || 0) * o.qty;
+    bucket.orders += 1;
+    bucket.copies += o.qty;
+    bucket.gross += gross;
+    bucket[o.type === "Listing" ? "Listing" : "WTB"] += gross;
+  };
+  for (const o of orders) {
+    if (o.status === PAID) {
+      add(out.pending, o);
+    } else if (o.closed) {
+      const t = new Date(o.closed).getTime();
+      Object.entries(periods).forEach(([name, inPeriod]) => inPeriod(t) && add(out[name], o));
+    }
+  }
+  for (const bucket of Object.values(out)) {
+    ["gross", "WTB", "Listing"].forEach((k) => (bucket[k] = Math.round(bucket[k] * 100) / 100));
+  }
+  return out;
+}
+
 function locationsOf(inv, scryfallId, finish) {
   return inv.rows
     .filter((r) => r.scryfallId === scryfallId && r.finish === finish && r.inBox > 0)
@@ -246,16 +363,19 @@ function parsePulls(location, inventoryRow, qty) {
 }
 
 // The rows a paid order pulled from, each checked against what it recorded
-// — rows are never deleted, but a sort of the Inventory tab would move them.
-function pulledRows(inv, order) {
+// — rows are never deleted, but a sort of the Inventory tab would move them
+// — and that each still has the copies about to be moved out of `from`
+// (pulled, sold, or inBox when putting cancelled copies back).
+const FROM_LABELS = { pulled: "Pulled", sold: "Sold", inBox: "In box" };
+function pulledRows(inv, order, from = "pulled") {
   if (!order.pulls.length) throw new Error("This order doesn't say which rows it pulled from — fix Sold/Pulled by hand");
   return order.pulls.map((p) => {
     const row = inv.rows.find((r) => r.row === p.row);
     if (!row || row.scryfallId !== order.scryfallId || row.finish !== order.finish || row.location !== p.location) {
       throw new Error(`Inventory row ${p.row} no longer holds this card at ${p.location} — fix Sold/Pulled by hand`);
     }
-    if (row.pulled < p.qty) {
-      throw new Error(`Pulled is only ${row.pulled} at ${row.location} — fix Sold/Pulled by hand`);
+    if (row[from] < p.qty) {
+      throw new Error(`${FROM_LABELS[from]} is only ${row[from]} at ${row.location} — fix Sold/Pulled by hand`);
     }
     return { row, qty: p.qty };
   });

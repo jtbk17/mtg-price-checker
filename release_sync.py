@@ -83,7 +83,7 @@ def _upload(asset_name):
     )
 
 
-def sync(asset_name, operation, max_retries=MAX_RETRIES):
+def sync(asset_name, operation, max_retries=MAX_RETRIES, should_upload=None, require_download=False):
     """Downloads `asset_name` fresh, runs `operation()` (which mutates
     the local file of that name and returns its own result), then
     uploads it back — redoing the whole cycle if another writer's
@@ -91,12 +91,21 @@ def sync(asset_name, operation, max_retries=MAX_RETRIES):
     `operation()`'s result from whichever attempt's upload actually
     went through, or the last attempt's result if every retry raced and
     none of the uploads could be confirmed conflict-free (logged, not
-    raised — this is best-effort sync, not a transaction)."""
+    raised — this is best-effort sync, not a transaction).
+
+    should_upload(result), if given, can skip the upload when the
+    operation turned out to change nothing. require_download=True raises
+    instead of running the operation on a stale or missing local copy, for
+    a caller with no local change worth keeping."""
     result = None
     for attempt in range(1, max_retries + 1):
         digest_before = _asset_digest(asset_name)
         downloaded = _download(asset_name)
+        if not downloaded and require_download:
+            raise RuntimeError(f"Could not download {asset_name}")
         result = operation()
+        if should_upload is not None and not should_upload(result):
+            return result
 
         # The local file is stale or freshly empty at this point, so
         # uploading it would overwrite the shared copy with old/no data.

@@ -190,6 +190,14 @@
     .card-actions label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85em; }
     .order-error { color: var(--down); font-size: 0.85em; }
     .order-error:empty { display: none; }
+    .card-actions input.price-input { width: 5.5em; }
+    .paid-panel { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 10px 12px; margin: 0 0 12px; }
+    .paid-panel h3 { margin: 0 0 6px; font-size: 1em; }
+    .pick-list { list-style: none; padding: 0; margin: 0; }
+    .pick-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .pick-list li:last-child { border-bottom: none; }
+    .pick-list label { display: flex; gap: 8px; align-items: flex-start; }
+    .pick-list input { margin-top: 3px; flex-shrink: 0; }
     #orders-connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
     #orders-connect[hidden] { display: none; }
     #orders-connect input { flex: 1 1 200px; min-width: 0; }
@@ -259,6 +267,8 @@
         <button type="submit">Connect</button>
         <span id="orders-connect-error" class="order-error"></span>
       </form>
+      <div id="orders-summary" class="totals" hidden></div>
+      <div id="orders-paid" class="paid-panel" hidden></div>
       <div id="orders-list" class="card-grid"></div>
     </section>
 
@@ -277,7 +287,7 @@
           </select>
         </div>
       </div>
-      <p class="section-sub">What to do with each card: list just under the cheapest matching TheTCGMarketplace copy (1¢ under, or 10¢ at $10+), but never below GOG Cash + 10% or the best WTB offer; sell to a WTB buyer if they pay at least 90% of a realistic sale price (the lower of that list price and Card Kingdom's price); sell to GOG if it pays within 15% of the cheapest listing.</p>
+      <p class="section-sub">What to do with each card: list just under the cheapest matching TheTCGMarketplace copy (1¢ under, or 10¢ at $10+), but never so low that, after TCGMP's 4% commission, it pays less than GOG Cash + 10%, or below the best WTB offer; sell to a WTB buyer if they pay at least 90% of a realistic sale price (the lower of that list price and Card Kingdom's price); sell to GOG if it pays within 15% of what the cheapest listing would bring after the 4% commission.</p>
       <div id="sell-plan-totals" class="totals" hidden></div>
       <div id="sell-plan" class="card-grid"><p class="empty">Loading…</p></div>
       <button id="sell-plan-more" class="more" hidden>Show more</button>
@@ -828,6 +838,10 @@
       // a list price well above CK's (e.g. $19.89 vs $12.99) may not sell
       // for a long time, while a $12 WTB offer is money now.
       wtbShareOfSale: 0.9,
+      // TheTCGMarketplace keeps this share of every sale (WTB or listing);
+      // GOG pays out with none, so comparisons against GOG use what a TCGMP
+      // sale actually brings in.
+      tcgmpFee: 0.04,
       sanityFactor: 3,      // cheapest listing vs CK price beyond 3x either way: likely a data error
     };
     const ROUTES = {
@@ -867,11 +881,11 @@
         return { route: "review", reason: `Listing ${formatPrice(cheapest)} vs CK ${formatPrice(ck)} looks off` };
       }
       const undercut = cheapest >= SELL_RULES.switchPrice ? SELL_RULES.undercutBig : SELL_RULES.undercutSmall;
-      const floor = Math.max(gog == null ? 0 : gog * (1 + SELL_RULES.floorOverGog), wtb == null ? 0 : wtb);
+      const floor = Math.max(gog == null ? 0 : (gog * (1 + SELL_RULES.floorOverGog)) / (1 - SELL_RULES.tcgmpFee), wtb == null ? 0 : wtb);
       const price = Math.round(Math.max(cheapest - undercut, floor, 0.01) * 100) / 100;
       const realisticSale = ck ? Math.min(price, ck) : price;
       if (wtb != null && wtb >= realisticSale * SELL_RULES.wtbShareOfSale) return { route: "wtb", price: wtb, gog, cheapest, wtb };
-      if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest) return { route: "gog", price: gog, gog, cheapest, wtb };
+      if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest * (1 - SELL_RULES.tcgmpFee)) return { route: "gog", price: gog, gog, cheapest, wtb };
       return { route: "list", price, gog, cheapest, wtb };
     }
 
@@ -897,8 +911,8 @@
         ${action}
         ${priceLinesHtml(item, { ckPrice: true })}
       `;
-      const sale = saleOrders && item.card_id ? saleKindFor(item, rec) : null;
-      if (sale) addSaleControls(el, item, rec, sale);
+      const kinds = saleOrders && item.card_id ? saleKindsFor(item, rec) : [];
+      if (kinds.length) addSaleControls(el, item, rec, kinds);
       return el;
     }
 
@@ -910,6 +924,7 @@
     const SHEET_FINISHES = { Normal: "normal", Foil: "foil", "Etched Foil": "etched" };
     const SHEET_FINISH_LABELS = Object.fromEntries(Object.entries(SHEET_FINISHES).map(([label, value]) => [value, label]));
     const AWAITING = "Awaiting payment";
+    const UNDO_HOURS = 24;  // keep in step with google_apps_script.js
     const ORDER_STATUS_CLASS = { [AWAITING]: "ck-buylist", Paid: "tcg-marketplace", Sold: "margin", Cancelled: "meta" };
     let saleOrders = null;  // null until loaded, and while not connected
     // Listings whose quantity dropped (docs/listing_sales.json, from
@@ -921,18 +936,21 @@
     let scriptKnowsListings = false;
     // What the deployed Apps Script supports (its VERSION; 0 before it had one).
     let scriptVersion = 0;
+    let salesSummary = null;  // Apps Script v5+: sales per period
 
     // What a Sell plan card can record: a sale from our own listing if it's
-    // listed, otherwise one to the best WTB offer if there is one.
-    function saleKindFor(item, rec) {
-      if (rec.route === "listed") {
-        return scriptKnowsListings ? { type: "Listing", price: rec.price, label: "Sold on TCGMP" } : null;
-      }
-      if (item.tcgmarketplace_wtb_price != null) {
-        return { type: "WTB", price: item.tcgmarketplace_wtb_price, label: "Sold to WTB buyer" };
-      }
-      return null;
+    // listed, and one to the best WTB offer if there is one.
+    function saleKindsFor(item, rec) {
+      const kinds = [];
+      if (rec.route === "listed" && scriptKnowsListings) kinds.push({ type: "Listing", price: rec.price, label: "Sold on TCGMP" });
+      if (item.tcgmarketplace_wtb_price != null) kinds.push({ type: "WTB", price: item.tcgmarketplace_wtb_price, label: "Sold to WTB buyer" });
+      return kinds;
     }
+
+    // TCGMP keeps SELL_RULES.tcgmpFee of every sale, WTB or listing.
+    const afterFee = (amount) => amount * (1 - SELL_RULES.tcgmpFee);
+    const feeNote = (amount) => `You get ${formatPrice(afterFee(amount))} after TCGMP's ${SELL_RULES.tcgmpFee * 100}%`;
+    const money = (n) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     async function sheetsApi(action, params = {}) {
       // A plain string body goes as text/plain, which keeps this a simple
@@ -987,6 +1005,7 @@
       scriptKnowsListings = Array.isArray(data.dismissed);
       scriptVersion = data.version || 0;
       dismissedDrops = new Set(data.dismissed || []);
+      salesSummary = data.sales || null;
       renderOrders();
       if (watchlistItems.length) renderSellPlan();
     }
@@ -1004,6 +1023,8 @@
       document.getElementById("orders-connect").hidden = connected;
       document.getElementById("orders-connect-error").textContent = authError || "";
       const container = document.getElementById("orders-list");
+      document.getElementById("orders-summary").hidden = true;
+      document.getElementById("orders-paid").hidden = true;
       if (!connected) {
         container.innerHTML = "";
         return;
@@ -1012,6 +1033,8 @@
         container.innerHTML = '<p class="empty">Loading…</p>';
         return;
       }
+      renderSalesSummary();
+      renderPaidPanel();
       // Drops not yet answered either way, newest first.
       const recorded = new Set(saleOrders.map((o) => o.source).filter(Boolean));
       const drops = scriptKnowsListings
@@ -1031,6 +1054,75 @@
       }
       drops.forEach((drop) => container.appendChild(dropCard(drop)));
       sorted.forEach((order) => container.appendChild(orderCard(order)));
+    }
+
+    // Sales per period (by drop-off date), after TCGMP's commission.
+    function renderSalesSummary() {
+      const el = document.getElementById("orders-summary");
+      if (!salesSummary) return;
+      const tiles = [["week", "Last 7 days"], ["month", "This month"], ["lastMonth", "Last month"], ["all", "All time"], ["pending", "Paid, not dropped off"]];
+      el.innerHTML = tiles
+        .map(([key, label]) => {
+          const b = salesSummary[key];
+          return `<div><div class="label">${label}</div><div class="value">${money(afterFee(b.gross))}</div>`
+            + `<div class="label">${b.copies} ${b.copies === 1 ? "copy" : "copies"} · ${money(b.gross)} before the ${SELL_RULES.tcgmpFee * 100}% fee</div></div>`;
+        })
+        .join("");
+      el.hidden = false;
+    }
+
+    // Every paid order in box order: where to pull each from, and a tick
+    // box to mark several dropped off in one go.
+    function renderPaidPanel() {
+      const el = document.getElementById("orders-paid");
+      const paid = saleOrders
+        .filter((o) => o.status === "Paid")
+        .map((o) => ({ order: o, pulls: o.pulls && o.pulls.length ? o.pulls : [{ location: o.location, row: o.inventoryRow, qty: o.qty }] }))
+        .sort((a, b) => byLocation(a.pulls)[0].location.localeCompare(byLocation(b.pulls)[0].location));
+      if (!paid.length) return;
+      el.innerHTML = `
+        <h3>Paid — pull and drop off (${paid.length})</h3>
+        <ul class="pick-list">${paid
+          .map(({ order, pulls }) => `<li><label><input type="checkbox">
+            <span>${byLocation(pulls).map((p) => `<strong>${escapeHtml(p.location)}</strong>${pulls.length > 1 ? ` ×${p.qty}` : ""}${p.row ? ` <span class="meta">(row ${p.row})</span>` : ""}`).join(", ")}
+            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""} <span class="meta">· ${escapeHtml(order.owner)}</span></span></label></li>`)
+          .join("")}</ul>
+        <div class="card-actions"></div>
+        <div class="order-error"></div>
+      `;
+      const actions = el.querySelector(".card-actions");
+      const error = el.querySelector(".order-error");
+      const boxes = [...el.querySelectorAll(".pick-list input")];
+      const picked = () => paid.filter((_, i) => boxes[i].checked).map((p) => p.order);
+      const all = actionButton(actions, "Select all", () => {
+        const on = boxes.some((b) => !b.checked);
+        boxes.forEach((b) => (b.checked = on));
+        refresh();
+      });
+      const drop = actionButton(actions, "", async () => {
+        const orders = picked();
+        const failed = busy(actions, error);
+        try {
+          if (scriptVersion >= 5) {
+            await change("droppedOffMany", { orders: orders.map((o) => ({ owner: o.owner, id: o.id })) });
+          } else {
+            // An older Apps Script: one at a time.
+            for (const o of orders) await sheetsApi("droppedOff", { owner: o.owner, id: o.id });
+            await loadOrders();
+          }
+        } catch (err) {
+          failed(err);
+        }
+      }, true);
+      function refresh() {
+        const n = picked().length;
+        drop.textContent = n ? `Mark ${n} dropped off` : "Tick the ones you dropped off";
+        drop.disabled = !n;
+        all.textContent = boxes.every((b) => b.checked) ? "Clear" : "Select all";
+      }
+      boxes.forEach((b) => b.addEventListener("change", refresh));
+      refresh();
+      el.hidden = false;
     }
 
     // Disables a card's controls while a request is in flight; returns the
@@ -1187,6 +1279,7 @@
         <div class="meta">${escapeHtml(order.set)}</div>
         <div class="meta">${escapeHtml(SHEET_FINISH_LABELS[order.finish] || order.finish)} · ${escapeHtml(order.type || "WTB")} · ${escapeHtml(order.owner)}</div>
         <div class="price">${formatPrice(order.price)}${order.qty > 1 && order.price != null ? ` <span class="meta">×${order.qty} = ${formatPrice(order.price * order.qty)}</span>` : ""}</div>
+        ${order.price != null && order.status !== "Cancelled" ? `<div class="meta">${feeNote(order.price * order.qty)}</div>` : ""}
         <div class="${ORDER_STATUS_CLASS[order.status] || "meta"}"><strong>${escapeHtml(status)}</strong></div>
         <div class="card-actions"></div>
         <div class="order-error"></div>
@@ -1279,10 +1372,16 @@
       } else if (order.status === "Cancelled" && scriptVersion >= 4) {
         actionButton(actions, "Delete", () => run("remove"));
       }
+      // A mis-tap can be stepped back for a day (Apps Script v5+).
+      const changedAt = order.status === "Paid" ? order.paid : order.closed;
+      if (scriptVersion >= 5 && changedAt && Date.now() - new Date(changedAt).getTime() < UNDO_HOURS * 60 * 60 * 1000) {
+        const label = { Paid: "Undo paid", Sold: "Undo drop-off", Cancelled: "Undo cancel" }[order.status];
+        if (label) actionButton(actions, label, () => run("undo"));
+      }
       return el;
     }
 
-    function addSaleControls(el, item, rec, sale) {
+    function addSaleControls(el, item, rec, kinds) {
       const finish = SHEET_FINISHES[item.printing];
       const mine = (o) => o.owner === item.owner && o.scryfallId === item.card_id && o.finish === finish;
       const open = saleOrders.filter((o) => mine(o) && (o.status === AWAITING || o.status === "Paid"));
@@ -1311,19 +1410,24 @@
           ? `<label>Copies <input type="number" min="1" max="${available}" value="${qty}" inputmode="numeric"></label>`
           : "";
         const input = actions.querySelector("input");
-        actionButton(actions, sale.label, () => {
+        kinds.forEach((sale) => actionButton(actions, sale.label, () => {
           const chosen = copiesFrom(input, available, error);
-          if (chosen != null) showConfirm(chosen);
-        });
+          if (chosen != null) showConfirm(chosen, sale);
+        }));
       }
-      function showConfirm(qty) {
-        actions.innerHTML = "";
-        actionButton(actions, `Record ${qty} at ${formatPrice(sale.price)}${qty > 1 ? ` = ${formatPrice(sale.price * qty)}` : ""}`, async () => {
+      // The price defaults to the offer or listing shown, but a sale can go
+      // to another buyer or at another price.
+      function showConfirm(qty, sale) {
+        actions.innerHTML = `<label>Price each $<input class="price-input" type="number" min="0.01" step="0.01" value="${sale.price.toFixed(2)}" inputmode="decimal"></label><div class="meta fee"></div>`;
+        const priceInput = actions.querySelector("input");
+        const fee = actions.querySelector(".fee");
+        const price = () => Math.round(Number(priceInput.value) * 100) / 100;
+        const record = actionButton(actions, "", async () => {
           const failed = busy(actions, error);
           try {
             const data = await sheetsApi("offer", {
               owner: item.owner, scryfallId: item.card_id, finish, name: item.name, set: item.set_name,
-              qty, price: sale.price, type: sale.type,
+              qty, price: price(), type: sale.type,
             });
             saleOrders = (data.orders ? data : await sheetsApi("list")).orders;
             renderOrders();
@@ -1335,6 +1439,14 @@
           }
         }, true);
         actionButton(actions, "Back", () => showStart(qty));
+        function refresh() {
+          const p = price();
+          record.disabled = !(p > 0);
+          record.textContent = p > 0 ? `Record ${qty} at ${formatPrice(p)}${qty > 1 ? ` = ${formatPrice(p * qty)}` : ""}` : "Enter a price";
+          fee.textContent = p > 0 ? feeNote(p * qty) : "";
+        }
+        priceInput.addEventListener("input", refresh);
+        refresh();
       }
       showStart();
     }

@@ -13,8 +13,18 @@
 //                                     pass it as secret_token when calling
 //                                     setWebhook (see below) so Telegram
 //                                     echoes it back on every real update
-//   GITHUB_TOKEN           (secret) - a GitHub token with Contents: write on this repo
+//   GITHUB_TOKEN           (secret) - a GitHub token with Contents: write and
+//                                     Actions: write on this repo
 //   GITHUB_REPO            (var)    - "owner/repo", e.g. "jtbk17/mtg-price-checker"
+//
+// It also starts the scheduled GitHub workflows on time (scheduled()
+// below), since GitHub's own cron runs them hours late. Add these under
+// the Worker's Settings -> Triggers -> Cron Triggers:
+//   */30 * * * *         shop/auction check and sheet sync, every 30 minutes
+//   0 0-13,15-23 * * *   marketplace refresh, hourly except 10pm SGT (the
+//                        nightly's hour: starting both at once could bump a
+//                        waiting Telegram-feedback run out of their queue)
+//   0 14 * * *           nightly refresh, 10pm SGT
 //
 // Register the webhook with the matching secret_token (one-time, from a
 // shell — replace <bot-token> and <secret>):
@@ -28,7 +38,36 @@
 // webhook call by echoing secret_token back in a header, so checking it
 // below is what actually verifies the request's origin.
 
+// Cron trigger -> the workflow files it starts.
+const SCHEDULES = {
+  "*/30 * * * *": ["auction-deals.yml", "sheet-sync.yml"],
+  "0 0-13,15-23 * * *": ["refresh-marketplace.yml"],
+  "0 14 * * *": ["nightly-refresh.yml"],
+};
+
 export default {
+  async scheduled(event, env, ctx) {
+    const workflows = SCHEDULES[event.cron] || [];
+    ctx.waitUntil(
+      Promise.allSettled(
+        workflows.map((file) =>
+          fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${file}/dispatches`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+              Accept: "application/vnd.github+json",
+              "User-Agent": "mtg-price-checker-worker",
+            },
+            body: JSON.stringify({ ref: "main" }),
+          }).then((resp) => {
+            if (!resp.ok) console.log(`Starting ${file} failed: ${resp.status}`);
+          })
+        )
+      )
+    );
+  },
+
   async fetch(request, env) {
     if (request.method !== "POST") {
       return new Response("OK");

@@ -7,11 +7,16 @@ on:
     # (the old 18:00 UTC / 2am SGT slot was pulling the *previous* day's prices).
     # Moved from 07:00 UTC: GitHub was starting the 07:00 slot ~7h late anyway
     # (around 10pm SGT), so this just makes the real run time the scheduled one.
+    # GitHub still starts it hours late, so the Cloudflare Worker
+    # (cloudflare_worker.js) starts it at 14:00 UTC sharp via
+    # workflow_dispatch; this schedule stays as a backup and stands down
+    # (see the check job) when tonight's refresh already ran.
     - cron: "0 14 * * *"
   workflow_dispatch: {}
 
 permissions:
   contents: write
+  actions: read  # the check job looks up tonight's earlier run
 
 # tcg_prices.db is NOT a git-tracked file (see below) — it's shared with
 # telegram-webhook-feedback.yml, which downloads/edits/uploads the same
@@ -26,7 +31,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.recent.outputs.skip }}
+    steps:
+      - id: recent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          skip=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            last=$(gh run list -R "${{ github.repository }}" --workflow nightly-refresh.yml --status success --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+            if [ -n "$last" ] && [ $(( $(date +%s) - $(date -d "$last" +%s) )) -lt 28800 ]; then
+              echo "Tonight's refresh already ran at $last — standing down"
+              skip=true
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   refresh:
+    needs: check
+    if: needs.check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -158,9 +184,11 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SHEETS_PASSCODE: ${{ secrets.SHEETS_PASSCODE }}
         run: |
           python market_alerts.py
           python news_signals.py --early-warnings
+          python order_reminders.py
 
       # Runs regardless of whether the steps above succeeded, so
       # whatever each one managed to write locally (price refresh,
@@ -170,6 +198,7 @@ jobs:
       # second git push that could itself conflict. The one exception is a
       # failed download, where there's nothing real here to persist.
       - name: Upload updated databases
+        id: upload
         if: always() && steps.download.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -177,6 +206,15 @@ jobs:
           gh release view data >/dev/null 2>&1 || gh release create data --title "Price history data" --notes "Persistent tcg_prices.db and all-cards price history (kept out of git history; not the same as source code releases)"
           gh release upload data tcg_prices.db all_cards_*.db --clobber
           if [ -f tcgmarketplace_id_cache.json ]; then gh release upload data tcgmarketplace_id_cache.json --clobber; fi
+
+      # A sheet sync (sheet-sync.yml) that landed while this job ran was just
+      # overwritten by the upload above. Dropping its fingerprint makes the
+      # next one re-apply both sheets instead of skipping them as unchanged.
+      - name: Make the next sheet sync re-check both sheets
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete-asset data sheet_fingerprint.txt --yes || true
 
       # Surfaced last (after alerts/upload already ran regardless) so the
       # price-refresh step's own failure doesn't block them, but still
@@ -197,5 +235,5 @@ jobs:
       - name: Fail the job if sending alerts/early warnings crashed
         if: steps.alerts.outcome == 'failure'
         run: |
-          echo "market_alerts.py or news_signals.py --early-warnings threw an error earlier in this run (see 'Send market alerts and early warnings' step above) — database upload still ran regardless." >&2
+          echo "market_alerts.py, news_signals.py --early-warnings or order_reminders.py threw an error earlier in this run (see 'Send market alerts and early warnings' step above) — database upload still ran regardless." >&2
           exit 1

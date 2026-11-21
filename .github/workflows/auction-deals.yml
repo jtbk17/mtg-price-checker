@@ -2,7 +2,11 @@ name: Auction deals
 
 # Checks every live TheTCGMarketplace Magic auction against GOG Cash and
 # publishes docs/auctions.json (see auction_deals.py). Every 30 minutes,
-# since bids move within hours; the whole check takes seconds.
+# since bids move within hours; the whole check takes seconds. Also reads
+# our own shop's listings, flagging ones that look sold (listing_sales.py).
+# The Cloudflare Worker (cloudflare_worker.js) starts it every 30 minutes
+# on time; GitHub's own schedule, which it often runs hours apart, stays
+# as a backup.
 on:
   schedule:
     - cron: "*/30 * * * *"
@@ -42,6 +46,10 @@ jobs:
         run: gh release download data --pattern "all_cards_*.db" --clobber
 
       - name: Check auctions and push docs/auctions.json (retries on conflict)
+        env:
+          # "Looks sold?" Telegram messages (sent once: python runs once, only the push retries)
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

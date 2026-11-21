@@ -1,10 +1,12 @@
 name: Refresh marketplace data
 
-# On demand only — started from the dashboard's "Refresh marketplace
-# data" button (which opens this workflow's page on GitHub, where the
-# repo owner taps "Run workflow"). Re-prices TheTCGMarketplace prices and
-# Market deals only; see refresh_marketplace.py for why the nightly
-# job's Card Kingdom history, movers and alerts are left out.
+# Every hour except 10pm SGT (the nightly run covers that hour), started by
+# the Cloudflare Worker (cloudflare_worker.js), and on demand from the
+# dashboard's "Refresh marketplace data" button. No GitHub schedule as a
+# backup: GitHub's runs start hours late and would just double up.
+# Re-prices TheTCGMarketplace prices and Market deals only; see
+# refresh_marketplace.py for why the nightly job's Card Kingdom history,
+# movers and alerts are left out.
 on:
   workflow_dispatch: {}
 
@@ -31,6 +33,7 @@ jobs:
       - run: pip install requests ijson
 
       - name: Download databases and TheTCGMarketplace id cache
+        id: download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -64,9 +67,19 @@ jobs:
           exit 1
 
       - name: Upload updated databases and id cache
-        if: always()
+        id: upload
+        if: always() && steps.download.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload data tcg_prices.db all_cards_*.db --clobber
           if [ -f tcgmarketplace_id_cache.json ]; then gh release upload data tcgmarketplace_id_cache.json --clobber; fi
+
+      # A sheet sync (sheet-sync.yml) that landed while this job ran was just
+      # overwritten by the upload above. Dropping its fingerprint makes the
+      # next one re-apply both sheets instead of skipping them as unchanged.
+      - name: Make the next sheet sync re-check both sheets
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete-asset data sheet_fingerprint.txt --yes || true

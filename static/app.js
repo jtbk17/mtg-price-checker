@@ -374,6 +374,10 @@ const SELL_RULES = {
   // price well above CK's (e.g. $19.89 vs $12.99) may not sell for a long
   // time, while a $12 WTB offer is money now.
   wtbShareOfSale: 0.9,
+  // TheTCGMarketplace keeps this share of every sale (WTB or listing);
+  // GOG pays out with none, so comparisons against GOG use what a TCGMP
+  // sale actually brings in.
+  tcgmpFee: 0.04,
   sanityFactor: 3, // cheapest listing vs CK price beyond 3x either way: likely a data error
 };
 const SELL_ROUTES = {
@@ -424,11 +428,11 @@ function sellRecommendationFor(item) {
     return { route: "review", reason: `Listing ${formatPrice(cheapest)} vs CK ${formatPrice(ck)} looks off` };
   }
   const undercut = cheapest >= SELL_RULES.switchPrice ? SELL_RULES.undercutBig : SELL_RULES.undercutSmall;
-  const floor = Math.max(gog == null ? 0 : gog * (1 + SELL_RULES.floorOverGog), wtb == null ? 0 : wtb);
+  const floor = Math.max(gog == null ? 0 : (gog * (1 + SELL_RULES.floorOverGog)) / (1 - SELL_RULES.tcgmpFee), wtb == null ? 0 : wtb);
   const price = Math.round(Math.max(cheapest - undercut, floor, 0.01) * 100) / 100;
   const realisticSale = ck ? Math.min(price, ck) : price;
   if (wtb != null && wtb >= realisticSale * SELL_RULES.wtbShareOfSale) return { route: "wtb", price: wtb };
-  if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest) return { route: "gog", price: gog };
+  if (gog != null && gog * (1 + SELL_RULES.gogWithin) > cheapest * (1 - SELL_RULES.tcgmpFee)) return { route: "gog", price: gog };
   return { route: "list", price };
 }
 

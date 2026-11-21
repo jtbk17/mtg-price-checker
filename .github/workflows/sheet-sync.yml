@@ -1,0 +1,64 @@
+name: Sheet sync
+
+# Syncs both inventory sheets into the database and the dashboard's
+# watchlist every 30 minutes, so sales, pulls and new batches show within
+# half an hour (see sheet_sync_job.py — it does nothing unless a sheet
+# changed). The Cloudflare Worker (cloudflare_worker.js) starts it on time;
+# GitHub's own schedule stays as a backup.
+on:
+  schedule:
+    - cron: "15,45 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Deliberately not the tcg-prices-db group the nightly jobs share: GitHub
+# keeps only the newest waiting run per group, so a run every 30 minutes
+# there could cancel a waiting nightly refresh. The database upload is
+# compare-and-swap protected instead (release_sync.py).
+concurrency:
+  group: sheet-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests ijson
+
+      - name: Sync both sheets if either changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOEL_SHEET_ID: ${{ secrets.JOEL_SHEET_ID }}
+        run: |
+          gh release download data --pattern sheet_fingerprint.txt --clobber || true
+          python sheet_sync_job.py
+
+      - name: Push the dashboard's watchlist if it changed (retries on conflict)
+        run: |
+          git diff --quiet docs/watchlist.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Regenerated wholesale, so on a conflict just re-apply it on top.
+          cp docs/watchlist.json /tmp/watchlist.json
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            cp /tmp/watchlist.json docs/watchlist.json
+            git add docs/watchlist.json
+            git diff --cached --quiet && exit 0
+            git commit -m "Sheet sync"
+            if git push; then
+              exit 0
+            fi
+          done
+          echo "Could not push docs/watchlist.json after 3 attempts" >&2
+          exit 1
