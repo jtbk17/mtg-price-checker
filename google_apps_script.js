@@ -1,6 +1,6 @@
 // Google Apps Script web app: lets the GitHub Pages dashboard
 // (docs/index.html) record sales — to WTB buyers or from our TCGMP
-// listings — and their progress in the two inventory sheets, and log new
+// listings or to GOG — and their progress in the two inventory sheets, and log new
 // batches of cards from a ManaBox CSV export (Add cards).
 // The dashboard is a static page with nowhere safe to keep Google
 // credentials, so this runs inside Google as you, and the dashboard only
@@ -32,6 +32,9 @@
 //                      copies out twice
 //   cancelled after    Pulled - qty (the copies go back in the box)
 //   being paid
+// A GOG sale uses the same steps with no buyer to wait on: recorded, then
+// pulled from the box (the "paid" step), then sold at the store (the
+// "dropped off" step), or cancelled and put back if GOG won't take it.
 //
 // Add cards appends a batch to the bottom of Inventory behind one slot —
 // the next empty one unless another is picked, worked out the same way as
@@ -47,7 +50,7 @@ const ORDER_HEADERS = [
   "Order", "Status", "Card", "Set", "Finish", "Scryfall ID", "Qty", "Price (USD)",
   "Location", "Inventory row", "Offered", "Paid", "Closed", "Type", "Source",
 ];
-const ORDER_TYPES = ["WTB", "Listing"];
+const ORDER_TYPES = ["WTB", "Listing", "GOG"];
 const SHEET_PROPERTIES = { Shared: "SHEET_SHARED", Joel: "SHEET_JOEL" };
 const RECENT_DAYS = 14;
 
@@ -56,8 +59,8 @@ const RECENT_DAYS = 14;
 // list carries each waiting order's box locations, every change answers
 // with the fresh list, and cancelled orders can be removed; 5: undo, several
 // orders dropped off at once, a sales summary, and a cached list; 6: Add
-// cards from a ManaBox CSV).
-const VERSION = 6;
+// cards from a ManaBox CSV; 7: GOG sales).
+const VERSION = 7;
 // A mis-tap can be stepped back for this long.
 const UNDO_HOURS = 24;
 // The list is cached this long between changes (each change refreshes it),
@@ -571,7 +574,8 @@ function freshList() {
 }
 
 // Sales by when they were dropped off (gross, before TCGMP's commission,
-// which the dashboard takes off), plus what paid orders will bring in.
+// which the dashboard takes off WTB and listing sales — GOG pays in full),
+// plus what paid orders will bring in.
 function salesSummary(orders) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -583,7 +587,7 @@ function salesSummary(orders) {
     lastMonth: (t) => t >= lastMonthStart && t < monthStart,
     all: () => true,
   };
-  const blank = () => ({ orders: 0, copies: 0, gross: 0, WTB: 0, Listing: 0 });
+  const blank = () => ({ orders: 0, copies: 0, gross: 0, WTB: 0, Listing: 0, GOG: 0 });
   const out = { pending: blank() };
   Object.keys(periods).forEach((name) => (out[name] = blank()));
   const add = (bucket, o) => {
@@ -591,7 +595,7 @@ function salesSummary(orders) {
     bucket.orders += 1;
     bucket.copies += o.qty;
     bucket.gross += gross;
-    bucket[o.type === "Listing" ? "Listing" : "WTB"] += gross;
+    bucket[ORDER_TYPES.indexOf(o.type) >= 0 ? o.type : "WTB"] += gross;
   };
   for (const o of orders) {
     if (o.status === PAID) {
@@ -602,7 +606,7 @@ function salesSummary(orders) {
     }
   }
   for (const bucket of Object.values(out)) {
-    ["gross", "WTB", "Listing"].forEach((k) => (bucket[k] = Math.round(bucket[k] * 100) / 100));
+    ["gross"].concat(ORDER_TYPES).forEach((k) => (bucket[k] = Math.round(bucket[k] * 100) / 100));
   }
   return out;
 }

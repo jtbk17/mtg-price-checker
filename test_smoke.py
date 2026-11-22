@@ -2599,6 +2599,19 @@ class OrderRemindersTests(unittest.TestCase):
         self.assertIn("Paid, not dropped off", text)
         self.assertIn("3 days", text)
 
+    def test_gog_sale_waits_on_pulling_not_a_buyer(self):
+        from datetime import datetime, timezone
+
+        import order_reminders as orr
+
+        now = datetime(2026, 11, 21, 12, tzinfo=timezone.utc)
+        gog = dict(self._order("Awaiting payment", offered="2026-11-18T12:00:00.000Z"), type="GOG")
+        unpaid, undropped = orr.stalled([gog], now)
+        text = orr.message(unpaid, undropped, now)
+        self.assertIn("Not pulled for GOG yet", text)
+        self.assertNotIn("Buyer hasn't paid", text)
+        self.assertIn("to GOG", text)
+
     def test_no_passcode_means_no_reminder(self):
         import order_reminders as orr
 

@@ -146,7 +146,8 @@ with sync_playwright() as p:
     # ---- buttons per card ----
     check("WTB button only on cards with an offer",
           frog().locator("text=Sold to WTB buyer").count() == 1 and sell("Snap").locator("text=Sold to WTB buyer").count() == 1
-          and sell("No Offer").locator("button").count() == 0)
+          and sell("No Offer").locator("text=Sold to WTB buyer").count() == 0
+          and [b.strip() for b in sell("No Offer").locator("button").all_inner_texts()] == ["Sold to GOG"])
     check("listed card gets Sold on TCGMP instead",
           sell("Sol Ring").locator("text=Sold on TCGMP").count() == 1 and sell("Sol Ring").locator("text=Sold to WTB buyer").count() == 0)
 
@@ -397,6 +398,44 @@ with sync_playwright() as p:
           "byhand01" not in cached_ids and changed["ok"] and "byhand01" not in [o["id"] for o in changed["orders"]], changed.get("error"))
     gas.evaluate("() => { __cacheOn = false; }")
 
+    # ---- Sold to GOG: GOG Cash, no fee, pull then sold at the store ----
+    watchlist["items"].append(item(name="Wasteland", card_id="waste", quantity=2, cardkingdom_buylist_price=10.0,
+                                   latest_price=14.0, tcgmarketplace_price=13.5))
+    pg.reload(); pg.wait_for_timeout(1500)
+
+    def waste_row(field):
+        return gas.evaluate("""f => { const s = __books.S.Inventory; const h = s.rows[0];
+            const r = s.getDataRange().getValues().find((x) => x[h.indexOf("Scryfall ID")] === "waste" && x[h.indexOf("Location")] === "B04-02");
+            return Number(r[h.indexOf(f)]) || 0; }""", field)
+
+    waste = sell("Wasteland")
+    check("Sold to GOG on a card GOG buys", waste.locator("text=Sold to GOG").count() == 1)
+    check("...and on every card with a GOG price, not just 'Sell to GOG' ones", sell("No Offer").locator("text=Sold to GOG").count() == 1)
+    waste.locator("text=Sold to GOG").click()
+    check("GOG Cash price, no TCGMP fee", waste.locator(".price-input").input_value() == "11.50" and "GOG Cash, no fee" in waste.inner_text())
+    waste.locator("text=Record 1 at $11.50").click(); pg.wait_for_timeout(700)
+    o = orders("S")[-1]
+    check("recorded as a GOG order", o[2] == "Wasteland" and o[7] == 11.5 and o[13] == "GOG" and o[1] == "Awaiting payment", o)
+    wc = lambda status: order_card("Wasteland").filter(has_text=status)
+    card_text = wc("To pull for GOG").inner_text()
+    check("order says where to take it from", "To pull for GOG" in card_text and "B04-02" in card_text and "GOG Cash, no fee" in card_text, card_text)
+    pulled0, sold0 = waste_row("Pulled"), waste_row("Sold")
+    wc("To pull for GOG").locator("text=Pull it").click(); pg.wait_for_timeout(400)
+    wc("To pull for GOG").locator("text=Pull 1 for GOG").click(); pg.wait_for_timeout(700)
+    check("pulled: Pulled +1 on its row", waste_row("Pulled") == pulled0 + 1)
+    check("then: bring to GOG", wc("bring to GOG").count() == 1 and wc("bring to GOG").locator("text=Sold at GOG").count() == 1)
+    check("pick list marks it as going to GOG", "to GOG" in pg.inner_text("#orders-paid"))
+    wc("bring to GOG").locator("text=Sold at GOG").click(); pg.wait_for_timeout(700)
+    check("sold at GOG: Pulled back, Sold +1", waste_row("Pulled") == pulled0 and waste_row("Sold") == sold0 + 1)
+    check("shows as sold at GOG, can be undone", wc("Sold at GOG").count() == 1 and wc("Sold at GOG").locator("text=Undo sold").count() == 1)
+    tiles = [" ".join(t.split()) for t in pg.locator("#orders-summary > div").all_inner_texts()]
+    by_type = gas.evaluate("""() => { const g = { GOG: 0, other: 0 }; for (const b of Object.values(__books)) { const s = b.Orders; if (!s) continue;
+        const h = s.rows[0]; s.rows.slice(1).forEach((r) => { if (r[h.indexOf("Status")] === "Sold")
+          g[r[h.indexOf("Type")] === "GOG" ? "GOG" : "other"] += r[h.indexOf("Price (USD)")] * r[h.indexOf("Qty")]; }); }
+        return g; }""")
+    net = f"${by_type['other'] * 0.96 + by_type['GOG']:,.2f}"
+    check("summary: GOG sales count in full, no 4% off them", by_type["GOG"] == 11.5 and any(t.startswith("All time") and net in t for t in tiles), (net, tiles))
+
     # ---- Add cards: a ManaBox CSV logged behind the next empty slot ----
     MANABOX = ["Name", "Set code", "Set name", "Collector number", "Foil", "Rarity", "Quantity", "ManaBox ID", "Scryfall ID",
                "Purchase price", "Misprint", "Altered", "Signed", "Condition", "Language", "Proxy", "Purchase price currency", "Added"]
@@ -579,6 +618,7 @@ with sync_playwright() as p:
     check("old script: a change falls back to fetching the list", calls[n:] == ["cancel", "list"]
           and "Cancelled" in old.locator("#orders-list .card", has_text="Bulk Card ×7").first.inner_text(), calls[n:])
     check("old script: Add cards asks for the script update", "update the Apps Script" in old.inner_text("#intake"))
+    check("old script: no Sold to GOG button", old.locator("text=Sold to GOG").count() == 0)
     check("old script: update note, no drops, no listing button, WTB still works",
           "update the Apps Script" in old.inner_text("#orders-list") and old.locator("#orders-list .card", has_text="Looks sold?").count() == 0
           and old.locator("text=Sold on TCGMP").count() == 0 and old.locator("text=Sold to WTB buyer").count() >= 1 and not old_errs, old_errs)

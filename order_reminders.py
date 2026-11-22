@@ -55,11 +55,17 @@ def message(unpaid, undropped, now=None):
 
     def line(o, since):
         copies = f" ×{o['qty']}" if o["qty"] > 1 else ""
-        return f"• {html.escape(o['name'])}{copies} ({html.escape(o['owner'])}) — {int(_days_since(o[since], now))} days"
+        to = " · to GOG" if o.get("type") == "GOG" else ""
+        return f"• {html.escape(o['name'])}{copies} ({html.escape(o['owner'])}{to}) — {int(_days_since(o[since], now))} days"
 
+    # A GOG sale waits on you pulling it, not on a buyer paying.
+    unpulled = [o for o in unpaid if o.get("type") == "GOG"]
+    unpaid = [o for o in unpaid if o.get("type") != "GOG"]
     parts = ["<b>⏰ Orders waiting on you</b>"]
     if unpaid:
         parts.append(f"\n<b>Buyer hasn't paid</b> ({AWAITING_DAYS}+ days):\n" + "\n".join(line(o, "offered") for o in unpaid))
+    if unpulled:
+        parts.append(f"\n<b>Not pulled for GOG yet</b> ({AWAITING_DAYS}+ days):\n" + "\n".join(line(o, "offered") for o in unpulled))
     if undropped:
         parts.append(f"\n<b>Paid, not dropped off</b> ({PAID_DAYS}+ days):\n" + "\n".join(line(o, "paid") for o in undropped))
     parts.append(f'\n<a href="{listing_sales.DASHBOARD_ORDERS_URL}">Open Orders on the dashboard</a>')

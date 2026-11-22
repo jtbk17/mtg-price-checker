@@ -963,12 +963,18 @@
       const kinds = [];
       if (rec.route === "listed" && scriptKnowsListings) kinds.push({ type: "Listing", price: rec.price, label: "Sold on TCGMP" });
       if (item.tcgmarketplace_wtb_price != null) kinds.push({ type: "WTB", price: item.tcgmarketplace_wtb_price, label: "Sold to WTB buyer" });
+      // Any card GOG buys, at GOG Cash (Apps Script v7+).
+      if (item.cardkingdom_buylist_price != null && scriptVersion >= 7) {
+        kinds.push({ type: "GOG", price: Math.round(item.cardkingdom_buylist_price * GOG_CASH_MULTIPLIER * 100) / 100, label: "Sold to GOG" });
+      }
       return kinds;
     }
 
     // TCGMP keeps SELL_RULES.tcgmpFee of every sale, WTB or listing.
     const afterFee = (amount) => amount * (1 - SELL_RULES.tcgmpFee);
     const feeNote = (amount) => `You get ${formatPrice(afterFee(amount))} after TCGMP's ${SELL_RULES.tcgmpFee * 100}%`;
+    // GOG pays cash in full; only TCGMP sales (WTB, listings) pay its fee.
+    const saleFeeNote = (type, amount) => (type === "GOG" ? "GOG Cash, no fee" : feeNote(amount));
     const money = (n) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     async function sheetsApi(action, params = {}) {
@@ -1087,8 +1093,9 @@
       el.innerHTML = tiles
         .map(([key, label]) => {
           const b = salesSummary[key];
-          return `<div><div class="label">${label}</div><div class="value">${money(afterFee(b.gross))}</div>`
-            + `<div class="label">${b.copies} ${b.copies === 1 ? "copy" : "copies"} · ${money(b.gross)} before the ${SELL_RULES.tcgmpFee * 100}% fee</div></div>`;
+          const net = afterFee(b.gross - (b.GOG || 0)) + (b.GOG || 0);
+          return `<div><div class="label">${label}</div><div class="value">${money(net)}</div>`
+            + `<div class="label">${b.copies} ${b.copies === 1 ? "copy" : "copies"} · ${money(b.gross)} before TCGMP's ${SELL_RULES.tcgmpFee * 100}%</div></div>`;
         })
         .join("");
       el.hidden = false;
@@ -1108,7 +1115,7 @@
         <ul class="pick-list">${paid
           .map(({ order, pulls }) => `<li><label><input type="checkbox">
             <span>${byLocation(pulls).map((p) => `<strong>${escapeHtml(p.location)}</strong>${pulls.length > 1 ? ` ×${p.qty}` : ""}${p.row ? ` <span class="meta">(row ${p.row})</span>` : ""}`).join(", ")}
-            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""} <span class="meta">· ${escapeHtml(order.owner)}</span></span></label></li>`)
+            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""} <span class="meta">· ${escapeHtml(order.owner)}${order.type === "GOG" ? " · to GOG" : ""}</span></span></label></li>`)
           .join("")}</ul>
         <div class="card-actions"></div>
         <div class="order-error"></div>
@@ -1298,12 +1305,20 @@
 
     function orderCard(order) {
       const item = watchlistItems.find((i) => i.card_id === order.scryfallId && SHEET_FINISHES[i.printing] === order.finish);
-      const status = {
+      // A GOG sale has no buyer to wait on: its "paid" step is pulling the
+      // copies, and "dropped off" is GOG taking them.
+      const gog = order.type === "GOG";
+      const status = (gog ? {
+        [AWAITING]: `To pull for GOG · recorded ${shortDate(order.offered)}`,
+        Paid: `Pulled from ${pulledFrom(order)} · bring to GOG`,
+        Sold: `Sold at GOG ${shortDate(order.closed)}`,
+        Cancelled: `Cancelled ${shortDate(order.closed)}`,
+      } : {
         [AWAITING]: `Awaiting payment · sold ${shortDate(order.offered)}`,
         Paid: `Paid · pulled from ${pulledFrom(order)} · drop off next`,
         Sold: `Sold · dropped off ${shortDate(order.closed)}`,
         Cancelled: `Cancelled ${shortDate(order.closed)}`,
-      }[order.status] || order.status;
+      })[order.status] || order.status;
       const el = document.createElement("div");
       el.className = "card";
       el.innerHTML = `
@@ -1312,7 +1327,7 @@
         <div class="meta">${escapeHtml(order.set)}</div>
         <div class="meta">${escapeHtml(SHEET_FINISH_LABELS[order.finish] || order.finish)} · ${escapeHtml(order.type || "WTB")} · ${escapeHtml(order.owner)}</div>
         <div class="price">${formatPrice(order.price)}${order.qty > 1 && order.price != null ? ` <span class="meta">×${order.qty} = ${formatPrice(order.price * order.qty)}</span>` : ""}</div>
-        ${order.price != null && order.status !== "Cancelled" ? `<div class="meta">${feeNote(order.price * order.qty)}</div>` : ""}
+        ${order.price != null && order.status !== "Cancelled" ? `<div class="meta">${saleFeeNote(order.type, order.price * order.qty)}</div>` : ""}
         <div class="${ORDER_STATUS_CLASS[order.status] || "meta"}"><strong>${escapeHtml(status)}</strong></div>
         <div class="card-actions"></div>
         <div class="order-error"></div>
@@ -1362,7 +1377,7 @@
             spot: spots[i], box: div.querySelector('[type="checkbox"]'), input: div.querySelector('[type="number"]'),
           }));
           const chosen = () => picks.filter((p) => p.box.checked).map((p) => ({ row: p.spot.row, qty: Number(p.input.value), max: p.spot.inBox }));
-          const pull = actionButton(actions, `Pull ${order.qty} & mark paid`, () => {
+          const pull = actionButton(actions, gog ? `Pull ${order.qty} for GOG` : `Pull ${order.qty} & mark paid`, () => {
             const sel = chosen();
             if (sel.length > 1 && scriptVersion < 3) {
               error.textContent = "Update the Apps Script to pull from several locations at once";
@@ -1395,11 +1410,11 @@
 
       if (order.status === AWAITING) {
         showWhereToTake(order, el.querySelector(".card-actions"));
-        actionButton(actions, "Buyer paid", choosePullLocation, true);
-        actionButton(actions, "Buyer cancelled", () => run("cancel"));
+        actionButton(actions, gog ? "Pull it" : "Buyer paid", choosePullLocation, true);
+        actionButton(actions, gog ? "Cancel" : "Buyer cancelled", () => run("cancel"));
       } else if (order.status === "Paid") {
-        actionButton(actions, "Dropped off", () => run("droppedOff"), true);
-        actionButton(actions, "Cancelled — put back", () => {
+        actionButton(actions, gog ? "Sold at GOG" : "Dropped off", () => run("droppedOff"), true);
+        actionButton(actions, gog ? "GOG didn't take it — put back" : "Cancelled — put back", () => {
           if (confirm(`Put ${order.qty} back in the box at ${pulledFrom(order)}?`)) run("cancel");
         });
       } else if (order.status === "Cancelled" && scriptVersion >= 4) {
@@ -1408,7 +1423,8 @@
       // A mis-tap can be stepped back for a day (Apps Script v5+).
       const changedAt = order.status === "Paid" ? order.paid : order.closed;
       if (scriptVersion >= 5 && changedAt && Date.now() - new Date(changedAt).getTime() < UNDO_HOURS * 60 * 60 * 1000) {
-        const label = { Paid: "Undo paid", Sold: "Undo drop-off", Cancelled: "Undo cancel" }[order.status];
+        const label = (gog ? { Paid: "Undo pull", Sold: "Undo sold" } : { Paid: "Undo paid", Sold: "Undo drop-off" })[order.status]
+          || (order.status === "Cancelled" ? "Undo cancel" : null);
         if (label) actionButton(actions, label, () => run("undo"));
       }
       return el;
@@ -1476,7 +1492,7 @@
           const p = price();
           record.disabled = !(p > 0);
           record.textContent = p > 0 ? `Record ${qty} at ${formatPrice(p)}${qty > 1 ? ` = ${formatPrice(p * qty)}` : ""}` : "Enter a price";
-          fee.textContent = p > 0 ? feeNote(p * qty) : "";
+          fee.textContent = p > 0 ? saleFeeNote(sale.type, p * qty) : "";
         }
         priceInput.addEventListener("input", refresh);
         refresh();
