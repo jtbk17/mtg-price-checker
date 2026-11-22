@@ -1,309 +1,7 @@
 {
-  "generated_at": "2026-11-21T20:21:49.877879+00:00",
-  "daily_gainers": [
-    {
-      "name": "Anhelo, the Painter",
-      "set": "NCC",
-      "set_full_name": "New Capenna Commander",
-      "scryfall_id": "462e887d-6b91-4b31-9487-2780ffe8943f",
-      "image_url": "https://api.scryfall.com/cards/462e887d-6b91-4b31-9487-2780ffe8943f?format=image&version=normal",
-      "price_now": 2.79,
-      "price_before": 0.99,
-      "pct_change": 181.8
-    },
-    {
-      "name": "Plains",
-      "set": "PTC",
-      "set_full_name": "Pro Tour Collector Set",
-      "scryfall_id": "cc623027-2b5c-489a-9bfc-763d678832d6",
-      "image_url": "https://api.scryfall.com/cards/cc623027-2b5c-489a-9bfc-763d678832d6?format=image&version=normal",
-      "price_now": 3.49,
-      "price_before": 1.29,
-      "pct_change": 170.5
-    },
-    {
-      "name": "Mindslicer",
-      "set": "ODY",
-      "set_full_name": "Odyssey",
-      "scryfall_id": "895b1c9b-b1a1-457b-92cd-3469a38b69a3",
-      "image_url": "https://api.scryfall.com/cards/895b1c9b-b1a1-457b-92cd-3469a38b69a3?format=image&version=normal",
-      "price_now": 5.99,
-      "price_before": 3.49,
-      "pct_change": 71.6
-    },
-    {
-      "name": "Arcane Signet",
-      "set": "MSC",
-      "set_full_name": "Marvel Super Heroes Commander",
-      "scryfall_id": "1cad1bd2-7c56-4ce0-99a6-b2a49c1288dd",
-      "image_url": "https://api.scryfall.com/cards/1cad1bd2-7c56-4ce0-99a6-b2a49c1288dd?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.79,
-      "pct_change": 63.3
-    },
-    {
-      "name": "Nighthawk Scavenger",
-      "set": "OTC",
-      "set_full_name": "Outlaws of Thunder Junction Commander",
-      "scryfall_id": "47433ce9-1ac6-4359-a5e4-4ec68490cb0c",
-      "image_url": "https://api.scryfall.com/cards/47433ce9-1ac6-4359-a5e4-4ec68490cb0c?format=image&version=normal",
-      "price_now": 1.99,
-      "price_before": 1.29,
-      "pct_change": 54.3
-    },
-    {
-      "name": "Hyena Umbra",
-      "set": "ROE",
-      "set_full_name": "Rise of the Eldrazi",
-      "scryfall_id": "f1461e2f-fb1d-4092-9935-4cee092f27e7",
-      "image_url": "https://api.scryfall.com/cards/f1461e2f-fb1d-4092-9935-4cee092f27e7?format=image&version=normal",
-      "price_now": 0.59,
-      "price_before": 0.39,
-      "pct_change": 51.3
-    },
-    {
-      "name": "Llawan, Cephalid Empress",
-      "set": "TOR",
-      "set_full_name": "Torment",
-      "scryfall_id": "a9821970-a5da-4045-93d8-f58c9e5797c1",
-      "image_url": "https://api.scryfall.com/cards/a9821970-a5da-4045-93d8-f58c9e5797c1?format=image&version=normal",
-      "price_now": 1.49,
-      "price_before": 0.99,
-      "pct_change": 50.5
-    },
-    {
-      "name": "Snow-Covered Forest",
-      "set": "KHM",
-      "set_full_name": "Kaldheim",
-      "scryfall_id": "ca17acea-f079-4e53-8176-a2f5c5c408a1",
-      "image_url": "https://api.scryfall.com/cards/ca17acea-f079-4e53-8176-a2f5c5c408a1?format=image&version=normal",
-      "price_now": 1.99,
-      "price_before": 1.49,
-      "pct_change": 33.6
-    },
-    {
-      "name": "Grothama, All-Devouring",
-      "set": "BBD",
-      "set_full_name": "Battlebond",
-      "scryfall_id": "ab8935b1-ec87-4330-9952-9ef8cd344531",
-      "image_url": "https://api.scryfall.com/cards/ab8935b1-ec87-4330-9952-9ef8cd344531?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Okiba-Gang Shinobi",
-      "set": "BOK",
-      "set_full_name": "Betrayers of Kamigawa",
-      "scryfall_id": "5cd9297e-301e-4e70-af9b-3218eacacf8d",
-      "image_url": "https://api.scryfall.com/cards/5cd9297e-301e-4e70-af9b-3218eacacf8d?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Murmuring Bosk",
-      "set": "C16",
-      "set_full_name": "Commander 2016",
-      "scryfall_id": "d07a08cc-e558-40a5-a10a-b52fd1c877e6",
-      "image_url": "https://api.scryfall.com/cards/d07a08cc-e558-40a5-a10a-b52fd1c877e6?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Goblin Anarchomancer",
-      "set": "MH2",
-      "set_full_name": "Modern Horizons 2",
-      "scryfall_id": "633a3423-501d-4b22-95a6-743233be521e",
-      "image_url": "https://api.scryfall.com/cards/633a3423-501d-4b22-95a6-743233be521e?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Reckless Rage",
-      "set": "PLST",
-      "set_full_name": "The List",
-      "scryfall_id": "7413d321-d39f-442d-afe7-755c855864e2",
-      "image_url": "https://api.scryfall.com/cards/7413d321-d39f-442d-afe7-755c855864e2?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Access Tunnel",
-      "set": "TDC",
-      "set_full_name": "Tarkir: Dragonstorm Commander",
-      "scryfall_id": "4bef5957-71a4-4fe0-b2ce-dff8e8690bd9",
-      "image_url": "https://api.scryfall.com/cards/4bef5957-71a4-4fe0-b2ce-dff8e8690bd9?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    },
-    {
-      "name": "Ornithopter of Paradise",
-      "set": "MH2",
-      "set_full_name": "Modern Horizons 2",
-      "scryfall_id": "025b0f0f-daf6-4071-82e7-39c015447ce4",
-      "image_url": "https://api.scryfall.com/cards/025b0f0f-daf6-4071-82e7-39c015447ce4?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.99,
-      "pct_change": 30.3
-    }
-  ],
-  "daily_losers": [
-    {
-      "name": "Island",
-      "set": "WC02",
-      "set_full_name": "World Championship Decks 2002",
-      "scryfall_id": "2d1f5b46-7217-4d43-aaa7-29ff2f7777fb",
-      "image_url": "https://api.scryfall.com/cards/2d1f5b46-7217-4d43-aaa7-29ff2f7777fb?format=image&version=normal",
-      "price_now": 1.99,
-      "price_before": 3.99,
-      "pct_change": -50.1
-    },
-    {
-      "name": "Chief Kyle, Transporter Tech",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "7a310a62-836b-4ed9-99b1-a09c9079ab43",
-      "image_url": "https://api.scryfall.com/cards/7a310a62-836b-4ed9-99b1-a09c9079ab43?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 1.49,
-      "pct_change": -47.0
-    },
-    {
-      "name": "Paradox Haze",
-      "set": "SPG",
-      "set_full_name": "Special Guests",
-      "scryfall_id": "3f92e3ed-32f7-40e0-952d-08ca524579c3",
-      "image_url": "https://api.scryfall.com/cards/3f92e3ed-32f7-40e0-952d-08ca524579c3?format=image&version=normal",
-      "price_now": 2.99,
-      "price_before": 5.49,
-      "pct_change": -45.5
-    },
-    {
-      "name": "Captain Kirk, Boldly Going",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "6b5d9bd2-cc78-4c30-b6ee-65b76c60a588",
-      "image_url": "https://api.scryfall.com/cards/6b5d9bd2-cc78-4c30-b6ee-65b76c60a588?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 1.79,
-      "pct_change": -44.7
-    },
-    {
-      "name": "Captain Janeway, Endgame",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "1fc05320-c8f8-4acd-8bac-86c4156352d2",
-      "image_url": "https://api.scryfall.com/cards/1fc05320-c8f8-4acd-8bac-86c4156352d2?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 1.79,
-      "pct_change": -44.7
-    },
-    {
-      "name": "Balance of Terror",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "2fc3e03e-29bd-4d69-b1c1-438183f39eb5",
-      "image_url": "https://api.scryfall.com/cards/2fc3e03e-29bd-4d69-b1c1-438183f39eb5?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 1.79,
-      "pct_change": -44.7
-    },
-    {
-      "name": "Ro Laren, Double Agent",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "54e9ffed-d541-4760-b9ae-8e62a4364da3",
-      "image_url": "https://api.scryfall.com/cards/54e9ffed-d541-4760-b9ae-8e62a4364da3?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 1.29,
-      "pct_change": -38.8
-    },
-    {
-      "name": "Duelist's Heritage",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "166411ca-cbfb-4636-a422-27b53c1faa76",
-      "image_url": "https://api.scryfall.com/cards/166411ca-cbfb-4636-a422-27b53c1faa76?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 1.29,
-      "pct_change": -38.8
-    },
-    {
-      "name": "Overflow Submatrix",
-      "set": "TRK",
-      "set_full_name": "Star Trek",
-      "scryfall_id": "33af9300-c477-4b47-9501-ebe03aa5a806",
-      "image_url": "https://api.scryfall.com/cards/33af9300-c477-4b47-9501-ebe03aa5a806?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 1.29,
-      "pct_change": -38.8
-    },
-    {
-      "name": "Plains",
-      "set": "PTC",
-      "set_full_name": "Pro Tour Collector Set",
-      "scryfall_id": "539f0b05-61a2-48da-913a-886bf9d97594",
-      "image_url": "https://api.scryfall.com/cards/539f0b05-61a2-48da-913a-886bf9d97594?format=image&version=normal",
-      "price_now": 1.49,
-      "price_before": 2.29,
-      "pct_change": -34.9
-    },
-    {
-      "name": "Disrupt Decorum",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "72352edf-72b8-4054-a8d1-d35b304b0db6",
-      "image_url": "https://api.scryfall.com/cards/72352edf-72b8-4054-a8d1-d35b304b0db6?format=image&version=normal",
-      "price_now": 1.49,
-      "price_before": 2.29,
-      "pct_change": -34.9
-    },
-    {
-      "name": "Giant Space Amoeba",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "6b49ed91-0898-4d03-8f5f-e5f39813e3ef",
-      "image_url": "https://api.scryfall.com/cards/6b49ed91-0898-4d03-8f5f-e5f39813e3ef?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 1.49,
-      "pct_change": -33.6
-    },
-    {
-      "name": "Command Chair",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "e46c4bbc-d4b3-44ae-bf91-cad01a66f302",
-      "image_url": "https://api.scryfall.com/cards/e46c4bbc-d4b3-44ae-bf91-cad01a66f302?format=image&version=normal",
-      "price_now": 2.49,
-      "price_before": 3.49,
-      "pct_change": -28.7
-    },
-    {
-      "name": "Collective Override",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "a16b9be3-5c17-4f63-9355-8fec2ce803e1",
-      "image_url": "https://api.scryfall.com/cards/a16b9be3-5c17-4f63-9355-8fec2ce803e1?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 1.79,
-      "pct_change": -27.9
-    },
-    {
-      "name": "Enlightened Confidant",
-      "set": "FRA",
-      "set_full_name": "Reality Fracture",
-      "scryfall_id": "483fcc58-cc6e-4452-a696-7b38e117c837",
-      "image_url": "https://api.scryfall.com/cards/483fcc58-cc6e-4452-a696-7b38e117c837?format=image&version=normal",
-      "price_now": 7.99,
-      "price_before": 10.99,
-      "pct_change": -27.3
-    }
-  ],
+  "generated_at": "2026-11-22T14:04:47.946371+00:00",
+  "daily_gainers": [],
+  "daily_losers": [],
   "weekly_gainers": [
     {
       "name": "Anhelo, the Painter",
@@ -316,16 +14,6 @@
       "pct_change": 181.8
     },
     {
-      "name": "Forest",
-      "set": "WC99",
-      "set_full_name": "World Championship Decks 1999",
-      "scryfall_id": "a06a2952-8a9a-4f9c-a113-c24144619781",
-      "image_url": "https://api.scryfall.com/cards/a06a2952-8a9a-4f9c-a113-c24144619781?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.49,
-      "pct_change": 163.3
-    },
-    {
       "name": "Plains",
       "set": "PTC",
       "set_full_name": "Pro Tour Collector Set",
@@ -334,16 +22,6 @@
       "price_now": 3.49,
       "price_before": 1.49,
       "pct_change": 134.2
-    },
-    {
-      "name": "Agent Bishop, Man in Black",
-      "set": "TMT",
-      "set_full_name": "Teenage Mutant Ninja Turtles",
-      "scryfall_id": "9c769202-178c-442a-a9e2-aa08b5ae5c9a",
-      "image_url": "https://api.scryfall.com/cards/9c769202-178c-442a-a9e2-aa08b5ae5c9a?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 0.49,
-      "pct_change": 102.0
     },
     {
       "name": "Gruul Signet",
@@ -366,16 +44,6 @@
       "pct_change": 87.0
     },
     {
-      "name": "Borg Cube",
-      "set": "TRK",
-      "set_full_name": "Star Trek",
-      "scryfall_id": "e58f7310-3fd5-48d5-b6b7-a5d3e1808bbc",
-      "image_url": "https://api.scryfall.com/cards/e58f7310-3fd5-48d5-b6b7-a5d3e1808bbc?format=image&version=normal",
-      "price_now": 10.99,
-      "price_before": 5.99,
-      "pct_change": 83.5
-    },
-    {
       "name": "Mindslicer",
       "set": "ODY",
       "set_full_name": "Odyssey",
@@ -386,14 +54,14 @@
       "pct_change": 71.6
     },
     {
-      "name": "Thassa's Intervention",
-      "set": "THB",
-      "set_full_name": "Theros Beyond Death",
-      "scryfall_id": "2c1241d0-20d4-4eab-970d-74e476f023b4",
-      "image_url": "https://api.scryfall.com/cards/2c1241d0-20d4-4eab-970d-74e476f023b4?format=image&version=normal",
-      "price_now": 0.99,
-      "price_before": 0.59,
-      "pct_change": 67.8
+      "name": "Borg Cube",
+      "set": "TRK",
+      "set_full_name": "Star Trek",
+      "scryfall_id": "e58f7310-3fd5-48d5-b6b7-a5d3e1808bbc",
+      "image_url": "https://api.scryfall.com/cards/e58f7310-3fd5-48d5-b6b7-a5d3e1808bbc?format=image&version=normal",
+      "price_now": 10.99,
+      "price_before": 6.49,
+      "pct_change": 69.3
     },
     {
       "name": "People of the Woods",
@@ -416,26 +84,6 @@
       "pct_change": 63.3
     },
     {
-      "name": "Breaker of Armies",
-      "set": "PLST",
-      "set_full_name": "The List",
-      "scryfall_id": "9c414c52-e076-42ea-b080-6b34316eb736",
-      "image_url": "https://api.scryfall.com/cards/9c414c52-e076-42ea-b080-6b34316eb736?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.79,
-      "pct_change": 63.3
-    },
-    {
-      "name": "Undying Malice",
-      "set": "FDN",
-      "set_full_name": "Foundations",
-      "scryfall_id": "97b3cf11-e352-4ee1-8c03-13898f576ef9",
-      "image_url": "https://api.scryfall.com/cards/97b3cf11-e352-4ee1-8c03-13898f576ef9?format=image&version=normal",
-      "price_now": 1.29,
-      "price_before": 0.79,
-      "pct_change": 63.3
-    },
-    {
       "name": "Goblin Archaeologist",
       "set": "DST",
       "set_full_name": "Darksteel",
@@ -446,14 +94,64 @@
       "pct_change": 63.3
     },
     {
-      "name": "Ichor Wellspring",
+      "name": "Myr Retriever",
       "set": "FDC",
       "set_full_name": "Foundations Commander",
-      "scryfall_id": "c904cd73-b3bf-4fbd-a0a0-1b2aaaf880b0",
-      "image_url": "https://api.scryfall.com/cards/c904cd73-b3bf-4fbd-a0a0-1b2aaaf880b0?format=image&version=normal",
+      "scryfall_id": "9bc01feb-9e14-40f1-ba4b-87e109c672e7",
+      "image_url": "https://api.scryfall.com/cards/9bc01feb-9e14-40f1-ba4b-87e109c672e7?format=image&version=normal",
       "price_now": 1.29,
       "price_before": 0.79,
       "pct_change": 63.3
+    },
+    {
+      "name": "Rampant Growth",
+      "set": "TRC",
+      "set_full_name": "Star Trek Commander",
+      "scryfall_id": "099c081d-06ae-4ca5-ab3b-f70d01509258",
+      "image_url": "https://api.scryfall.com/cards/099c081d-06ae-4ca5-ab3b-f70d01509258?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
+    },
+    {
+      "name": "Fabled Passage",
+      "set": "TRC",
+      "set_full_name": "Star Trek Commander",
+      "scryfall_id": "5ea98881-83bf-4daa-9d53-9e638340ea2e",
+      "image_url": "https://api.scryfall.com/cards/5ea98881-83bf-4daa-9d53-9e638340ea2e?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
+    },
+    {
+      "name": "Elim Garak, Simple Tailor",
+      "set": "TRK",
+      "set_full_name": "Star Trek",
+      "scryfall_id": "2c881def-1b77-42ed-9fdc-45f0ebbf843d",
+      "image_url": "https://api.scryfall.com/cards/2c881def-1b77-42ed-9fdc-45f0ebbf843d?format=image&version=normal",
+      "price_now": 1.29,
+      "price_before": 0.79,
+      "pct_change": 63.3
+    },
+    {
+      "name": "Magister Sphinx",
+      "set": "2X2",
+      "set_full_name": "Double Masters 2022",
+      "scryfall_id": "be662808-e452-407d-b142-bf6f30990b5a",
+      "image_url": "https://api.scryfall.com/cards/be662808-e452-407d-b142-bf6f30990b5a?format=image&version=normal",
+      "price_now": 6.99,
+      "price_before": 4.49,
+      "pct_change": 55.7
+    },
+    {
+      "name": "Nighthawk Scavenger",
+      "set": "OTC",
+      "set_full_name": "Outlaws of Thunder Junction Commander",
+      "scryfall_id": "47433ce9-1ac6-4359-a5e4-4ec68490cb0c",
+      "image_url": "https://api.scryfall.com/cards/47433ce9-1ac6-4359-a5e4-4ec68490cb0c?format=image&version=normal",
+      "price_now": 1.99,
+      "price_before": 1.29,
+      "pct_change": 54.3
     }
   ],
   "weekly_losers": [
@@ -568,6 +266,16 @@
       "pct_change": -50.1
     },
     {
+      "name": "Salvage",
+      "set": "P02",
+      "set_full_name": "Portal Second Age",
+      "scryfall_id": "f3012e10-566b-447c-bb0a-dfc38c8e0fdf",
+      "image_url": "https://api.scryfall.com/cards/f3012e10-566b-447c-bb0a-dfc38c8e0fdf?format=image&version=normal",
+      "price_now": 0.35,
+      "price_before": 0.69,
+      "pct_change": -49.3
+    },
+    {
       "name": "Mirror Universe Intrusion",
       "set": "TRK",
       "set_full_name": "Star Trek",
@@ -593,16 +301,6 @@
       "set_full_name": "Star Trek Commander",
       "scryfall_id": "54e9ffed-d541-4760-b9ae-8e62a4364da3",
       "image_url": "https://api.scryfall.com/cards/54e9ffed-d541-4760-b9ae-8e62a4364da3?format=image&version=normal",
-      "price_now": 0.79,
-      "price_before": 1.49,
-      "pct_change": -47.0
-    },
-    {
-      "name": "Duelist's Heritage",
-      "set": "TRC",
-      "set_full_name": "Star Trek Commander",
-      "scryfall_id": "166411ca-cbfb-4636-a422-27b53c1faa76",
-      "image_url": "https://api.scryfall.com/cards/166411ca-cbfb-4636-a422-27b53c1faa76?format=image&version=normal",
       "price_now": 0.79,
       "price_before": 1.49,
       "pct_change": -47.0
