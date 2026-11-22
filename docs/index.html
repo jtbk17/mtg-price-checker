@@ -1263,6 +1263,16 @@
       return pulls.map((p) => `${p.location}${pulls.length > 1 ? ` ×${p.qty}` : ""} (row ${p.row})`).join(", ");
     }
 
+    // Once an order takes the last copy out of the box, the card drops off the
+    // tracked list and with it the picture, so fall back to Scryfall's own.
+    function orderImage(order) {
+      const id = /^[0-9a-f-]{36}$/i.test(order.scryfallId || "") ? order.scryfallId : null;
+      return {
+        name: order.name,
+        image_url: id ? `https://api.scryfall.com/cards/${id}?format=image&version=normal` : null,
+      };
+    }
+
     function orderCard(order) {
       const item = watchlistItems.find((i) => i.card_id === order.scryfallId && SHEET_FINISHES[i.printing] === order.finish);
       const status = {
@@ -1274,7 +1284,7 @@
       const el = document.createElement("div");
       el.className = "card";
       el.innerHTML = `
-        ${item ? cardImageHtml(item) : ""}
+        ${cardImageHtml(item || orderImage(order))}
         <div class="name">${escapeHtml(order.name)}${order.qty > 1 ? ` <span class="meta">×${order.qty}</span>` : ""}</div>
         <div class="meta">${escapeHtml(order.set)}</div>
         <div class="meta">${escapeHtml(SHEET_FINISH_LABELS[order.finish] || order.finish)} · ${escapeHtml(order.type || "WTB")} · ${escapeHtml(order.owner)}</div>
