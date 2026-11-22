@@ -8,8 +8,10 @@ Run with `python test_orders_e2e.py` (needs `pip install playwright` and
 `playwright install chromium`); exits non-zero if any check fails.
 tests.yml runs it on every push touching either file.
 """
+import csv
 import functools
 import http.server
+import io
 import json
 import re
 import sys
@@ -280,7 +282,8 @@ with sync_playwright() as p:
 
     # ---- fewer round trips (Apps Script v4) ----
     n = len(calls); pg.reload(); pg.wait_for_timeout(1200)
-    check("loading is one call: box locations come with the list", calls[n:] == ["list"], calls[n:])
+    # (v6 adds one read for Add cards, which needs no lock and no list.)
+    check("loading: box locations come with the list, no call per order", calls[n:] == ["list", "intakeStatus"], calls[n:])
     check("waiting orders still show where to take them", "Take from B02-01 ×1 (row 3)" in order_card("Sol Ring").filter(has_text="Joel").inner_text())
 
     # ---- deleting cancelled orders ----
@@ -394,6 +397,145 @@ with sync_playwright() as p:
           "byhand01" not in cached_ids and changed["ok"] and "byhand01" not in [o["id"] for o in changed["orders"]], changed.get("error"))
     gas.evaluate("() => { __cacheOn = false; }")
 
+    # ---- Add cards: a ManaBox CSV logged behind the next empty slot ----
+    MANABOX = ["Name", "Set code", "Set name", "Collector number", "Foil", "Rarity", "Quantity", "ManaBox ID", "Scryfall ID",
+               "Purchase price", "Misprint", "Altered", "Signed", "Condition", "Language", "Proxy", "Purchase price currency", "Added"]
+
+    def uid(n):
+        return f"{n:08x}-0000-4000-8000-000000000000"
+
+    def mb(name, n, qty=1, price="1.50", foil="normal", added="2026-11-21T03:04:34.722382Z"):
+        return [name, "msh", "Marvel Super Heroes", str(100 + n), foil, "rare", str(qty), str(n), uid(n), price,
+                "FALSE", "FALSE", "FALSE", "near_mint", "en", "FALSE", "USD", added]
+
+    def csv_bytes(rows, header=MANABOX):
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator="\r\n").writerows([header] + rows)
+        return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+    def pick(rows, name="ManaBox_Inbox.csv", header=MANABOX):
+        pg.set_input_files("#intake input[type=file]", files=[{"name": name, "mimeType": "text/csv", "buffer": csv_bytes(rows, header)}])
+        pg.wait_for_timeout(300)
+
+    def intake_api(**params):
+        body = json.dumps({"passcode": "pw", **params})
+        return json.loads(gas.evaluate("b => doPost({ postData: { contents: b } }).s", body))
+
+    def inv_rows(book):
+        return gas.evaluate("b => __books[b].Inventory.rows.map(r => r.slice())", book)
+
+    def log_rows(book):
+        return gas.evaluate("b => __books[b]['Intake log'] ? __books[b]['Intake log'].rows.map(r => r.map(v => v instanceof Date ? 'DATE' : v)) : []", book)
+
+    intake = pg.locator("#intake")
+    pg.reload(); pg.wait_for_timeout(1500)
+    check("Add cards: section and nav link shown once connected", pg.is_visible("#intake-section") and pg.is_visible("#intake-link"))
+    check("Add cards: Shared's next empty slot follows the highest one (B05-03)", "Next empty slot: B05-04" in intake.inner_text(), intake.inner_text())
+
+    batch_a = [mb('Thor, God of Thunder', 1, price="16.99", foil="foil"), mb('Avengers "Assemble!"', 2, qty=2), mb("Castle Doom", 3, price="")]
+    s_before = len(inv_rows("S"))
+    pick(batch_a)
+    check("preview: cards, rows and what they cost", "4 cards in 3 rows" in intake.inner_text() and "bought for $19.99" in intake.inner_text(), intake.inner_text())
+    check("preview: logs behind the next empty slot", intake.locator("text=Log 4 cards → B05-04").count() == 1)
+    n = len(calls)
+    intake.locator("text=Log 4 cards → B05-04").click(); pg.wait_for_timeout(800)
+    rows = inv_rows("S")
+    new = rows[s_before:]
+    H = rows[0]
+    c = lambda name: H.index(name)
+    check("one call logs the batch", calls[n:] == ["intake"], calls[n:])
+    check("rows added at the bottom, behind B05-04", len(new) == 3 and all(r[c("Location")] == "B05-04" for r in new), new)
+    check("name with a comma and quotes kept whole", new[0][c("Name")] == "Thor, God of Thunder" and new[1][c("Name")] == 'Avengers "Assemble!"')
+    check("columns mapped like the Staging tab",
+          new[0][c("Foil")] == "foil" and new[1][c("Qty")] == 2 and new[0][c("Price (USD)")] == 16.99 and new[2][c("Price (USD)")] == ""
+          and new[0][c("Scryfall ID")] == uid(1) and new[0][c("Set name")] == "Marvel Super Heroes" and new[0][c("Collector #")] == "101"
+          and new[0][c("Condition")] == "near_mint" and re.fullmatch(r"\d{4}-\d{2}-\d{2}", new[0][c("Date logged")]), new[0])
+    check("Sold/Pulled left blank, In box and Value never written (they're formulas)",
+          all(len(r) <= c("In box") for r in new) and all((r + [""] * 20)[c("Sold")] == "" and (r + [""] * 20)[c("Pulled")] == "" for r in new), new)
+    check("In box counts the new copies", cell("S", s_before + 1, "In box") == 2)
+    lg = log_rows("S")
+    check("Intake log tab records the batch",
+          lg and lg[0][:3] == ["Batch", "Logged", "Location"] and lg[1][2] == "B05-04" and lg[1][3] == 4 and lg[1][4] == 3
+          and lg[1][5] == s_before + 1 and lg[1][6] == "2026-11-21T03:04:34.722382Z", lg)
+    check("what now: write the slot on the divider, move Inbox to Collection",
+          "Logged 4 cards behind B05-04" in intake.inner_text() and "move Inbox to Collection" in intake.inner_text())
+    check("next empty slot moves on", "Next empty slot: B05-05" in intake.inner_text() and "Last batch: 4 cards → B05-04" in intake.inner_text())
+
+    pick(batch_a)
+    check("same file again: flagged, Log disabled", "This file was already logged" in intake.inner_text()
+          and not intake.locator("text=Log 4 cards").is_enabled(), intake.inner_text())
+    again = intake_api(action="intake", owner="Shared", location="B05-05",
+                       rows=[{"name": "Castle Doom", "scryfallId": uid(3), "qty": 1, "added": "2026-11-21T03:04:34.722382Z"}])
+    check("...and the script refuses it too", not again["ok"] and "already logged behind B05-04" in again["error"], again)
+    pick([mb("Castle Doom", 3), mb("New Card", 4, added="2026-11-22T09:00:00.000000Z")])
+    check("Inbox not emptied in ManaBox: says which cards and what to do",
+          "1 card in this file was already logged" in intake.inner_text() and "move them from Inbox to Collection" in intake.inner_text(), intake.inner_text())
+    intake.locator("text=Cancel").click()
+
+    pg.select_option("#intake .intake-owner select", "Joel"); pg.wait_for_timeout(200)
+    check("Joel's sheet: its own next slot", "Next empty slot: B02-02" in intake.inner_text(), intake.inner_text())
+    pick(batch_a)
+    check("a file logged in the other sheet is caught too", "already logged in Shared's sheet" in intake.inner_text(), intake.inner_text())
+    big = [mb("Big Stack", 5, qty=120, added="2026-11-22T10:00:00.000000Z")]
+    pick(big)
+    check("more than a slot holds: warned, still allowed", "more than a slot holds (100)" in intake.inner_text()
+          and intake.locator("text=Log 120 cards → B02-02").is_enabled(), intake.inner_text())
+    opts = pg.locator("#intake .intake-slot option").all_inner_texts()
+    check("slot choices: next empty, then part-full slots with room", opts[0] == "B02-02 — next empty slot" and "B01-01 — 99 free" in opts, opts)
+    pg.select_option("#intake .intake-slot", "B01-01"); pg.wait_for_timeout(200)
+    check("picked slot: room left shown, button follows", "B01-01 has room for 99 more" in intake.inner_text()
+          and intake.locator("text=Log 120 cards → B01-01").count() == 1, intake.inner_text())
+    intake.locator("text=Cancel").click()
+    pg.select_option("#intake .intake-owner select", "Shared"); pg.wait_for_timeout(200)
+
+    pick([["Foo", "Bar"], ["1", "2"]], name="notes.csv", header=["Card", "Count"])
+    check("not a ManaBox export: says so", "doesn't look like a ManaBox CSV export" in intake.inner_text(), intake.inner_text())
+    bad = intake_api(action="intake", owner="Shared", location="box 5", rows=[{"name": "X", "scryfallId": uid(9), "qty": 1}])
+    bad_id = intake_api(action="intake", owner="Shared", location="B05-05", rows=[{"name": "X", "scryfallId": "nope", "qty": 1}])
+    check("script checks the slot and every row", "isn't a slot like B01-10" in bad["error"] and "has no Scryfall ID" in bad_id["error"], (bad, bad_id))
+    check("...and writes nothing when it refuses", len(inv_rows("S")) == s_before + 3)
+
+    # undo: only the latest batch, only while untouched
+    last_row = s_before + 3
+    gas.evaluate(f"() => {{ const s = __books.S.Inventory; s.rows[{last_row - 1}][s.rows[0].indexOf('Sold')] = 1; }}")
+    intake.locator("text=Undo").click(); pg.wait_for_timeout(700)
+    check("undo refused once a card is sold", "already sold or pulled" in intake.inner_text() and len(inv_rows("S")) == last_row, intake.inner_text())
+    gas.evaluate(f"() => {{ const s = __books.S.Inventory; s.rows[{last_row - 1}][s.rows[0].indexOf('Sold')] = ''; }}")
+    intake.locator("text=Undo").click(); pg.wait_for_timeout(700)
+    check("undo takes the batch back out", len(inv_rows("S")) == s_before and "Next empty slot: B05-04" in intake.inner_text()
+          and "Last batch" not in intake.inner_text(), intake.inner_text())
+    check("...and marks it undone in the log", log_rows("S")[1][8] == "DATE")
+    pick(batch_a)
+    check("an undone file can be logged again", intake.locator("text=Log 4 cards → B05-04").is_enabled())
+    intake.locator("text=Log 4 cards → B05-04").click(); pg.wait_for_timeout(800)
+    gas.evaluate("() => { const s = __books.S.Inventory; s.rows.push(s.rows[1].slice()); }")
+    st = intake_api(action="intakeStatus")["intake"]["Shared"]
+    refused = intake_api(action="undoIntake", owner="Shared", batch=st["undoable"])
+    check("undo refused once rows are added below the batch", not refused["ok"] and "added below" in refused["error"], refused)
+    gas.evaluate("() => { __books.S.Inventory.rows.pop(); }")
+    gas.evaluate("""() => { const s = __books.S['Intake log']; const h = s.rows[0];
+        s.rows[s.rows.length - 1][h.indexOf('Logged')] = new Date(Date.now() - 25 * 3600 * 1000); }""")
+    st = intake_api(action="intakeStatus")["intake"]["Shared"]
+    old_undo = intake_api(action="undoIntake", owner="Shared", batch=st["recent"][0]["batch"])
+    check("no undo after 24 hours", st["undoable"] is None and not old_undo["ok"], old_undo)
+
+    # a bigger batch than the tab has rows for, and the last slot of a box
+    gas.evaluate("() => { const s = __books.J.Inventory; s.rows.push(s.rows[2].slice()); s.rows[s.rows.length - 1][0] = 'B02-10'; s.maxRows = s.rows.length; }")
+    check("after a box's last slot: the next box", intake_api(action="intakeStatus")["intake"]["Joel"]["next"] == "B03-01")
+    j_before = len(inv_rows("J"))
+    many = [{"name": f"Card {i}", "scryfallId": uid(100 + i), "qty": 1, "added": "2026-11-22T11:00:00Z"} for i in range(12)]
+    out = intake_api(action="intake", owner="Joel", location="B03-01", rows=many)
+    check("rows inserted when the tab runs out", out["ok"] and len(inv_rows("J")) == j_before + 12 and out["logged"]["firstRow"] == j_before + 1, out.get("error"))
+    check("the answer carries the fresh status and orders", out["intake"]["Joel"]["next"] == "B03-02" and "orders" in out)
+    gas.evaluate("() => { const s = __books.J.Inventory; s.rows.splice(" + str(j_before - 1) + "); }")
+    pg.reload(); pg.wait_for_timeout(1500)
+    pick([mb("Phone Card", 7, added="2026-11-22T12:00:00.000000Z")])
+    pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(300)
+    check("Add cards at phone width: no horizontal scroll", not pg.evaluate("document.documentElement.scrollWidth > innerWidth"))
+    pg.locator("#intake-section").screenshot(path=SHOTS / "intake_phone.png")
+    pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(200)
+    intake.locator("text=Cancel").click()
+
     # ---- safety ----
     frog().locator("text=Sold to WTB buyer").click(); frog().locator("text=Record 1 at $9.00").click(); pg.wait_for_timeout(500)
     c = order_card("Psychic Frog").filter(has_text="Awaiting payment")
@@ -436,6 +578,7 @@ with sync_playwright() as p:
     n = len(calls); oc.locator("text=Back").click(); oc.locator("text=Buyer cancelled").click(); old.wait_for_timeout(700)
     check("old script: a change falls back to fetching the list", calls[n:] == ["cancel", "list"]
           and "Cancelled" in old.locator("#orders-list .card", has_text="Bulk Card ×7").first.inner_text(), calls[n:])
+    check("old script: Add cards asks for the script update", "update the Apps Script" in old.inner_text("#intake"))
     check("old script: update note, no drops, no listing button, WTB still works",
           "update the Apps Script" in old.inner_text("#orders-list") and old.locator("#orders-list .card", has_text="Looks sold?").count() == 0
           and old.locator("text=Sold on TCGMP").count() == 0 and old.locator("text=Sold to WTB buyer").count() >= 1 and not old_errs, old_errs)

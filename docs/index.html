@@ -198,6 +198,18 @@
     .pick-list li:last-child { border-bottom: none; }
     .pick-list label { display: flex; gap: 8px; align-items: flex-start; }
     .pick-list input { margin-top: 3px; flex-shrink: 0; }
+    #intake p { margin: 6px 0; }
+    .intake-last { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .intake-last .card-actions { margin-top: 0; }
+    .intake-done { color: var(--up); }
+    .intake-warn { color: #e5c07b; font-size: 0.9em; }
+    .intake-preview { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; overflow-wrap: anywhere; }
+    .file-button {
+      display: inline-flex; align-items: center; cursor: pointer;
+      background: var(--panel); border: 1px solid #c792ea; color: var(--text);
+      border-radius: 8px; padding: 6px 12px; font-size: 16px;
+    }
+    .file-button input { display: none; }
     #orders-connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
     #orders-connect[hidden] { display: none; }
     #orders-connect input { flex: 1 1 200px; min-width: 0; }
@@ -245,6 +257,7 @@
 
     <nav class="jump">
       <a href="#orders-section" id="orders-link" hidden>Orders</a>
+      <a href="#intake-section" id="intake-link" hidden>Add cards</a>
       <a href="#sell-plan-section">Sell plan</a>
       <a href="#deals-section">Good deals</a>
       <a href="#market-deals-section" id="market-deals-link">Market deals</a>
@@ -270,6 +283,12 @@
       <div id="orders-summary" class="totals" hidden></div>
       <div id="orders-paid" class="paid-panel" hidden></div>
       <div id="orders-list" class="card-grid"></div>
+    </section>
+
+    <section id="intake-section" hidden>
+      <h2>Add cards</h2>
+      <p class="section-sub">Scan a stack of about 100 into ManaBox's Inbox binder, export it as CSV, and pick the file here. It's added to the inventory sheet behind the next empty slot, so there's nothing to import, copy or paste.</p>
+      <div id="intake" class="paid-panel"></div>
     </section>
 
     <section id="sell-plan-section">
@@ -964,7 +983,10 @@
         if (data.auth) {
           remember("sheetsPasscode", "");
           saleOrders = null;
+          intakeStatus = null;
+          intakeError = "";
           renderOrders(data.error);
+          renderIntake();
           renderSellPlan();
         }
         throw new Error(data.error || "Request failed");
@@ -1007,6 +1029,7 @@
       dismissedDrops = new Set(data.dismissed || []);
       salesSummary = data.sales || null;
       renderOrders();
+      renderIntake();
       if (watchlistItems.length) renderSellPlan();
     }
 
@@ -1459,6 +1482,211 @@
         refresh();
       }
       showStart();
+    }
+
+    // ---- Add cards: a ManaBox CSV export logged in an inventory sheet
+    // behind the next empty slot (Apps Script v6+), instead of the sheet's
+    // Import tab, Staging copy and paste. ----
+    let intakeStatus = null;  // per sheet: next slot, slots, what's been logged
+    let intakeLoading = false;
+    let intakeFile = null;    // the picked file, parsed: {name, rows, cards, value} or {name, error}
+    let intakeSlot = null;    // a slot picked instead of the next empty one
+    let intakeDone = null;    // the batch just logged, for the "what now" note
+    let intakeError = "";
+
+    // RFC 4180: quoted fields may hold commas ("Thor, God of Thunder"),
+    // doubled quotes and line breaks.
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], field = "", quoted = false;
+      text = text.replace(/^\uFEFF/, "");
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (quoted) {
+          if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+          else if (c === '"') quoted = false;
+          else field += c;
+        } else if (c === '"') quoted = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(field); rows.push(row); row = []; field = "";
+        } else field += c;
+      }
+      if (field !== "" || row.length) { row.push(field); rows.push(row); }
+      return rows.filter((r) => r.some((v) => v.trim() !== ""));
+    }
+
+    // ManaBox's export columns -> what the Apps Script logs.
+    const MANABOX_COLUMNS = {
+      name: "Name", setCode: "Set code", setName: "Set name", collector: "Collector number", foil: "Foil",
+      rarity: "Rarity", qty: "Quantity", scryfallId: "Scryfall ID", price: "Purchase price",
+      condition: "Condition", language: "Language", added: "Added",
+    };
+    function manaboxRows(text) {
+      const [header, ...lines] = parseCsv(text);
+      if (!header) throw new Error("The file is empty");
+      const at = {};
+      for (const [key, column] of Object.entries(MANABOX_COLUMNS)) at[key] = header.findIndex((h) => h.trim() === column);
+      const missing = ["name", "qty", "scryfallId"].filter((k) => at[k] < 0).map((k) => MANABOX_COLUMNS[k]);
+      if (missing.length) throw new Error(`This doesn't look like a ManaBox CSV export (no ${missing.join(", ")} column)`);
+      if (!lines.length) throw new Error("The file has no cards in it");
+      return lines.map((line, i) => {
+        const row = {};
+        for (const key of Object.keys(MANABOX_COLUMNS)) row[key] = at[key] >= 0 ? (line[at[key]] || "").trim() : "";
+        row.qty = Number(row.qty);
+        if (!row.name || !row.scryfallId || !Number.isInteger(row.qty) || row.qty < 1) {
+          throw new Error(`Row ${i + 2}${row.name ? ` (${row.name})` : ""} is missing its name, Scryfall ID or quantity`);
+        }
+        return row;
+      });
+    }
+
+    async function loadIntake() {
+      if (intakeLoading) return;
+      intakeLoading = true;
+      try {
+        intakeStatus = (await sheetsApi("intakeStatus")).intake;
+        intakeError = "";
+      } catch (err) {
+        intakeError = `Couldn't load: ${err.message}`;
+      } finally {
+        intakeLoading = false;
+      }
+      renderIntake();
+    }
+
+    // Cards in this file some sheet has already logged (ManaBox stamps each
+    // card with when it was added), so the same file can't go in twice.
+    function alreadyLogged(rows) {
+      for (const [owner, st] of Object.entries(intakeStatus || {})) {
+        const seen = new Set(st.added || []);
+        const n = rows.filter((r) => r.added && seen.has(r.added)).reduce((k, r) => k + r.qty, 0);
+        if (n) return { owner, n };
+      }
+      return null;
+    }
+
+    function renderIntake() {
+      const section = document.getElementById("intake-section");
+      const show = !!SHEETS_API_URL && !!remembered("sheetsPasscode") && saleOrders !== null;
+      section.hidden = document.getElementById("intake-link").hidden = !show;
+      if (!show) return;
+      const el = document.getElementById("intake");
+      if (scriptVersion < 6) {
+        el.innerHTML = '<p class="empty">To add cards from here, update the Apps Script to the latest google_apps_script.js and deploy a new version.</p>';
+        return;
+      }
+      if (!intakeStatus) {
+        el.innerHTML = `<p class="empty">${escapeHtml(intakeError || "Loading…")}</p>`;
+        if (!intakeError) loadIntake();
+        return;
+      }
+      const owners = Object.keys(intakeStatus);
+      const owner = owners.includes(remembered("intakeOwner")) ? remembered("intakeOwner") : owners[0];
+      const st = intakeStatus[owner];
+      const last = st.recent && st.recent[0];
+      const when = (iso) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+      const inBox = Object.fromEntries(st.slots.map((s) => [s.location, s.inBox]));
+      const slot = intakeSlot || st.next;
+      const room = st.cardsPerSlot - (inBox[slot] || 0);
+      const file = intakeFile;
+      const dup = file && file.rows ? alreadyLogged(file.rows) : null;
+      const plural = (n) => `${n} card${n === 1 ? "" : "s"}`;
+
+      el.innerHTML = `
+        <div class="card-actions intake-owner"><select aria-label="Which sheet">${owners
+          .map((o) => `<option value="${escapeHtml(o)}"${o === owner ? " selected" : ""}>${escapeHtml(o)}'s sheet</option>`).join("")}</select></div>
+        <p>Next empty slot: <strong>${escapeHtml(st.next)}</strong> <span class="meta">· ${st.cardsPerSlot} cards per slot</span></p>
+        ${last ? `<div class="intake-last"><span class="meta">Last batch: ${plural(last.cards)} → ${escapeHtml(last.location)} · ${escapeHtml(when(last.logged))}</span>
+          ${st.undoable === last.batch ? '<span class="card-actions intake-undo"></span>' : ""}</div>` : ""}
+        ${intakeDone && intakeDone.owner === owner ? `<p class="intake-done">✓ Logged ${plural(intakeDone.cards)} behind <strong>${escapeHtml(intakeDone.location)}</strong>.
+          Write ${escapeHtml(intakeDone.location)} on the divider and box them, then in ManaBox move Inbox to Collection.
+          They'll be on the dashboard within 30 minutes.</p>` : ""}
+        ${file && file.rows ? `
+          <div class="intake-preview">
+            <div><strong>${escapeHtml(file.name)}</strong></div>
+            <div class="meta">${plural(file.cards)}${file.rows.length !== file.cards ? ` in ${file.rows.length} rows` : ""}${file.value ? ` · bought for ${money(file.value)}` : ""}</div>
+            <div class="card-actions"><select class="intake-slot" aria-label="Slot">${[st.next, ...st.slots.filter((s) => s.location !== st.next && s.inBox < st.cardsPerSlot).map((s) => s.location)]
+              .map((l) => `<option value="${escapeHtml(l)}"${l === slot ? " selected" : ""}>${escapeHtml(l)} — ${l === st.next ? "next empty slot" : `${st.cardsPerSlot - inBox[l]} free`}</option>`).join("")}</select></div>
+            ${dup ? `<p class="order-error">${dup.n === file.cards ? "This file was already logged" : `${plural(dup.n)} in this file ${dup.n === 1 ? "was" : "were"} already logged`}${dup.owner === owner ? "" : ` in ${escapeHtml(dup.owner)}'s sheet`}.
+              ${dup.n === file.cards ? "" : "In ManaBox, move them from Inbox to Collection, then export and upload again."}</p>`
+              : file.cards > room ? `<p class="intake-warn">${slot === st.next ? `That's more than a slot holds (${st.cardsPerSlot}).` : `${escapeHtml(slot)} has room for ${room} more.`}
+              Log it anyway if they fit behind the divider, or split the stack and upload each part.</p>` : ""}
+            <div class="card-actions intake-go"></div>
+          </div>` : ""}
+        ${file && file.error ? `<p class="order-error">${escapeHtml(file.name)}: ${escapeHtml(file.error)}</p>` : ""}
+        <div class="card-actions intake-pick"><label class="file-button">${file && file.rows ? "Choose a different file" : "Choose ManaBox CSV"}<input type="file" accept=".csv,text/csv,text/comma-separated-values,text/plain"></label></div>
+        <div class="order-error intake-error">${escapeHtml(intakeError)}</div>
+      `;
+
+      el.querySelector(".intake-owner select").addEventListener("change", (event) => {
+        remember("intakeOwner", event.target.value);
+        intakeSlot = null;
+        intakeError = "";
+        renderIntake();
+      });
+      const slotSelect = el.querySelector(".intake-slot");
+      if (slotSelect) slotSelect.addEventListener("change", (event) => {
+        intakeSlot = event.target.value === st.next ? null : event.target.value;
+        renderIntake();
+      });
+      el.querySelector(".intake-pick input").addEventListener("change", async (event) => {
+        const picked = event.target.files[0];
+        if (!picked) return;
+        intakeDone = null;
+        intakeError = "";
+        intakeSlot = null;
+        try {
+          const rows = manaboxRows(await picked.text());
+          const cards = rows.reduce((n, r) => n + r.qty, 0);
+          const value = rows.reduce((v, r) => v + (Number(r.price) || 0) * r.qty, 0);
+          intakeFile = { name: picked.name, rows, cards, value };
+        } catch (err) {
+          intakeFile = { name: picked.name, error: err.message };
+        }
+        renderIntake();
+      });
+      const undoSpot = el.querySelector(".intake-undo");
+      if (undoSpot) actionButton(undoSpot, "Undo", async () => {
+        if (!confirm(`Take the ${plural(last.cards)} logged behind ${last.location} back out of ${owner}'s sheet?`)) return;
+        await intakeChange("undoIntake", { owner, batch: last.batch }, () => (intakeDone = null));
+      });
+      const go = el.querySelector(".intake-go");
+      if (go) {
+        const log = actionButton(go, `Log ${plural(file.cards)} → ${slot}`, async () => {
+          await intakeChange("intake", { owner, location: slot, rows: file.rows }, (data) => {
+            intakeDone = data.logged;
+            intakeFile = null;
+            intakeSlot = null;
+          });
+        }, true);
+        log.disabled = !!dup;
+        actionButton(go, "Cancel", () => {
+          intakeFile = null;
+          intakeSlot = null;
+          intakeError = "";
+          renderIntake();
+        });
+      }
+    }
+
+    // An Add cards change: the answer carries the fresh status (and the
+    // orders list, which the inventory change can affect).
+    async function intakeChange(action, params, onDone) {
+      const el = document.getElementById("intake");
+      const failed = busy(el, el.querySelector(".intake-error"));
+      try {
+        const data = await sheetsApi(action, params);
+        intakeStatus = data.intake;
+        intakeError = "";
+        onDone(data);
+        if (data.orders) takeList(data);
+        else renderIntake();
+      } catch (err) {
+        failed(err);
+        intakeError = err.message;
+      }
     }
 
     document.getElementById("orders-connect").addEventListener("submit", (event) => {

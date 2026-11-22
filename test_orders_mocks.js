@@ -13,9 +13,15 @@ const CacheService = { getScriptCache: () => ({
 }) };
 const ContentService = { MimeType: { JSON: "json" }, createTextOutput: (s) => ({ s, setMimeType() { return this; } }) };
 let __uuid = 0;
-const Utilities = { getUuid: () => "ord" + String(++__uuid).padStart(5, "0") + "-x" };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const Utilities = {
+  getUuid: () => "ord" + String(++__uuid).padStart(5, "0") + "-x",
+  // Only the two patterns the script uses, in UTC.
+  formatDate: (d, tz, fmt) => fmt === "yyyy-MM-dd" ? d.toISOString().slice(0, 10) : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`,
+};
 class Sheet {
-  constructor(name, rows) { this.name = name; this.rows = rows; }
+  // Like a real tab, a few blank rows below the data until more are inserted.
+  constructor(name, rows) { this.name = name; this.rows = rows; this.maxRows = rows.length + 3; }
   // In box is a formula in the real sheet: Qty - Sold - Pulled.
   computed(r, i) {
     if (this.name !== "Inventory" || i === 0) return r.slice();
@@ -28,10 +34,26 @@ class Sheet {
     const width = Math.max(...this.rows.map((r) => r.length));
     return { getValues: () => this.rows.map((r, i) => this.computed(r, i).concat(Array(width - r.length).fill(""))) };
   }
-  getRange(row, col) { return { setValue: (v) => { this.rows[row - 1][col - 1] = v; } }; }
+  getRange(row, col, numRows = 1, numCols = 1) {
+    return {
+      setValue: (v) => { this.rows[row - 1][col - 1] = v; },
+      setValues: (vals) => {
+        if (vals.length !== numRows || vals.some((r) => r.length !== numCols)) throw new Error("setValues: size doesn't match the range");
+        if (row + numRows - 1 > this.maxRows) throw new Error("setValues: past the last row of the sheet");
+        vals.forEach((r, i) => {
+          while (this.rows.length < row + i) this.rows.push([]);
+          const target = this.rows[row - 1 + i];
+          r.forEach((v, j) => { while (target.length < col - 1 + j) target.push(""); target[col - 1 + j] = v; });
+        });
+      },
+    };
+  }
+  getMaxRows() { return this.maxRows; }
+  insertRowsAfter(after, n) { this.maxRows += n; }
+  deleteRows(start, n) { this.rows.splice(start - 1, n); this.maxRows -= n; }
   appendRow(a) { this.rows.push(a.slice()); }
   setFrozenRows() {}
-  deleteRow(n) { this.rows.splice(n - 1, 1); }
+  deleteRow(n) { this.rows.splice(n - 1, 1); this.maxRows -= 1; }
   setName(n) { const b = Object.values(__books).find((bk) => Object.values(bk).includes(this)); for (const k of Object.keys(b)) if (b[k] === this) delete b[k]; b[n] = this; this.name = n; }
 }
 const H = ["Location", "Name", "Set code", "Set name", "Collector #", "Foil", "Rarity", "Condition", "Language", "Qty", "Price (USD)",
@@ -51,12 +73,13 @@ window.__books = {
     "WTB orders": new Sheet("WTB orders", [
       ["Order", "Status", "Card", "Set", "Finish", "Scryfall ID", "Qty", "Price (USD)", "Location", "Inventory row", "Offered", "Paid", "Closed"],
       ["legacy01", "Awaiting payment", "Old Card", "Set", "normal", "old", 1, 3, "", "", new Date(), "", ""]]) },
-  J: { Inventory: new Sheet("Inventory", [H, inv("B01-01", "Snap", "foil", 1, "snap"), inv("B02-01", "Sol Ring", "foil", 1, "sol")]) },
+  J: { Inventory: new Sheet("Inventory", [H, inv("B01-01", "Snap", "foil", 1, "snap"), inv("B02-01", "Sol Ring", "foil", 1, "sol")]),
+    Dashboard: new Sheet("Dashboard", [["MTG chaos-sort inventory"], [], ["Settings"], ["Cards per slot", 100], ["Slots per box", 10]]) },
 };
 const SpreadsheetApp = {
   openById: (id) => {
     const b = __books[id];
     if (!b) throw new Error("no sheet " + id);
-    return { getSheetByName: (n) => b[n] || null, insertSheet: (n) => (b[n] = new Sheet(n, [])) };
+    return { getSheetByName: (n) => b[n] || null, insertSheet: (n) => (b[n] = new Sheet(n, [])), getSpreadsheetTimeZone: () => "Asia/Singapore" };
   },
 };

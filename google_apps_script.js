@@ -1,6 +1,7 @@
 // Google Apps Script web app: lets the GitHub Pages dashboard
 // (docs/index.html) record sales — to WTB buyers or from our TCGMP
-// listings — and their progress in the two inventory sheets.
+// listings — and their progress in the two inventory sheets, and log new
+// batches of cards from a ManaBox CSV export (Add cards).
 // The dashboard is a static page with nowhere safe to keep Google
 // credentials, so this runs inside Google as you, and the dashboard only
 // ever sends it a passcode.
@@ -31,6 +32,12 @@
 //                      copies out twice
 //   cancelled after    Pulled - qty (the copies go back in the box)
 //   being paid
+//
+// Add cards appends a batch to the bottom of Inventory behind one slot —
+// the next empty one unless another is picked, worked out the same way as
+// the Dashboard tab's "Next location" — and records it on an "Intake log"
+// tab (created on first use), which is how a batch uploaded twice is
+// caught and how the latest one can be undone.
 
 const INVENTORY_TAB = "Inventory";
 const ORDERS_TAB = "Orders";
@@ -48,13 +55,40 @@ const RECENT_DAYS = 14;
 // (3: an order's copies can be pulled from several Inventory rows; 4: the
 // list carries each waiting order's box locations, every change answers
 // with the fresh list, and cancelled orders can be removed; 5: undo, several
-// orders dropped off at once, a sales summary, and a cached list).
-const VERSION = 5;
+// orders dropped off at once, a sales summary, and a cached list; 6: Add
+// cards from a ManaBox CSV).
+const VERSION = 6;
 // A mis-tap can be stepped back for this long.
 const UNDO_HOURS = 24;
 // The list is cached this long between changes (each change refreshes it),
 // so a hand edit in the sheet can take up to a minute to show.
 const LIST_CACHE_SECONDS = 60;
+
+const INTAKE_LOG_TAB = "Intake log";
+const INTAKE_LOG_HEADERS = ["Batch", "Logged", "Location", "Cards", "Rows", "First row", "Added", "Fingerprint", "Undone"];
+// The Inventory columns a batch fills, from one parsed ManaBox CSV row.
+// Sold and Pulled start blank. In box and Value in box are each one formula
+// in their header cell that fills every row, so writing there would break
+// them for the whole sheet.
+const INTAKE_FIELDS = {
+  "Location": (r, batch) => batch.location,
+  "Name": (r) => r.name,
+  "Set code": (r) => r.setCode,
+  "Set name": (r) => r.setName,
+  "Collector #": (r) => r.collector,
+  "Foil": (r) => r.foil,
+  "Rarity": (r) => r.rarity,
+  "Condition": (r) => r.condition,
+  "Language": (r) => r.language,
+  "Qty": (r) => r.qty,
+  "Price (USD)": (r) => r.price,
+  "Scryfall ID": (r) => r.scryfallId,
+  "Date logged": (r, batch) => batch.today,
+};
+const SLOT_PATTERN = /^B(\d{2})-(\d{2})$/;
+const SCRYFALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Only reads, so they skip the lock real changes need (and the fresh list).
+const READ_ONLY = ["locations", "intakeStatus"];
 
 const AWAITING = "Awaiting payment";
 const PAID = "Paid";
@@ -70,10 +104,10 @@ function doPost(e) {
       result = { ok: false, auth: true, error: "Wrong passcode" };
     } else if (!ACTIONS.hasOwnProperty(req.action)) {
       result = { ok: false, error: `Unknown action "${req.action}"` };
-    } else if (req.action === "locations") {
-      // Only reads, and the dashboard asks once per open order, so it
-      // mustn't queue behind (or hold up) the lock real changes need.
-      result = Object.assign({ ok: true }, ACTIONS.locations(req));
+    } else if (READ_ONLY.indexOf(req.action) >= 0) {
+      // Only reads, so they mustn't queue behind (or hold up) the lock
+      // real changes need.
+      result = Object.assign({ ok: true }, ACTIONS[req.action](req));
     } else {
       // One request at a time: two taps landing together must not both
       // read the same Pulled value and each add to it.
@@ -248,6 +282,93 @@ const ACTIONS = {
     return { order: findOrder(req.owner, req.id).order };
   },
 
+  // Where the next batch goes and what's been logged, for each sheet.
+  intakeStatus() {
+    return { intake: intakeStatusAll() };
+  },
+
+  // A ManaBox CSV export, parsed by the dashboard: req.rows (see
+  // cleanIntakeRows) logged behind req.location in req.owner's Inventory.
+  intake(req) {
+    const owners = Object.keys(SHEET_PROPERTIES).filter(sheetIdFor);
+    if (owners.indexOf(req.owner) < 0) throw new Error(`No sheet set up for ${req.owner}`);
+    const location = String(req.location || "").trim().toUpperCase();
+    if (!SLOT_PATTERN.test(location)) throw new Error(`"${req.location}" isn't a slot like B01-10`);
+    const rows = cleanIntakeRows(req.rows);
+    const cards = rows.reduce((n, r) => n + r.qty, 0);
+
+    // The same export uploaded twice, to either sheet. ManaBox stamps each
+    // card with when it was added, so a card left in the Inbox binder and
+    // exported again with the next stack is caught too.
+    const logged = new Map();
+    const fingerprints = new Map();
+    owners.forEach((owner) => liveBatches(readIntakeLog(owner)).forEach((e) => {
+      e.added.forEach((a) => logged.set(a, Object.assign({ owner }, e)));
+      fingerprints.set(e.fingerprint, Object.assign({ owner }, e));
+    }));
+    const again = rows.filter((r) => r.added && logged.has(r.added));
+    const fingerprint = intakeFingerprint(rows);
+    const earlier = again.length ? logged.get(again[0].added) : rows.some((r) => r.added) ? null : fingerprints.get(fingerprint);
+    if (earlier) {
+      const n = again.length ? again.reduce((k, r) => k + r.qty, 0) : cards;
+      const where = `behind ${earlier.location}${earlier.owner === req.owner ? "" : ` in ${earlier.owner}'s sheet`} on ${dayOf(earlier.logged, earlier.owner)}`;
+      throw new Error(n === cards
+        ? `This file was already logged ${where}.`
+        : `${n} of these ${cards} cards were already logged ${where}. In ManaBox, move them from Inbox to Collection, then export and upload again.`);
+    }
+
+    const inv = inventoryTable(req.owner);
+    const first = lastFilledRow(inv) + 1;
+    const last = first + rows.length - 1;
+    const max = inv.sheet.getMaxRows();
+    if (max < last) inv.sheet.insertRowsAfter(max, last - max);
+    const batch = { location, today: Utilities.formatDate(new Date(), inv.timeZone, "yyyy-MM-dd") };
+    const col = columnsOf(inv.headers, Object.keys(INTAKE_FIELDS), INVENTORY_TAB);
+    // One write per run of side-by-side columns (normally just one).
+    const indexes = Object.keys(INTAKE_FIELDS).map((name) => col[name]).sort((a, b) => a - b);
+    const byIndex = {};
+    Object.keys(INTAKE_FIELDS).forEach((name) => (byIndex[col[name]] = INTAKE_FIELDS[name]));
+    const runs = [];
+    indexes.forEach((i) => {
+      const run = runs[runs.length - 1];
+      if (run && run[run.length - 1] === i - 1) run.push(i);
+      else runs.push([i]);
+    });
+    runs.forEach((run) => {
+      inv.sheet.getRange(first, run[0] + 1, rows.length, run.length)
+        .setValues(rows.map((r) => run.map((i) => byIndex[i](r, batch))));
+    });
+
+    const id = Utilities.getUuid().slice(0, 8);
+    const added = Array.from(new Set(rows.map((r) => r.added).filter(Boolean)));
+    intakeLogSheet(req.owner).appendRow([id, new Date(), location, cards, rows.length, first, added.join(" "), fingerprint, ""]);
+    return { logged: { batch: id, owner: req.owner, location, cards, rows: rows.length, firstRow: first }, intake: intakeStatusAll() };
+  },
+
+  // Takes the latest batch back out, for a wrong sheet or slot — only
+  // within UNDO_HOURS, while it's still the last thing on Inventory and
+  // none of its cards have been sold or pulled.
+  undoIntake(req) {
+    const log = readIntakeLog(req.owner);
+    const live = liveBatches(log);
+    const e = live[live.length - 1];
+    if (!e || e.batch !== String(req.batch)) throw new Error("Only the latest batch can be undone");
+    if (Date.now() - new Date(e.logged).getTime() > UNDO_HOURS * 60 * 60 * 1000) {
+      throw new Error(`Only batches from the last ${UNDO_HOURS} hours can be undone`);
+    }
+    const inv = inventoryTable(req.owner);
+    const col = columnsOf(inv.headers, ["Location", "Sold", "Pulled"], INVENTORY_TAB);
+    if (lastFilledRow(inv) !== e.firstRow + e.rows - 1) throw new Error("Rows were added below this batch since — fix it by hand");
+    for (let row = e.firstRow; row < e.firstRow + e.rows; row++) {
+      const r = inv.values[row - 1];
+      if (String(r[col["Location"]]).trim().toUpperCase() !== e.location) throw new Error("This batch's rows have changed since — fix it by hand");
+      if (Number(r[col["Sold"]]) || Number(r[col["Pulled"]])) throw new Error("Some of these cards are already sold or pulled — fix it by hand");
+    }
+    inv.sheet.deleteRows(e.firstRow, e.rows);
+    log.sheet.getRange(e.sheetRow, log.col["Undone"] + 1).setValue(new Date());
+    return { intake: intakeStatusAll() };
+  },
+
   cancel(req) {
     const { order, update } = findOrder(req.owner, req.id);
     if (order.status === PAID) {
@@ -260,6 +381,161 @@ const ACTIONS = {
     return { order: findOrder(req.owner, req.id).order };
   },
 };
+
+// ---- Add cards ----
+
+function intakeStatusAll() {
+  const out = {};
+  Object.keys(SHEET_PROPERTIES).filter(sheetIdFor).forEach((owner) => (out[owner] = intakeStatusOf(owner)));
+  return out;
+}
+
+function intakeStatusOf(owner) {
+  const inv = inventoryTable(owner);
+  const settings = slotSettings(owner);
+  const col = columnsOf(inv.headers, ["Location", "In box"], INVENTORY_TAB);
+  const slots = {};
+  inv.values.slice(1).forEach((r) => {
+    const location = String(r[col["Location"]]).trim().toUpperCase();
+    if (SLOT_PATTERN.test(location)) slots[location] = (slots[location] || 0) + (Number(r[col["In box"]]) || 0);
+  });
+  const live = liveBatches(readIntakeLog(owner));
+  const latest = live[live.length - 1];
+  return {
+    next: nextSlot(Object.keys(slots), settings.slotsPerBox),
+    cardsPerSlot: settings.cardsPerSlot,
+    slots: Object.keys(slots).sort().map((location) => ({ location, inBox: slots[location] })),
+    added: Array.from(new Set([].concat(...live.map((e) => e.added)))),
+    recent: live.slice(-5).reverse().map((e) => ({ batch: e.batch, logged: e.logged, location: e.location, cards: e.cards })),
+    undoable: latest && Date.now() - new Date(latest.logged).getTime() <= UNDO_HOURS * 60 * 60 * 1000 ? latest.batch : null,
+  };
+}
+
+// The slot after the highest one in use, rolling over to the next box after
+// its last slot — the Dashboard tab's "Next location (auto)".
+function nextSlot(locations, slotsPerBox) {
+  const highest = locations.filter((l) => SLOT_PATTERN.test(l)).sort().pop();
+  if (!highest) return "B01-01";
+  const m = highest.match(SLOT_PATTERN);
+  const box = Number(m[1]);
+  const slot = Number(m[2]);
+  const pad = (n) => String(n).padStart(2, "0");
+  return slot >= slotsPerBox ? `B${pad(box + 1)}-01` : `B${pad(box)}-${pad(slot + 1)}`;
+}
+
+// The Dashboard tab's "Cards per slot" and "Slots per box" settings.
+function slotSettings(owner) {
+  const settings = { cardsPerSlot: 100, slotsPerBox: 10 };
+  const sheet = spreadsheet(owner).getSheetByName("Dashboard");
+  if (!sheet) return settings;
+  sheet.getDataRange().getValues().forEach((r) => {
+    const label = String(r[0]).trim();
+    const n = Number(r[1]);
+    if (!(n > 0)) return;
+    if (label === "Cards per slot") settings.cardsPerSlot = n;
+    if (label === "Slots per box") settings.slotsPerBox = n;
+  });
+  return settings;
+}
+
+// Checks every row of a parsed ManaBox export before anything is written.
+function cleanIntakeRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) throw new Error("The file has no cards in it");
+  const text = (v) => (v == null ? "" : String(v).trim());
+  return rows.map((r, i) => {
+    const qty = Number(r.qty);
+    const name = text(r.name);
+    const scryfallId = text(r.scryfallId).toLowerCase();
+    const where = `Row ${i + 2}${name ? ` (${name})` : ""}`;
+    if (!name) throw new Error(`${where} has no card name`);
+    if (!SCRYFALL_ID.test(scryfallId)) throw new Error(`${where} has no Scryfall ID`);
+    if (!Number.isInteger(qty) || qty < 1) throw new Error(`${where} has no quantity`);
+    const price = text(r.price) === "" ? "" : Number(r.price);
+    if (price !== "" && !(price >= 0)) throw new Error(`${where} has a price that isn't a number`);
+    return {
+      name, scryfallId, qty, price,
+      setCode: text(r.setCode), setName: text(r.setName), collector: text(r.collector),
+      foil: text(r.foil).toLowerCase() || "normal", rarity: text(r.rarity),
+      condition: text(r.condition) || "near_mint", language: text(r.language) || "en",
+      added: text(r.added),
+    };
+  });
+}
+
+// For an export without ManaBox's Added column: the same cards again.
+function intakeFingerprint(rows) {
+  const key = rows.map((r) => [r.scryfallId, r.foil, r.condition, r.language, r.qty].join("|")).sort().join("\n");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return ("0000000" + h.toString(16)).slice(-8);
+}
+
+function dayOf(when, owner) {
+  const d = new Date(when);
+  return isNaN(d) ? String(when) : Utilities.formatDate(d, spreadsheet(owner).getSpreadsheetTimeZone(), "d MMM");
+}
+
+function inventoryTable(owner) {
+  const ss = spreadsheet(owner);
+  const sheet = ss.getSheetByName(INVENTORY_TAB);
+  if (!sheet) throw new Error(`${owner}'s sheet has no ${INVENTORY_TAB} tab`);
+  const values = sheet.getDataRange().getValues();
+  return { sheet, values, headers: values[0].map(String), timeZone: ss.getSpreadsheetTimeZone() };
+}
+
+// The last row with a card in it (the header row when there are none). The
+// formula columns fill every row, so only the card's own cells count.
+function lastFilledRow(inv) {
+  const col = columnsOf(inv.headers, ["Location", "Name", "Scryfall ID"], INVENTORY_TAB);
+  for (let i = inv.values.length - 1; i >= 1; i--) {
+    const r = inv.values[i];
+    if ([col["Location"], col["Name"], col["Scryfall ID"]].some((c) => String(r[c]).trim() !== "")) return i + 1;
+  }
+  return 1;
+}
+
+function intakeLogSheet(owner) {
+  const ss = spreadsheet(owner);
+  let sheet = ss.getSheetByName(INTAKE_LOG_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(INTAKE_LOG_TAB);
+    sheet.appendRow(INTAKE_LOG_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Every batch logged so far (none before the tab exists — reading never
+// creates it).
+function readIntakeLog(owner) {
+  const sheet = spreadsheet(owner).getSheetByName(INTAKE_LOG_TAB);
+  if (!sheet) return { sheet: null, col: {}, entries: [] };
+  const values = sheet.getDataRange().getValues();
+  const col = columnsOf(values[0].map(String), INTAKE_LOG_HEADERS, INTAKE_LOG_TAB);
+  const iso = (v) => (v instanceof Date ? v.toISOString() : v || null);
+  const entries = values.slice(1).map((r, i) => ({
+    sheetRow: i + 2,
+    batch: String(r[col["Batch"]]),
+    logged: iso(r[col["Logged"]]),
+    location: String(r[col["Location"]]),
+    cards: Number(r[col["Cards"]]) || 0,
+    rows: Number(r[col["Rows"]]) || 0,
+    firstRow: Number(r[col["First row"]]) || 0,
+    added: String(r[col["Added"]]).split(/\s+/).filter(Boolean),
+    fingerprint: String(r[col["Fingerprint"]]),
+    undone: iso(r[col["Undone"]]),
+  })).filter((e) => e.batch);
+  return { sheet, col, entries };
+}
+
+function liveBatches(log) {
+  return log.entries.filter((e) => !e.undone);
+}
+
+// ---- Orders ----
 
 // Recent and open orders (waiting ones with where their copies are), the
 // sales summary, and what this deployment supports — cached until the
