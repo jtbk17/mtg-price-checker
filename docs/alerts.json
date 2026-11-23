@@ -1,4 +1,14 @@
 {
-  "generated_at": "2026-11-22T14:04:45.610058+00:00",
-  "alerts": []
+  "generated_at": "2026-11-23T14:05:04.703837+00:00",
+  "alerts": [
+    {
+      "name": "Brotherhood Regalia",
+      "set_name": "Assassin's Creed",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 17.99,
+      "price_now": 19.99,
+      "pct_change": 11.1
+    }
+  ]
 }
