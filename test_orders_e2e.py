@@ -280,6 +280,17 @@ with sync_playwright() as p:
           looks_sold().count() == 0 and sales["drops"][2]["id"] in gas.evaluate("() => __props.DISMISSED"))
     pg.reload(); pg.wait_for_timeout(1000)
     check("after reload: answered drops stay answered", looks_sold().count() == 0)
+    not_sale = pg.locator("#orders-list .card", has_text="Marked not a sale")
+    check("Not a sale stays in view for a day, with Undo", not_sale.count() == 1 and not_sale.locator("text=Undo").count() == 1)
+    not_sale.locator("text=Undo").click(); pg.wait_for_timeout(600)
+    check("Undo brings back Looks sold?", looks_sold().count() == 1 and not_sale.count() == 0
+          and sales["drops"][2]["id"] not in gas.evaluate("() => __props.DISMISSED"))
+    looks_sold().locator("text=Not a sale").click(); pg.wait_for_timeout(500)
+    gas.evaluate("""id => { const d = JSON.parse(__props.DISMISSED); d[id] = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+        __props.DISMISSED = JSON.stringify(d); }""", sales["drops"][2]["id"])
+    pg.reload(); pg.wait_for_timeout(1000)
+    late = json.loads(gas.evaluate("id => doPost({postData:{contents: JSON.stringify({action:'undismiss',passcode:'pw',source:id})}}).s", sales["drops"][2]["id"]))
+    check("no Undo after 24 hours", not_sale.count() == 0 and looks_sold().count() == 0 and not late["ok"], late)
 
     # ---- fewer round trips (Apps Script v4) ----
     n = len(calls); pg.reload(); pg.wait_for_timeout(1200)

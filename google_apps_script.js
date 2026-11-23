@@ -59,8 +59,8 @@ const RECENT_DAYS = 14;
 // list carries each waiting order's box locations, every change answers
 // with the fresh list, and cancelled orders can be removed; 5: undo, several
 // orders dropped off at once, a sales summary, and a cached list; 6: Add
-// cards from a ManaBox CSV; 7: GOG sales).
-const VERSION = 7;
+// cards from a ManaBox CSV; 7: GOG sales; 8: "Not a sale" can be undone).
+const VERSION = 8;
 // A mis-tap can be stepped back for this long.
 const UNDO_HOURS = 24;
 // The list is cached this long between changes (each change refreshes it),
@@ -202,7 +202,9 @@ const ACTIONS = {
     if (order.status !== CANCELLED) throw new Error(`Only cancelled orders can be deleted (this one is ${order.status})`);
     if (order.source) {
       const dismissed = readDismissed();
-      dismissed[order.source] = new Date().toISOString();
+      // Marked as from a deleted order, so it isn't offered as a "Not a sale"
+      // to undo.
+      dismissed[order.source] = { at: new Date().toISOString(), deleted: true };
       PropertiesService.getScriptProperties().setProperty("DISMISSED", JSON.stringify(dismissed));
     }
     sheet.deleteRow(order.sheetRow);
@@ -214,6 +216,20 @@ const ACTIONS = {
     if (!req.source) throw new Error("Missing which listing drop to dismiss");
     const dismissed = readDismissed();
     dismissed[req.source] = new Date().toISOString();
+    PropertiesService.getScriptProperties().setProperty("DISMISSED", JSON.stringify(dismissed));
+    return {};
+  },
+
+  // Brings back a listing drop answered "Not a sale" by mistake, within
+  // UNDO_HOURS, so it shows as "Looks sold?" again.
+  undismiss(req) {
+    const dismissed = readDismissed();
+    const when = dismissed[req.source];
+    if (!when || typeof when !== "string") throw new Error("That listing isn't marked Not a sale");
+    if (Date.now() - new Date(when).getTime() > UNDO_HOURS * 60 * 60 * 1000) {
+      throw new Error(`Only answers from the last ${UNDO_HOURS} hours can be undone`);
+    }
+    delete dismissed[req.source];
     PropertiesService.getScriptProperties().setProperty("DISMISSED", JSON.stringify(dismissed));
     return {};
   },
@@ -564,7 +580,12 @@ function freshList() {
     }
     orders.push(...mine);
   }
-  const list = { orders, dismissed: Object.keys(readDismissed()), version: VERSION, sales: salesSummary(everySold) };
+  const dismissed = readDismissed();
+  // When each was answered "Not a sale" (not drops whose order was deleted),
+  // for the dashboard's Undo.
+  const notSales = {};
+  Object.keys(dismissed).forEach((id) => typeof dismissed[id] === "string" && (notSales[id] = dismissed[id]));
+  const list = { orders, dismissed: Object.keys(dismissed), notSales, version: VERSION, sales: salesSummary(everySold) };
   try {
     CacheService.getScriptCache().put("list", JSON.stringify(list), LIST_CACHE_SECONDS);
   } catch (err) {
@@ -735,7 +756,9 @@ function ordersSheet(owner) {
   return sheet;
 }
 
-// {listing drop id: when dismissed}, pruned to the dashboard's window.
+// {listing drop id: when answered "Not a sale" (an ISO string), or
+// {at, deleted} for a drop whose order was deleted}, pruned to the
+// dashboard's window.
 function readDismissed() {
   let dismissed = {};
   try {
@@ -745,7 +768,7 @@ function readDismissed() {
   }
   const cutoff = Date.now() - 2 * RECENT_DAYS * 24 * 60 * 60 * 1000;
   for (const [id, when] of Object.entries(dismissed)) {
-    if (new Date(when).getTime() < cutoff) delete dismissed[id];
+    if (new Date(typeof when === "string" ? when : when && when.at).getTime() < cutoff) delete dismissed[id];
   }
   return dismissed;
 }

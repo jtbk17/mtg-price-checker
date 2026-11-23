@@ -950,6 +950,7 @@
     // listing_sales.py), and the ones answered "Not a sale".
     let listingDrops = [];
     let dismissedDrops = new Set();
+    let notSales = {};  // Apps Script v8+: drop id -> when answered "Not a sale"
     // An Apps Script deployed before listing sales existed can't record
     // them (it drops the order type and which listing drop it came from).
     let scriptKnowsListings = false;
@@ -1033,6 +1034,7 @@
       scriptKnowsListings = Array.isArray(data.dismissed);
       scriptVersion = data.version || 0;
       dismissedDrops = new Set(data.dismissed || []);
+      notSales = data.notSales || {};
       salesSummary = data.sales || null;
       renderOrders();
       renderIntake();
@@ -1082,6 +1084,12 @@
           '<p class="empty">To track listing sales too, update the Apps Script to the latest google_apps_script.js and deploy a new version.</p>');
       }
       drops.forEach((drop) => container.appendChild(dropCard(drop)));
+      // Answered "Not a sale" in the last day: kept in view for an Undo.
+      const recent = (iso) => Date.now() - new Date(iso).getTime() < UNDO_HOURS * 60 * 60 * 1000;
+      listingDrops
+        .filter((d) => !recorded.has(d.id) && notSales[d.id] && recent(notSales[d.id]))
+        .sort((a, b) => notSales[b.id].localeCompare(notSales[a.id]))
+        .forEach((drop) => container.appendChild(notSaleCard(drop)));
       sorted.forEach((order) => container.appendChild(orderCard(order)));
     }
 
@@ -1251,6 +1259,33 @@
         const failed = busy(actions, error);
         try {
           await change("dismiss", { source: drop.id });
+        } catch (err) {
+          failed(err);
+        }
+      });
+      return el;
+    }
+
+    // A listing drop answered "Not a sale" today, with an Undo for a mis-tap.
+    function notSaleCard(drop) {
+      const first = (drop.cards || [])[0];
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        ${first ? cardImageHtml(first) : ""}
+        <div class="name">${first ? escapeHtml(first.name) : "Unmatched listing"}</div>
+        <div class="meta">${escapeHtml(first ? first.set_name || "" : drop.key)}</div>
+        <div class="price">${formatPrice(drop.price)}</div>
+        <div class="meta"><strong>Marked not a sale · ${escapeHtml(shortDate(notSales[drop.id]))}</strong></div>
+        <div class="card-actions"></div>
+        <div class="order-error"></div>
+      `;
+      const actions = el.querySelector(".card-actions");
+      const error = el.querySelector(".order-error");
+      actionButton(actions, "Undo", async () => {
+        const failed = busy(actions, error);
+        try {
+          await change("undismiss", { source: drop.id });
         } catch (err) {
           failed(err);
         }
