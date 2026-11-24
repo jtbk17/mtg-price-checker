@@ -194,6 +194,10 @@
     .paid-panel { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 10px 12px; margin: 0 0 12px; }
     .paid-panel h3 { margin: 0 0 6px; font-size: 1em; }
     .pick-list { list-style: none; padding: 0; margin: 0; }
+    .pick-owner + .pick-owner { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .pick-owner h4 { margin: 0 0 4px; font-size: 0.95em; }
+    .pick-box { margin: 4px 0 0 0; }
+    .pick-box > .meta { margin-top: 4px; font-weight: 600; }
     .pick-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
     .pick-list li:last-child { border-bottom: none; }
     .pick-list label { display: flex; gap: 8px; align-items: flex-start; }
@@ -1109,22 +1113,46 @@
       el.hidden = false;
     }
 
-    // Every paid order in box order: where to pull each from, and a tick
-    // box to mark several dropped off in one go.
+    // Every paid order, grouped by whose boxes it's in and then by box (each
+    // sheet numbers its own boxes from B01), in the order you'd walk them:
+    // where to pull each from, and a tick box to mark several dropped off in
+    // one go.
     function renderPaidPanel() {
       const el = document.getElementById("orders-paid");
+      const boxOf = (location) => (String(location).match(/^B\d+/) || ["Other"])[0];
       const paid = saleOrders
         .filter((o) => o.status === "Paid")
-        .map((o) => ({ order: o, pulls: o.pulls && o.pulls.length ? o.pulls : [{ location: o.location, row: o.inventoryRow, qty: o.qty }] }))
-        .sort((a, b) => byLocation(a.pulls)[0].location.localeCompare(byLocation(b.pulls)[0].location));
+        .map((o) => {
+          const pulls = byLocation(o.pulls && o.pulls.length ? o.pulls : [{ location: o.location, row: o.inventoryRow, qty: o.qty }]);
+          return { order: o, pulls, box: boxOf(pulls[0].location) };
+        })
+        .sort((a, b) => a.order.owner.localeCompare(b.order.owner) || a.pulls[0].location.localeCompare(b.pulls[0].location));
       if (!paid.length) return;
+      const line = ({ order, pulls }) => `<li><label><input type="checkbox">
+            <span>${pulls.map((p) => `<strong>${escapeHtml(p.location)}</strong>${pulls.length > 1 ? ` ×${p.qty}` : ""}${p.row ? ` <span class="meta">(row ${p.row})</span>` : ""}`).join(", ")}
+            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""}${order.type === "GOG" ? ' <span class="meta">· to GOG</span>' : ""}</span></label></li>`;
+      // Owner -> box -> orders, in the sorted order above. An order split
+      // across boxes sits under its first one and lists every location.
+      const groups = [];
+      paid.forEach((p) => {
+        let owner = groups[groups.length - 1];
+        if (!owner || owner.name !== p.order.owner) groups.push((owner = { name: p.order.owner, boxes: [] }));
+        let box = owner.boxes[owner.boxes.length - 1];
+        if (!box || box.name !== p.box) owner.boxes.push((box = { name: p.box, items: [] }));
+        box.items.push(p);
+      });
+      const copies = (items) => items.reduce((n, p) => n + p.order.qty, 0);
       el.innerHTML = `
         <h3>Paid — pull and drop off (${paid.length})</h3>
-        <ul class="pick-list">${paid
-          .map(({ order, pulls }) => `<li><label><input type="checkbox">
-            <span>${byLocation(pulls).map((p) => `<strong>${escapeHtml(p.location)}</strong>${pulls.length > 1 ? ` ×${p.qty}` : ""}${p.row ? ` <span class="meta">(row ${p.row})</span>` : ""}`).join(", ")}
-            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""} <span class="meta">· ${escapeHtml(order.owner)}${order.type === "GOG" ? " · to GOG" : ""}</span></span></label></li>`)
-          .join("")}</ul>
+        ${groups.map((owner) => `
+          <div class="pick-owner">
+            <h4>${escapeHtml(owner.name)}'s boxes</h4>
+            ${owner.boxes.map((box) => `
+              <div class="pick-box">
+                <div class="meta">Box ${escapeHtml(box.name)} · ${copies(box.items)} ${copies(box.items) === 1 ? "copy" : "copies"}</div>
+                <ul class="pick-list">${box.items.map(line).join("")}</ul>
+              </div>`).join("")}
+          </div>`).join("")}
         <div class="card-actions"></div>
         <div class="order-error"></div>
       `;

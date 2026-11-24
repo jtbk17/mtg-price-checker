@@ -374,6 +374,40 @@ with sync_playwright() as p:
           and order_card("pulled from").count() == 0, calls[n:])
     check("their copies moved from Pulled to Sold", row_pulled() == ["", "", ""])
 
+    # ---- the pick list split by whose boxes, then by box ----
+    # Paid orders already pulled: two in Joel's boxes (B01, B02), one in Shared's.
+    gas.evaluate("""() => {
+      const add = (book, row) => { const s = __books[book].Orders || (__books[book].Orders = new Sheet("Orders", [ORDER_HEADERS.slice()]));
+        const h = s.rows[0]; s.rows.push(h.map((name) => name in row ? row[name] : "")); };
+      const pull = (book, r) => { const s = __books[book].Inventory; s.rows[r - 1][s.rows[0].indexOf("Pulled")] = 1; };
+      const S = __books.S.Inventory;
+      S.rows.push(["B01-05", "Pick Me", "X", "Set", "1", "normal", "rare", "near_mint", "en", 1, "$1", "pickme", "2026-11-01", "", "", "", "", ""]);
+      pull("S", S.rows.length); pull("J", 2); pull("J", 3);
+      const base = { Status: "Paid", Qty: 1, "Price (USD)": 2, Offered: new Date(), Paid: new Date(), Type: "WTB" };
+      add("S", Object.assign({ Order: "grp-s1", Card: "Pick Me", Set: "Set", Finish: "normal", "Scryfall ID": "pickme", Location: "B01-05", "Inventory row": S.rows.length }, base));
+      add("J", Object.assign({ Order: "grp-j1", Card: "Snap", Set: "Set", Finish: "foil", "Scryfall ID": "snap", Location: "B01-01", "Inventory row": 2 }, base));
+      add("J", Object.assign({ Order: "grp-j2", Card: "Sol Ring", Set: "Set", Finish: "foil", "Scryfall ID": "sol", Location: "B02-01", "Inventory row": 3 }, base));
+    }""")
+    pg.reload(); pg.wait_for_timeout(1500)
+    owners = [" ".join(t.split()) for t in panel.locator(".pick-owner h4").all_inner_texts()]
+    joel = panel.locator(".pick-owner", has_text="Joel's boxes")
+    joel_boxes = [" ".join(t.split()) for t in joel.locator(".pick-box > .meta").all_inner_texts()]
+    check("pick list: one group per owner's boxes", owners == ["Joel's boxes", "Shared's boxes"], owners)
+    check("...then one per box, in walking order", joel_boxes == ["Box B01 · 1 copy", "Box B02 · 1 copy"], joel_boxes)
+    check("...each order under its own box", "Snap" in joel.locator(".pick-box", has_text="Box B01").inner_text()
+          and "Sol Ring" in joel.locator(".pick-box", has_text="Box B02").inner_text()
+          and "Pick Me" in panel.locator(".pick-owner", has_text="Shared's boxes").inner_text())
+    joel.locator(".pick-box", has_text="Box B02").locator("input").check()
+    panel.locator("text=Mark 1 dropped off").click(); pg.wait_for_timeout(800)
+    status = gas.evaluate("""() => { const out = {}; for (const b of ["S", "J"]) { const s = __books[b].Orders; const h = s.rows[0];
+        s.rows.slice(1).forEach((r) => { if (String(r[0]).startsWith("grp-")) out[r[0]] = r[h.indexOf("Status")]; }); } return out; }""")
+    check("ticking one line drops off exactly that order", status == {"grp-s1": "Paid", "grp-j1": "Paid", "grp-j2": "Sold"}, status)
+    panel.locator("text=Select all").click(); panel.locator("text=Mark 2 dropped off").click(); pg.wait_for_timeout(800)
+    check("...and the rest go together", panel.is_hidden())
+    # Joel's two copies back in the box for the checks further down.
+    gas.evaluate("""() => { const s = __books.J.Inventory; const h = s.rows[0];
+        [1, 2].forEach((i) => { s.rows[i][h.indexOf("Sold")] = ""; s.rows[i][h.indexOf("Pulled")] = ""; }); }""")
+
     # ---- sales summary ----
     tiles = [" ".join(t.split()) for t in pg.locator("#orders-summary > div").all_inner_texts()]
     gross = gas.evaluate("""() => { let g = 0; for (const b of Object.values(__books)) { const s = b.Orders; if (!s) continue;
