@@ -1,23 +1,4 @@
 {
-  "generated_at": "2026-11-24T01:23:55.879225+00:00",
-  "alerts": [
-    {
-      "name": "Kindred Judgment",
-      "set_name": "Reality Fracture",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 1.49,
-      "price_now": 3.99,
-      "pct_change": 167.8
-    },
-    {
-      "name": "Loki, Lord of Misrule",
-      "set_name": "Marvel Super Heroes Commander",
-      "printing": "Normal",
-      "owner": "Joel",
-      "price_before": 49.99,
-      "price_now": 54.99,
-      "pct_change": 10.0
-    }
-  ]
+  "generated_at": "2026-11-24T14:02:05.419351+00:00",
+  "alerts": []
 }
