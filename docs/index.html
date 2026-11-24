@@ -196,6 +196,8 @@
     .pick-list { list-style: none; padding: 0; margin: 0; }
     .pick-owner + .pick-owner { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
     .pick-owner h4 { margin: 0 0 4px; font-size: 0.95em; }
+    .finish-tag { font-size: 0.8em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+    .finish-tag.shiny { color: #c792ea; border-color: #c792ea; font-weight: 600; }
     .pick-box { margin: 4px 0 0 0; }
     .pick-box > .meta { margin-top: 4px; font-weight: 600; }
     .pick-list li { padding: 6px 0; border-bottom: 1px solid var(--border); }
@@ -1113,6 +1115,12 @@
       el.hidden = false;
     }
 
+    // Which copy to grab: foil and etched stand out from the normal ones.
+    function finishTag(finish) {
+      const label = SHEET_FINISH_LABELS[finish] || finish || "Normal";
+      return `<span class="finish-tag${finish && finish !== "normal" ? " shiny" : ""}">${escapeHtml(label)}</span>`;
+    }
+
     // Every paid order, grouped by whose boxes it's in and then by box (each
     // sheet numbers its own boxes from B01), in the order you'd walk them:
     // where to pull each from, and a tick box to mark several dropped off in
@@ -1130,7 +1138,7 @@
       if (!paid.length) return;
       const line = ({ order, pulls }) => `<li><label><input type="checkbox">
             <span>${pulls.map((p) => `<strong>${escapeHtml(p.location)}</strong>${pulls.length > 1 ? ` ×${p.qty}` : ""}${p.row ? ` <span class="meta">(row ${p.row})</span>` : ""}`).join(", ")}
-            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""}${order.type === "GOG" ? ' <span class="meta">· to GOG</span>' : ""}</span></label></li>`;
+            · ${escapeHtml(order.name)}${order.qty > 1 ? ` ×${order.qty}` : ""} ${finishTag(order.finish)}${order.type === "GOG" ? ' <span class="meta">· to GOG</span>' : ""}</span></label></li>`;
       // Owner -> box -> orders, in the sorted order above. An order split
       // across boxes sits under its first one and lists every location.
       const groups = [];

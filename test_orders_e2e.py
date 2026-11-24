@@ -394,6 +394,10 @@ with sync_playwright() as p:
     joel_boxes = [" ".join(t.split()) for t in joel.locator(".pick-box > .meta").all_inner_texts()]
     check("pick list: one group per owner's boxes", owners == ["Joel's boxes", "Shared's boxes"], owners)
     check("...then one per box, in walking order", joel_boxes == ["Box B01 · 1 copy", "Box B02 · 1 copy"], joel_boxes)
+    check("each line says which finish to grab",
+          "Foil" in joel.locator(".pick-box", has_text="Box B01").locator("li").inner_text()
+          and "Normal" in panel.locator(".pick-owner", has_text="Shared's boxes").locator("li").inner_text()
+          and joel.locator(".finish-tag.shiny").count() == 2)
     check("...each order under its own box", "Snap" in joel.locator(".pick-box", has_text="Box B01").inner_text()
           and "Sol Ring" in joel.locator(".pick-box", has_text="Box B02").inner_text()
           and "Pick Me" in panel.locator(".pick-owner", has_text="Shared's boxes").inner_text())
