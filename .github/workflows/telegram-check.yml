@@ -1,0 +1,36 @@
+name: Telegram bot check
+
+# On demand: what Telegram knows about the bot's webhook (which updates it
+# receives, its last delivery error) and what kind of chat the alerts go to,
+# for when the bot doesn't respond. Prints no tokens or ids.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Webhook and alerts chat
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+          api = f"https://api.telegram.org/bot{os.environ['TOKEN']}/"
+          def call(method, **params):
+              req = urllib.request.Request(api + method, data=json.dumps(params).encode(), headers={"Content-Type": "application/json"})
+              return json.load(urllib.request.urlopen(req, timeout=30))
+          info = call("getWebhookInfo")["result"]
+          host = info.get("url", "").split("/")[2] if info.get("url") else None
+          print("webhook host:", host)
+          for k in ("allowed_updates", "pending_update_count", "last_error_date", "last_error_message", "max_connections"):
+              print(f"{k}:", info.get(k))
+          me = call("getMe")["result"]
+          print("bot:", me.get("username"), "| can read all group messages:", me.get("can_read_all_group_messages"))
+          chat = call("getChat", chat_id=os.environ["CHAT"])["result"]
+          print("alerts chat type:", chat.get("type"))
+          EOF
