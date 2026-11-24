@@ -9,6 +9,7 @@ on:
       - "docs/index.html"
       - "google_apps_script.js"
       - "test_orders_mocks.js"
+      - "cloudflare_worker.js"
   workflow_dispatch: {}
 
 jobs:
@@ -25,8 +26,9 @@ jobs:
 
       - run: python -m unittest test_smoke -v
 
-  # The dashboard's Orders section against the real Apps Script code (see
-  # test_orders_e2e.py) — the part of the system no Python test reaches.
+  # The dashboard's Orders section and the Cloudflare Worker against the
+  # real Apps Script code (see test_orders_e2e.py, test_worker_e2e.py) — the
+  # part of the system no Python test reaches.
   orders:
     runs-on: ubuntu-latest
     steps:
@@ -41,3 +43,5 @@ jobs:
       - run: playwright install chromium --with-deps
 
       - run: python test_orders_e2e.py
+
+      - run: python test_worker_e2e.py
