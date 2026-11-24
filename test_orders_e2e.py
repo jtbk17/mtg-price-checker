@@ -92,7 +92,7 @@ with sync_playwright() as p:
         out = gas.evaluate("body => doPost({ postData: { contents: body } }).s", body)
         route.fulfill(status=200, content_type="application/json", body=out, headers={"Access-Control-Allow-Origin": "*"})
 
-    def open_dashboard(page_html):
+    def open_dashboard(page_html, unfold=True):
         pg = ctx.new_page()
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -103,6 +103,9 @@ with sync_playwright() as p:
         pg.route("**/my_listings.json", lambda r: r.fulfill(json=my_listings))
         pg.route("**/listing_sales.json", lambda r: r.fulfill(json=sales))
         pg.add_init_script("localStorage.setItem('sellPlanOwner','')")
+        if unfold:
+            # Sections start folded; these checks are about what's inside them.
+            pg.add_init_script("document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('section.fold').forEach((s) => s.classList.remove('collapsed')))")
         pg.goto(f"{BASE}/index.html")
         pg.wait_for_timeout(800)
         return pg, errs
@@ -671,6 +674,31 @@ with sync_playwright() as p:
     check("old script: update note, no drops, no listing button, WTB still works",
           "update the Apps Script" in old.inner_text("#orders-list") and old.locator("#orders-list .card", has_text="Looks sold?").count() == 0
           and old.locator("text=Sold on TCGMP").count() == 0 and old.locator("text=Sold to WTB buyer").count() >= 1 and not old_errs, old_errs)
+
+    # ---- sections start folded ----
+    fp, fold_errs = open_dashboard(test_html, unfold=False)
+    folded = fp.evaluate("() => [...document.querySelectorAll('section.fold')].map((s) => [s.id, s.classList.contains('collapsed')])")
+    check("every main section starts folded", len(folded) == 8 and all(c for _, c in folded), folded)
+    check("folded: heading only", fp.is_visible("#sell-plan-section h2") and not fp.is_visible("#sell-plan")
+          and not fp.is_visible("#sell-plan-owner"))
+    fp.evaluate("() => localStorage.removeItem('sheetsPasscode')"); fp.reload(); fp.wait_for_timeout(800)
+    check("folded Orders hides the passcode box too", fp.is_visible("#orders-section h2") and not fp.is_visible("#orders-connect"))
+    fp.evaluate("() => localStorage.setItem('sheetsPasscode', 'pw')"); fp.reload(); fp.wait_for_timeout(1000)
+    fp.click("#sell-plan-section h2")
+    check("tap the heading: it opens", fp.is_visible("#sell-plan") and fp.is_visible("#sell-plan-owner")
+          and fp.get_attribute("#sell-plan-section h2", "aria-expanded") == "true")
+    fp.click("#sell-plan-section h2")
+    check("tap again: folded", not fp.is_visible("#sell-plan"))
+    fp.click("nav.jump a[href='#watchlist-section']"); fp.wait_for_timeout(200)
+    check("menu link opens its section", fp.is_visible("#watchlist") and not fp.is_visible("#sell-plan"))
+    fp.goto(f"{BASE}/"); fp.goto(f"{BASE}/index.html#orders-section"); fp.wait_for_timeout(1000)
+    check("a link to #orders-section (Telegram's) opens Orders", fp.is_visible("#orders-list") and not fp.is_visible("#watchlist"))
+    fp.focus("#movers-section h2"); fp.keyboard.press("Enter")
+    check("keyboard: Enter opens a section", fp.is_visible("#movers-section .movers-columns"))
+    fp.set_viewport_size({"width": 390, "height": 900}); fp.wait_for_timeout(200)
+    check("folded page at phone width: no horizontal scroll", not fp.evaluate("document.documentElement.scrollWidth > innerWidth"))
+    fp.screenshot(path=SHOTS / "folded_phone.png", full_page=True)
+    check("no page errors when folded", not fold_errs, fold_errs)
 
     off = ctx.new_page()
     off.route("**/index.html", lambda r: r.fulfill(status=200, content_type="text/html", body=off_html))

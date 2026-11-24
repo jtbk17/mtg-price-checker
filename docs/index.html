@@ -27,6 +27,8 @@
     html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0;
+      font-size: 18px;
+      line-height: 1.4;
       font-family: -apple-system, Segoe UI, Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
@@ -138,7 +140,16 @@
     canvas { width: 100%; height: 50px; margin-top: 4px; }
 
     section { margin-bottom: 36px; scroll-margin-top: 72px; }
-    section h2 { margin: 0 0 4px; font-size: 1.15em; }
+    section h2 { margin: 0 0 4px; font-size: 1.25em; }
+    /* Folded sections show only their heading until it's tapped. */
+    section.fold { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); padding: 12px 14px; }
+    section.fold h2 { cursor: pointer; user-select: none; margin: 0; display: flex; align-items: center; gap: 8px; }
+    section.fold h2::before { content: "▸"; color: var(--muted); font-size: 0.8em; width: 1em; transition: transform 0.15s; }
+    section.fold:not(.collapsed) h2::before { transform: rotate(90deg); }
+    section.fold:not(.collapsed) > h2, section.fold:not(.collapsed) > .section-head { margin-bottom: 8px; }
+    section.fold.collapsed > :not(h2):not(.section-head),
+    section.fold.collapsed .section-head .filters { display: none !important; }  /* over #id rules like #orders-connect's */
+    section.fold .section-head h2 { flex: 1; }
     section .section-sub { color: var(--muted); font-size: 0.85em; margin: 0 0 12px; }
 
     .more {
@@ -196,7 +207,7 @@
     .pick-list { list-style: none; padding: 0; margin: 0; }
     .pick-owner + .pick-owner { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
     .pick-owner h4 { margin: 0 0 4px; font-size: 0.95em; }
-    .finish-tag { font-size: 0.8em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+    .finish-tag { font-size: 0.85em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
     .finish-tag.shiny { color: #c792ea; border-color: #c792ea; font-weight: 600; }
     .pick-box { margin: 4px 0 0 0; }
     .pick-box > .meta { margin-top: 4px; font-weight: 600; }
@@ -240,9 +251,10 @@
       /* Two cards per row on a phone, rather than one huge card per screen. */
       .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .card { padding: 8px; }
-      .card .name { font-size: 0.95em; }
-      .card .price { font-size: 1.1em; }
-      .meta { font-size: 0.8em; }
+      body { font-size: 17px; }
+      .card .name { font-size: 1em; }
+      .card .price { font-size: 1.15em; }
+      .meta { font-size: 0.85em; }
       #alerts-section { padding: 12px 14px; }
     }
   </style>
@@ -2064,6 +2076,43 @@
     loadMovers();
     loadAlerts();
     loadOrders();
+
+    // Every main section starts folded, showing just its heading: tap the
+    // heading (or its link in the menu, or a link to it from Telegram) to
+    // open it.
+    const FOLDED = ["orders-section", "intake-section", "sell-plan-section", "deals-section",
+      "market-deals-section", "auctions-section", "watchlist-section", "movers-section"];
+    function setOpen(section, open) {
+      section.classList.toggle("collapsed", !open);
+      section.querySelector("h2").setAttribute("aria-expanded", String(open));
+    }
+    FOLDED.forEach((id) => {
+      const section = document.getElementById(id);
+      if (!section) return;
+      const h2 = section.querySelector("h2");
+      section.classList.add("fold");
+      h2.setAttribute("role", "button");
+      h2.tabIndex = 0;
+      setOpen(section, false);
+      const toggle = () => setOpen(section, section.classList.contains("collapsed"));
+      h2.addEventListener("click", toggle);
+      h2.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
+      });
+    });
+    function openFromHash() {
+      const section = FOLDED.includes(location.hash.slice(1)) && document.getElementById(location.hash.slice(1));
+      if (section) {
+        setOpen(section, true);
+        section.scrollIntoView();
+      }
+    }
+    document.querySelectorAll("nav.jump a").forEach((a) => a.addEventListener("click", () => {
+      const section = document.getElementById(a.getAttribute("href").slice(1));
+      if (section && section.classList.contains("fold")) setOpen(section, true);
+    }));
+    window.addEventListener("hashchange", openFromHash);
+    openFromHash();
   </script>
 </body>
 </html>
