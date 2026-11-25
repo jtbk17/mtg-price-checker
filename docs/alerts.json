@@ -1,14 +1,4 @@
 {
-  "generated_at": "2026-11-24T23:22:24.812748+00:00",
-  "alerts": [
-    {
-      "name": "Eerie Ultimatum",
-      "set_name": "Secret Lair Countdown",
-      "printing": "Foil",
-      "owner": "Shared",
-      "price_before": 13.99,
-      "price_now": 16.99,
-      "pct_change": 21.4
-    }
-  ]
+  "generated_at": "2026-11-25T14:04:51.531521+00:00",
+  "alerts": []
 }
