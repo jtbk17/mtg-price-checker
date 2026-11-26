@@ -659,8 +659,9 @@ with sync_playwright() as p:
     sword = plan("Galaxy Sword", "Secret Lair Drop")
     check("Secret Lair: always kept", "Secret Lair — Joel keeps every copy" in sword.inner_text() and sword.locator("button").count() == 0)
     sig = plan("Arcane Signet", "Commander Legends")
-    check("a Secret Lair copy is the play copy, so the regular ones can all go",
-          "play copy is the Secret Lair one" in sig.inner_text() and sig.locator("input").get_attribute("max") == "2", sig.inner_text())
+    check("Secret Lair copies don't count as the play copy: a regular one is kept too",
+          "Joel's play copy" in sig.inner_text() and "1 kept, 1 to sell" in sig.inner_text()
+          and sig.locator("input").count() == 0 and sig.locator("text=Sold to WTB buyer").count() == 1, sig.inner_text())
     check("Shared's cards aren't held back", "Keep" not in frog().inner_text() and frog().locator("text=Sold to WTB buyer").count() == 1)
     pg.select_option("#sell-plan-route", "keep"); pg.wait_for_timeout(300)
     kept = sorted({" ".join(t.split()[:2]) for t in pg.locator("#sell-plan .card .name").all_inner_texts()})
@@ -675,16 +676,21 @@ with sync_playwright() as p:
     first = offer_api("bolt-b", "foil")
     second = offer_api("bolt-a")
     check("script: one of two printings can go, not both", first["ok"] and not second["ok"] and "last Lightning Bolt" in second["error"], (first, second))
+    two_sig = offer_api("sig", qty=2, name="Arcane Signet")
+    one_sig = offer_api("sig", qty=1, name="Arcane Signet")
+    check("script: with a Secret Lair copy, a regular one is still kept", not two_sig["ok"] and one_sig["ok"], (two_sig, one_sig))
+    cancel_api(one_sig["order"]["id"])
+    sl_keep = json.loads(gas.evaluate("""() => doPost({ postData: { contents: JSON.stringify({ action: 'keep', passcode: 'pw', owner: 'Joel',
+        name: 'Arcane Signet', scryfallId: 'sig-sl', finish: 'normal' }) } }).s"""))
+    check("script: a Secret Lair printing can't be the play copy", not sl_keep["ok"] and "Secret Lair" in sl_keep["error"], sl_keep)
     detected = offer_api("snap", "foil", name="Snap", type="Listing", source="drop-x")
     check("script: a sale already seen on TCGMP is still recorded", detected["ok"], detected)
     cancel_api(first["order"]["id"]); cancel_api(detected["order"]["id"])
 
     # choosing the play copy
     pg.reload(); pg.wait_for_timeout(1500)
-    alpha = plan("Lightning Bolt", "Alpha")
-    alpha.locator("text=Change play copy").click()
-    alpha.locator("select").select_option(label="Beta · Foil · $20.00")
-    alpha.locator("text=Keep this one").click(); pg.wait_for_timeout(800)
+    check("the play copy itself has no toggle", plan("Lightning Bolt", "Alpha").locator("text=Keep this one instead").count() == 0)
+    plan("Lightning Bolt", "Beta").locator("text=Keep this one instead").click(); pg.wait_for_timeout(800)
     alpha, beta = plan("Lightning Bolt", "Alpha"), plan("Lightning Bolt", "Beta")
     check("choose another printing: it's kept instead", "Joel's play copy (chosen)" in beta.inner_text()
           and beta.locator("text=Sold to WTB buyer").count() == 0 and alpha.locator("text=Sold to WTB buyer").count() == 1, beta.inner_text())

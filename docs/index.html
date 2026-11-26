@@ -962,7 +962,8 @@
     }
 
     // ---- Joel keeps one copy of every card for play (by card name, across
-    // printings) and every Secret Lair card. The kept copies show as "Keep"
+    // printings) and, on top of that, every Secret Lair card (never the play
+    // copy). The kept copies show as "Keep"
     // with nothing to sell; the Apps Script refuses such a sale too. Which
     // printing is the play copy can be chosen (Apps Script v9+), otherwise
     // it's the cheapest. Keep in step with google_apps_script.js. ----
@@ -990,11 +991,8 @@
       for (const items of groups.values()) {
         const sl = items.filter(isSecretLair);
         const others = items.filter((i) => !isSecretLair(i));
-        sl.forEach((i) => out.set(itemKey(i), { kept: i.quantity, reason: "sl", play: sl[0], options: [] }));
-        if (sl.length) {
-          others.forEach((i) => out.set(itemKey(i), { kept: 0, reason: "play", play: sl[0], options: [] }));
-          continue;
-        }
+        sl.forEach((i) => out.set(itemKey(i), { kept: i.quantity, reason: "sl", options: [] }));
+        if (!others.length) continue;
         const chosenVariant = (playKeeps[items[0].owner] || {})[cardKey(items[0].name)];
         const chosen = others.find((i) => variantOf(i) === chosenVariant);
         const play = chosen || [...others].sort((a, b) => pricedAt(a) - pricedAt(b))[0];
@@ -1011,31 +1009,24 @@
       function show() {
         const isPlay = keep.play === item;
         const lines = [];
-        if (keep.reason === "sl") lines.push(`🔒 Secret Lair — ${item.owner} keeps every copy`);
-        else if (isPlay && keep.kept) lines.push(`🔒 ${item.owner}'s play copy${keep.options.length > 1 ? (keep.chosen ? " (chosen)" : " (cheapest printing)") : ""}`);
-        else lines.push(`🔒 ${item.owner}'s play copy is ${isSecretLair(keep.play) ? "the Secret Lair one" : where(keep.play)}`);
+        if (keep.reason === "sl") lines.push(`🔒 Secret Lair — ${item.owner} keeps every copy (the play copy is a regular printing)`);
+        else if (isPlay) lines.push(`🔒 ${item.owner}'s play copy${keep.options.length > 1 ? (keep.chosen ? " (chosen)" : " (cheapest printing)") : ""}`);
+        else lines.push(`🔒 ${item.owner}'s play copy is ${where(keep.play)}`);
         if (keep.reason === "play" && isPlay && (item.quantity || 1) > 1) lines.push(`1 kept, ${(item.quantity || 1) - 1} to sell`);
         box.innerHTML = `<div class="keep-note">${lines.map(escapeHtml).join("<br>")}</div><div class="card-actions"></div><div class="order-error"></div>`;
         const actions = box.querySelector(".card-actions");
-        if (keep.options.length > 1 && saleOrders && scriptVersion >= 9) actionButton(actions, "Change play copy", pick);
-      }
-      function pick() {
-        const actions = box.querySelector(".card-actions");
         const error = box.querySelector(".order-error");
-        actions.innerHTML = `<select aria-label="Play copy">${keep.options
-          .map((i, n) => `<option value="${n}"${i === keep.play ? " selected" : ""}>${escapeHtml(where(i))}${pricedAt(i) !== Infinity ? ` · ${formatPrice(pricedAt(i))}` : ""}</option>`)
-          .join("")}</select>`;
-        const select = actions.querySelector("select");
-        actionButton(actions, "Keep this one", async () => {
-          const choice = keep.options[Number(select.value)];
-          const failed = busy(actions, error);
-          try {
-            await change("keep", { owner: item.owner, name: item.name, scryfallId: choice.card_id, finish: SHEET_FINISHES[choice.printing] || "normal" });
-          } catch (err) {
-            failed(err);
-          }
-        }, true);
-        actionButton(actions, "Back", show);
+        // One tap on another printing makes it the play copy instead.
+        if (keep.reason === "play" && !isPlay && saleOrders && scriptVersion >= 9) {
+          actionButton(actions, "Keep this one instead", async () => {
+            const failed = busy(actions, error);
+            try {
+              await change("keep", { owner: item.owner, name: item.name, scryfallId: item.card_id, finish: SHEET_FINISHES[item.printing] || "normal" });
+            } catch (err) {
+              failed(err);
+            }
+          });
+        }
       }
       show();
     }

@@ -37,7 +37,8 @@
 // "dropped off" step), or cancelled and put back if GOG won't take it.
 //
 // Joel keeps one copy of every card for play (KEEP_ONE_OWNERS), counted by
-// card name across printings, and every Secret Lair copy. A sale that would
+// card name across printings, and every Secret Lair copy on top of that (a
+// Secret Lair copy isn't the play copy). A sale that would
 // take the last one is refused at both steps that move copies (recording
 // it, and pulling it) — except a sale already detected on TCGMP, which has
 // happened. Which printing is kept can be chosen ("Play copies" tab);
@@ -251,6 +252,7 @@ const ACTIONS = {
     const inv = readInventory(req.owner);
     const row = inv.rows.find((r) => r.scryfallId === String(req.scryfallId) && r.finish === String(req.finish));
     if (!row) throw new Error(`That printing isn't in ${req.owner}'s Inventory`);
+    if (isSecretLair(row.setName)) throw new Error("Secret Lair copies are kept anyway — pick a regular printing as the play copy");
     const sheet = playCopiesSheet(req.owner);
     const values = sheet.getDataRange().getValues();
     const name = cardKey(row.name);
@@ -455,7 +457,6 @@ function checkKeep(owner, inv, card, qty, skipId) {
     .forEach((o) => (promised[`${o.scryfallId}:${o.finish}`] = (promised[`${o.scryfallId}:${o.finish}`] || 0) + o.qty));
   const left = (filter) => rows.filter(filter).reduce((n, r) => n + r.inBox, 0)
     - Object.keys(promised).filter((v) => rows.some((r) => variant(r) === v && filter(r))).reduce((n, v) => n + promised[v], 0);
-  if (left((r) => isSecretLair(r.setName)) > 0) return;  // a Secret Lair copy is the one played with
   const chosen = readPlayCopies(owner)[name];
   if (chosen && left((r) => variant(r) === chosen) > 0) {
     if (target === chosen && left((r) => variant(r) === chosen) - qty < 1) {
@@ -463,7 +464,10 @@ function checkKeep(owner, inv, card, qty, skipId) {
     }
     return;
   }
-  if (left(() => true) - qty < 1) throw new Error(`That would sell ${owner}'s last ${label} — ${owner} keeps one copy of every card for play`);
+  // Secret Lair copies are kept anyway, so the play copy is a regular one.
+  if (left((r) => !isSecretLair(r.setName)) - qty < 1) {
+    throw new Error(`That would sell ${owner}'s last ${label} — ${owner} keeps one copy of every card for play`);
+  }
 }
 
 function playCopiesSheet(owner) {
