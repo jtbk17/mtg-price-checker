@@ -58,6 +58,7 @@ class Sheet {
 }
 const H = ["Location", "Name", "Set code", "Set name", "Collector #", "Foil", "Rarity", "Condition", "Language", "Qty", "Price (USD)",
   "Scryfall ID", "Date logged", "Sold", "Pulled", "In box", "Value in box (USD)", "Notes"];
+const set = (row, setName) => { row[3] = setName; return row; };
 const inv = (loc, name, foil, qty, id) => [loc, name, "X", "Set", "1", foil, "rare", "near_mint", "en", qty, "$1", id, "2026-11-01", "", "", "", "", ""];
 window.__books = {
   S: { Inventory: new Sheet("Inventory", [H,
@@ -73,7 +74,14 @@ window.__books = {
     "WTB orders": new Sheet("WTB orders", [
       ["Order", "Status", "Card", "Set", "Finish", "Scryfall ID", "Qty", "Price (USD)", "Location", "Inventory row", "Offered", "Paid", "Closed"],
       ["legacy01", "Awaiting payment", "Old Card", "Set", "normal", "old", 1, 3, "", "", new Date(), "", ""]]) },
-  J: { Inventory: new Sheet("Inventory", [H, inv("B01-01", "Snap", "foil", 1, "snap"), inv("B02-01", "Sol Ring", "foil", 1, "sol")]),
+  // Joel keeps a copy of each card: two printings of Lightning Bolt, and
+  // Secret Lair cards (one Arcane Signet also in a regular printing).
+  J: { Inventory: new Sheet("Inventory", [H, inv("B01-01", "Snap", "foil", 1, "snap"), inv("B02-01", "Sol Ring", "foil", 1, "sol"),
+    set(inv("B01-02", "Lightning Bolt", "normal", 1, "bolt-a"), "Alpha"),
+    set(inv("B01-02", "Lightning Bolt", "foil", 1, "bolt-b"), "Beta"),
+    set(inv("B01-03", "Arcane Signet", "normal", 1, "sig-sl"), "Secret Lair Drop"),
+    set(inv("B01-03", "Arcane Signet", "normal", 2, "sig"), "Commander Legends"),
+    set(inv("B01-03", "Galaxy Sword", "normal", 1, "sword"), "Secret Lair Drop")]),
     Dashboard: new Sheet("Dashboard", [["MTG chaos-sort inventory"], [], ["Settings"], ["Cards per slot", 100], ["Slots per box", 10]]) },
 };
 const SpreadsheetApp = {

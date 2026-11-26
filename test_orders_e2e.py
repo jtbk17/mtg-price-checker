@@ -148,14 +148,14 @@ with sync_playwright() as p:
 
     # ---- buttons per card ----
     check("WTB button only on cards with an offer",
-          frog().locator("text=Sold to WTB buyer").count() == 1 and sell("Snap").locator("text=Sold to WTB buyer").count() == 1
+          frog().locator("text=Sold to WTB buyer").count() == 1 and sell("Psychic Frog").locator("text=Sold to WTB buyer").count() == 1
           and sell("No Offer").locator("text=Sold to WTB buyer").count() == 0
           and [b.strip() for b in sell("No Offer").locator("button").all_inner_texts()] == ["Sold to GOG"])
     check("listed card gets Sold on TCGMP instead",
           sell("Sol Ring").locator("text=Sold on TCGMP").count() == 1 and sell("Sol Ring").locator("text=Sold to WTB buyer").count() == 0)
 
     # ---- WTB flow ----
-    check("copies box up front", frog().locator("input").count() == 1 and sell("Snap").locator("input").count() == 0)
+    check("copies box up front", frog().locator("input").count() == 1 and sell("No Offer").locator("input").count() == 0)
     frog().locator("input").fill("3"); frog().locator("text=Sold to WTB buyer").click()
     check("qty above copies rejected before sending", "Enter 1–2" in frog().inner_text())
     frog().locator("input").fill("2"); frog().locator("text=Sold to WTB buyer").click()
@@ -626,6 +626,77 @@ with sync_playwright() as p:
     pg.locator("#intake-section").screenshot(path=SHOTS / "intake_phone.png")
     pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(200)
     intake.locator("text=Cancel").click()
+
+    # ---- Joel keeps one copy of each card, and every Secret Lair card ----
+    watchlist["items"].extend([
+        item(name="Lightning Bolt", card_id="bolt-a", set_name="Alpha", owner="Joel", tcgmarketplace_price=1.0, latest_price=1.2, tcgmarketplace_wtb_price=0.9),
+        item(name="Lightning Bolt", card_id="bolt-b", set_name="Beta", printing="Foil", owner="Joel", tcgmarketplace_price=20.0, latest_price=22.0, tcgmarketplace_wtb_price=19.0),
+        item(name="Arcane Signet", card_id="sig-sl", set_name="Secret Lair Drop", owner="Joel", tcgmarketplace_wtb_price=4.0),
+        item(name="Arcane Signet", card_id="sig", set_name="Commander Legends", owner="Joel", quantity=2, tcgmarketplace_wtb_price=1.0, latest_price=1.1, tcgmarketplace_price=1.2),
+        item(name="Galaxy Sword", card_id="sword", set_name="Secret Lair Drop", owner="Joel", tcgmarketplace_wtb_price=12.0, latest_price=14.0, tcgmarketplace_price=13.5),
+    ])
+    pg.reload(); pg.wait_for_timeout(1500)
+
+    def plan(name, set_name):
+        return pg.locator("#sell-plan .card", has_text=name).filter(has=pg.locator("div.meta", has_text=re.compile(f"^{re.escape(set_name)}$")))
+
+    def offer_api(card_id, finish="normal", qty=1, name="Lightning Bolt", **extra):
+        body = json.dumps({"action": "offer", "passcode": "pw", "owner": "Joel", "scryfallId": card_id, "finish": finish,
+                           "name": name, "set": "Set", "qty": qty, "price": 1, **extra})
+        return json.loads(gas.evaluate("b => doPost({ postData: { contents: b } }).s", body))
+
+    def cancel_api(order_id):
+        gas.evaluate("id => doPost({ postData: { contents: JSON.stringify({ action: 'cancel', passcode: 'pw', owner: 'Joel', id }) } })", order_id)
+
+    snap = sell("Snap")
+    check("Joel's only copy: Keep, nothing to sell", "Keep" in snap.inner_text() and "Joel's play copy" in snap.inner_text()
+          and snap.locator("button").count() == 0, snap.inner_text())
+    alpha, beta = plan("Lightning Bolt", "Alpha"), plan("Lightning Bolt", "Beta")
+    check("two printings: the cheapest is kept by default", "Joel's play copy (cheapest printing)" in alpha.inner_text()
+          and alpha.locator("text=Sold to WTB buyer").count() == 0, alpha.inner_text())
+    check("...and the other can be sold, saying which is kept", beta.locator("text=Sold to WTB buyer").count() == 1
+          and "play copy is Alpha · Normal" in beta.inner_text(), beta.inner_text())
+    sword = plan("Galaxy Sword", "Secret Lair Drop")
+    check("Secret Lair: always kept", "Secret Lair — Joel keeps every copy" in sword.inner_text() and sword.locator("button").count() == 0)
+    sig = plan("Arcane Signet", "Commander Legends")
+    check("a Secret Lair copy is the play copy, so the regular ones can all go",
+          "play copy is the Secret Lair one" in sig.inner_text() and sig.locator("input").get_attribute("max") == "2", sig.inner_text())
+    check("Shared's cards aren't held back", "Keep" not in frog().inner_text() and frog().locator("text=Sold to WTB buyer").count() == 1)
+    pg.select_option("#sell-plan-route", "keep"); pg.wait_for_timeout(300)
+    kept = sorted({" ".join(t.split()[:2]) for t in pg.locator("#sell-plan .card .name").all_inner_texts()})
+    check("filter: Keep lists Joel's kept cards", kept == ["Arcane Signet", "Galaxy Sword", "Lightning Bolt", "Snap"], kept)
+    pg.select_option("#sell-plan-route", ""); pg.wait_for_timeout(300)
+
+    # the script refuses on its own, whatever the dashboard shows
+    last = offer_api("snap", "foil", name="Snap")
+    check("script: Joel's last copy can't be sold", not last["ok"] and "last Snap" in last["error"], last)
+    sl = offer_api("sword", name="Galaxy Sword")
+    check("script: nor a Secret Lair card", not sl["ok"] and "Secret Lair" in sl["error"], sl)
+    first = offer_api("bolt-b", "foil")
+    second = offer_api("bolt-a")
+    check("script: one of two printings can go, not both", first["ok"] and not second["ok"] and "last Lightning Bolt" in second["error"], (first, second))
+    detected = offer_api("snap", "foil", name="Snap", type="Listing", source="drop-x")
+    check("script: a sale already seen on TCGMP is still recorded", detected["ok"], detected)
+    cancel_api(first["order"]["id"]); cancel_api(detected["order"]["id"])
+
+    # choosing the play copy
+    pg.reload(); pg.wait_for_timeout(1500)
+    alpha = plan("Lightning Bolt", "Alpha")
+    alpha.locator("text=Change play copy").click()
+    alpha.locator("select").select_option(label="Beta · Foil · $20.00")
+    alpha.locator("text=Keep this one").click(); pg.wait_for_timeout(800)
+    alpha, beta = plan("Lightning Bolt", "Alpha"), plan("Lightning Bolt", "Beta")
+    check("choose another printing: it's kept instead", "Joel's play copy (chosen)" in beta.inner_text()
+          and beta.locator("text=Sold to WTB buyer").count() == 0 and alpha.locator("text=Sold to WTB buyer").count() == 1, beta.inner_text())
+    tab = gas.evaluate("() => __books.J['Play copies'].rows.map(r => r.slice(0, 4))")
+    check("choice saved in Joel's sheet (Play copies tab)", tab == [["Card", "Scryfall ID", "Finish", "Set"], ["Lightning Bolt", "bolt-b", "foil", "Beta"]], tab)
+    chosen = offer_api("bolt-b", "foil")
+    other = offer_api("bolt-a")
+    check("script: the chosen copy is the one kept", not chosen["ok"] and "play copy" in chosen["error"] and other["ok"], (chosen, other))
+    paid_try = json.loads(gas.evaluate("""id => doPost({ postData: { contents: JSON.stringify({ action: 'paid', passcode: 'pw', owner: 'Joel', id,
+        picks: [{ row: 4, qty: 1 }] }) } }).s""", other["order"]["id"]))
+    check("pulling the other printing is fine", paid_try["ok"], paid_try)
+    gas.evaluate("""id => doPost({ postData: { contents: JSON.stringify({ action: 'cancel', passcode: 'pw', owner: 'Joel', id }) } })""", other["order"]["id"])
 
     # ---- safety ----
     frog().locator("text=Sold to WTB buyer").click(); frog().locator("text=Record 1 at $9.00").click(); pg.wait_for_timeout(500)

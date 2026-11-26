@@ -36,6 +36,13 @@
 // pulled from the box (the "paid" step), then sold at the store (the
 // "dropped off" step), or cancelled and put back if GOG won't take it.
 //
+// Joel keeps one copy of every card for play (KEEP_ONE_OWNERS), counted by
+// card name across printings, and every Secret Lair copy. A sale that would
+// take the last one is refused at both steps that move copies (recording
+// it, and pulling it) — except a sale already detected on TCGMP, which has
+// happened. Which printing is kept can be chosen ("Play copies" tab);
+// otherwise any one copy left in the box counts.
+//
 // Add cards appends a batch to the bottom of Inventory behind one slot —
 // the next empty one unless another is picked, worked out the same way as
 // the Dashboard tab's "Next location" — and records it on an "Intake log"
@@ -59,8 +66,12 @@ const RECENT_DAYS = 14;
 // list carries each waiting order's box locations, every change answers
 // with the fresh list, and cancelled orders can be removed; 5: undo, several
 // orders dropped off at once, a sales summary, and a cached list; 6: Add
-// cards from a ManaBox CSV; 7: GOG sales; 8: "Not a sale" can be undone).
-const VERSION = 8;
+// cards from a ManaBox CSV; 7: GOG sales; 8: "Not a sale" can be undone;
+// 9: Joel's play copies and Secret Lair cards are kept).
+const VERSION = 9;
+const KEEP_ONE_OWNERS = ["Joel"];
+const PLAY_COPIES_TAB = "Play copies";
+const PLAY_COPIES_HEADERS = ["Card", "Scryfall ID", "Finish", "Set", "Chosen"];
 // A mis-tap can be stepped back for this long.
 const UNDO_HOURS = 24;
 // The list is cached this long between changes (each change refreshes it),
@@ -234,6 +245,22 @@ const ACTIONS = {
     return {};
   },
 
+  // Which printing of a card is the play copy kept back from sale.
+  keep(req) {
+    if (KEEP_ONE_OWNERS.indexOf(req.owner) < 0) throw new Error(`${req.owner}'s cards don't keep a play copy`);
+    const inv = readInventory(req.owner);
+    const row = inv.rows.find((r) => r.scryfallId === String(req.scryfallId) && r.finish === String(req.finish));
+    if (!row) throw new Error(`That printing isn't in ${req.owner}'s Inventory`);
+    const sheet = playCopiesSheet(req.owner);
+    const values = sheet.getDataRange().getValues();
+    const name = cardKey(row.name);
+    const at = values.findIndex((r, i) => i > 0 && cardKey(r[0]) === name);
+    const line = [row.name, row.scryfallId, row.finish, row.setName, new Date()];
+    if (at > 0) sheet.getRange(at + 1, 1, 1, line.length).setValues([line]);
+    else sheet.appendRow(line);
+    return {};
+  },
+
   // Inventory rows holding this printing with copies still in the box.
   locations(req) {
     return { locations: locationsOf(readInventory(req.owner), req.scryfallId, req.finish) };
@@ -252,6 +279,7 @@ const ACTIONS = {
     if (req.source && owners.some((o) => readOrders(o).orders.some((order) => order.source === req.source))) {
       throw new Error("That sale is already recorded");
     }
+    if (!req.source) checkKeep(req.owner, null, { name: req.name, scryfallId: req.scryfallId, finish: req.finish }, qty, null);
     const id = Utilities.getUuid().slice(0, 8);
     const values = {
       "Order": id, "Status": AWAITING, "Card": req.name || "", "Set": req.set || "", "Finish": req.finish,
@@ -284,6 +312,7 @@ const ACTIONS = {
       if (row.inBox < p.qty) throw new Error(`Only ${row.inBox} in the box at ${row.location}`);
       return row;
     });
+    if (!order.source) checkKeep(req.owner, inv, order, order.qty, order.id);
     picks.forEach((p, i) => inv.add(rows[i], "Pulled", p.qty));
     update(Object.assign({ "Status": PAID, "Paid": new Date() }, pullsColumns(picks.map((p, i) => ({ row: p.row, location: rows[i].location, qty: p.qty })))));
     return { order: findOrder(req.owner, req.id).order };
@@ -400,6 +429,64 @@ const ACTIONS = {
     return { order: findOrder(req.owner, req.id).order };
   },
 };
+
+// ---- Joel's play copies ----
+
+const cardKey = (name) => String(name || "").trim().toLowerCase();
+const isSecretLair = (setName) => /^secret lair/i.test(String(setName || "").trim());
+
+// Refuses selling qty copies of this printing when it would leave the owner
+// without a copy of the card to play, or it's a Secret Lair card. Copies
+// promised in other orders not yet pulled count as gone. `inv` may be null
+// (read here); skipId is the order being pulled, already counted in the box.
+function checkKeep(owner, inv, card, qty, skipId) {
+  if (KEEP_ONE_OWNERS.indexOf(owner) < 0) return;
+  inv = inv || readInventory(owner);
+  const variant = (r) => `${r.scryfallId}:${r.finish}`;
+  const target = `${card.scryfallId}:${card.finish}`;
+  const own = inv.rows.find((r) => variant(r) === target);
+  const name = cardKey(own ? own.name : card.name);
+  const label = own ? own.name : card.name;
+  if (own && isSecretLair(own.setName)) throw new Error(`${label} is a Secret Lair card — ${owner} keeps those`);
+  const rows = inv.rows.filter((r) => cardKey(r.name) === name);
+  const promised = {};
+  readOrders(owner).orders
+    .filter((o) => o.status === AWAITING && o.id !== skipId && cardKey(o.name) === name)
+    .forEach((o) => (promised[`${o.scryfallId}:${o.finish}`] = (promised[`${o.scryfallId}:${o.finish}`] || 0) + o.qty));
+  const left = (filter) => rows.filter(filter).reduce((n, r) => n + r.inBox, 0)
+    - Object.keys(promised).filter((v) => rows.some((r) => variant(r) === v && filter(r))).reduce((n, v) => n + promised[v], 0);
+  if (left((r) => isSecretLair(r.setName)) > 0) return;  // a Secret Lair copy is the one played with
+  const chosen = readPlayCopies(owner)[name];
+  if (chosen && left((r) => variant(r) === chosen) > 0) {
+    if (target === chosen && left((r) => variant(r) === chosen) - qty < 1) {
+      throw new Error(`That's ${owner}'s play copy of ${label} — pick another printing to keep first, or sell a different one`);
+    }
+    return;
+  }
+  if (left(() => true) - qty < 1) throw new Error(`That would sell ${owner}'s last ${label} — ${owner} keeps one copy of every card for play`);
+}
+
+function playCopiesSheet(owner) {
+  const ss = spreadsheet(owner);
+  let sheet = ss.getSheetByName(PLAY_COPIES_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(PLAY_COPIES_TAB);
+    sheet.appendRow(PLAY_COPIES_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// {card name, lower case: "scryfall id:finish"} — reading never creates the tab.
+function readPlayCopies(owner) {
+  const sheet = spreadsheet(owner).getSheetByName(PLAY_COPIES_TAB);
+  const out = {};
+  if (!sheet) return out;
+  sheet.getDataRange().getValues().slice(1).forEach((r) => {
+    if (cardKey(r[0]) && r[1]) out[cardKey(r[0])] = `${String(r[1]).trim()}:${String(r[2] || "normal").trim().toLowerCase()}`;
+  });
+  return out;
+}
 
 // ---- Add cards ----
 
@@ -585,7 +672,9 @@ function freshList() {
   // for the dashboard's Undo.
   const notSales = {};
   Object.keys(dismissed).forEach((id) => typeof dismissed[id] === "string" && (notSales[id] = dismissed[id]));
-  const list = { orders, dismissed: Object.keys(dismissed), notSales, version: VERSION, sales: salesSummary(everySold) };
+  const keeps = {};
+  KEEP_ONE_OWNERS.filter(sheetIdFor).forEach((owner) => (keeps[owner] = readPlayCopies(owner)));
+  const list = { orders, dismissed: Object.keys(dismissed), notSales, keeps, version: VERSION, sales: salesSummary(everySold) };
   try {
     CacheService.getScriptCache().put("list", JSON.stringify(list), LIST_CACHE_SECONDS);
   } catch (err) {
@@ -709,13 +798,15 @@ function readInventory(owner) {
   const values = sheet.getDataRange().getValues();
   const col = columnsOf(
     values[0].map(String),
-    ["Location", "Scryfall ID", "Foil", "Condition", "Sold", "Pulled", "In box"],
+    ["Location", "Name", "Set name", "Scryfall ID", "Foil", "Condition", "Sold", "Pulled", "In box"],
     INVENTORY_TAB
   );
   const num = (v) => Number(v) || 0;
   const rows = values.slice(1).map((r, i) => ({
     row: i + 2,
     location: String(r[col["Location"]]),
+    name: String(r[col["Name"]]),
+    setName: String(r[col["Set name"]]),
     scryfallId: String(r[col["Scryfall ID"]]).trim(),
     finish: String(r[col["Foil"]]).trim().toLowerCase(),
     condition: String(r[col["Condition"]]),

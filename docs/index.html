@@ -207,6 +207,8 @@
     .pick-list { list-style: none; padding: 0; margin: 0; }
     .pick-owner + .pick-owner { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
     .pick-owner h4 { margin: 0 0 4px; font-size: 0.95em; }
+    .keep-route { color: #c792ea; }
+    .keep-note { color: #c792ea; font-size: 0.85em; margin-top: 4px; }
     .finish-tag { font-size: 0.85em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
     .finish-tag.shiny { color: #c792ea; border-color: #c792ea; font-weight: 600; }
     .pick-box { margin: 4px 0 0 0; }
@@ -321,6 +323,7 @@
             <option value="wtb">Sell to WTB buyer</option>
             <option value="gog">Sell to GOG</option>
             <option value="review">Manual review</option>
+            <option value="keep">Keep (Joel's play copies)</option>
           </select>
         </div>
       </div>
@@ -887,6 +890,7 @@
       wtb: { label: "Sell to WTB buyer", className: "tcg-wtb" },
       gog: { label: "Sell to GOG", className: "gog-price" },
       review: { label: "Manual review", className: "meta" },
+      keep: { label: "Keep", className: "keep-route" },
     };
 
     function sellRecommendation(item) {
@@ -926,13 +930,16 @@
       return { route: "list", price, gog, cheapest, wtb };
     }
 
-    function sellPlanCard({ item, rec }) {
+    function sellPlanCard({ item, rec, keep }) {
       const el = document.createElement("div");
       el.className = "card";
-      const qty = item.quantity || 1;
+      const owned = item.quantity || 1;
+      const qty = owned - ((keep && keep.kept) || 0);  // what's for sale
       const route = ROUTES[rec.route];
       const action =
-        rec.route === "review"
+        rec.route === "keep"
+          ? (rec.listed ? `<div class="delta down">⚠ It's listed on TCGMP — take that listing down</div>` : "")
+          : rec.route === "review"
           ? `<div class="meta">${escapeHtml(rec.reason)}</div>`
           : rec.route === "listed"
           ? `<div class="price">Listed ×${rec.listedQty} at ${formatPrice(rec.price)}</div>` +
@@ -942,16 +949,97 @@
           : `<div class="price">${rec.route === "list" ? "List at " : ""}${formatPrice(rec.price)}${qty > 1 ? ` <span class="meta">×${qty} = ${formatPrice(rec.price * qty)}</span>` : ""}</div>`;
       el.innerHTML = `
         ${cardImageHtml(item)}
-        <div class="name">${escapeHtml(item.name)}${qty > 1 ? ` <span class="meta">×${qty}</span>` : ""}</div>
+        <div class="name">${escapeHtml(item.name)}${owned > 1 ? ` <span class="meta">×${owned}</span>` : ""}</div>
         ${cardMetaHtml(item)}
         <div class="${route.className}"><strong>${route.label}</strong></div>
         ${action}
         ${priceLinesHtml(item, { ckPrice: true })}
       `;
-      const kinds = saleOrders && item.card_id ? saleKindsFor(item, rec) : [];
-      if (kinds.length) addSaleControls(el, item, rec, kinds);
+      if (keep) addPlayCopyNote(el, item, keep);
+      const kinds = rec.route !== "keep" && saleOrders && item.card_id ? saleKindsFor(item, rec) : [];
+      if (kinds.length) addSaleControls(el, item, rec, kinds, (keep && keep.kept) || 0);
       return el;
     }
+
+    // ---- Joel keeps one copy of every card for play (by card name, across
+    // printings) and every Secret Lair card. The kept copies show as "Keep"
+    // with nothing to sell; the Apps Script refuses such a sale too. Which
+    // printing is the play copy can be chosen (Apps Script v9+), otherwise
+    // it's the cheapest. Keep in step with google_apps_script.js. ----
+    const KEEP_ONE_OWNERS = ["Joel"];
+    let playKeeps = {};  // owner -> {card name, lower case: "scryfall id:finish"}
+    const isSecretLair = (item) => /^secret lair/i.test(String(item.set_name || "").trim());
+    const cardKey = (name) => String(name || "").trim().toLowerCase();
+    const variantOf = (item) => `${item.card_id}:${SHEET_FINISHES[item.printing] || "normal"}`;
+    const itemKey = (item) => `${item.owner}|${item.card_id}|${item.printing}|${item.condition}`;
+    const pricedAt = (item) => item.tcgmarketplace_price ?? item.latest_price ?? Infinity;
+
+    // itemKey -> {kept: copies held back, reason: "sl" | "play", play: the
+    // play copy's item, chosen: picked rather than the cheapest, options:
+    // the printings that could be the play copy}
+    function playCopies() {
+      const out = new Map();
+      const groups = new Map();
+      watchlistItems
+        .filter((i) => KEEP_ONE_OWNERS.includes(i.owner) && (i.quantity || 0) > 0)
+        .forEach((i) => {
+          const k = `${i.owner}|${cardKey(i.name)}`;
+          if (!groups.has(k)) groups.set(k, []);
+          groups.get(k).push(i);
+        });
+      for (const items of groups.values()) {
+        const sl = items.filter(isSecretLair);
+        const others = items.filter((i) => !isSecretLair(i));
+        sl.forEach((i) => out.set(itemKey(i), { kept: i.quantity, reason: "sl", play: sl[0], options: [] }));
+        if (sl.length) {
+          others.forEach((i) => out.set(itemKey(i), { kept: 0, reason: "play", play: sl[0], options: [] }));
+          continue;
+        }
+        const chosenVariant = (playKeeps[items[0].owner] || {})[cardKey(items[0].name)];
+        const chosen = others.find((i) => variantOf(i) === chosenVariant);
+        const play = chosen || [...others].sort((a, b) => pricedAt(a) - pricedAt(b))[0];
+        others.forEach((i) => out.set(itemKey(i), { kept: i === play ? 1 : 0, reason: "play", play, chosen: !!chosen, options: others }));
+      }
+      return out;
+    }
+
+    // "Keep" lines on a Sell plan card, and changing which printing is kept.
+    function addPlayCopyNote(el, item, keep) {
+      const box = document.createElement("div");
+      el.appendChild(box);
+      const where = (i) => `${i.set_name || "?"} · ${i.printing}`;
+      function show() {
+        const isPlay = keep.play === item;
+        const lines = [];
+        if (keep.reason === "sl") lines.push(`🔒 Secret Lair — ${item.owner} keeps every copy`);
+        else if (isPlay && keep.kept) lines.push(`🔒 ${item.owner}'s play copy${keep.options.length > 1 ? (keep.chosen ? " (chosen)" : " (cheapest printing)") : ""}`);
+        else lines.push(`🔒 ${item.owner}'s play copy is ${isSecretLair(keep.play) ? "the Secret Lair one" : where(keep.play)}`);
+        if (keep.reason === "play" && isPlay && (item.quantity || 1) > 1) lines.push(`1 kept, ${(item.quantity || 1) - 1} to sell`);
+        box.innerHTML = `<div class="keep-note">${lines.map(escapeHtml).join("<br>")}</div><div class="card-actions"></div><div class="order-error"></div>`;
+        const actions = box.querySelector(".card-actions");
+        if (keep.options.length > 1 && saleOrders && scriptVersion >= 9) actionButton(actions, "Change play copy", pick);
+      }
+      function pick() {
+        const actions = box.querySelector(".card-actions");
+        const error = box.querySelector(".order-error");
+        actions.innerHTML = `<select aria-label="Play copy">${keep.options
+          .map((i, n) => `<option value="${n}"${i === keep.play ? " selected" : ""}>${escapeHtml(where(i))}${pricedAt(i) !== Infinity ? ` · ${formatPrice(pricedAt(i))}` : ""}</option>`)
+          .join("")}</select>`;
+        const select = actions.querySelector("select");
+        actionButton(actions, "Keep this one", async () => {
+          const choice = keep.options[Number(select.value)];
+          const failed = busy(actions, error);
+          try {
+            await change("keep", { owner: item.owner, name: item.name, scryfallId: choice.card_id, finish: SHEET_FINISHES[choice.printing] || "normal" });
+          } catch (err) {
+            failed(err);
+          }
+        }, true);
+        actionButton(actions, "Back", show);
+      }
+      show();
+    }
+
 
     // ---- Orders: sales to WTB buyers and from our own TCGMP listings,
     // saved to the inventory sheets through the Apps Script web app in
@@ -1053,6 +1141,7 @@
       scriptVersion = data.version || 0;
       dismissedDrops = new Set(data.dismissed || []);
       notSales = data.notSales || {};
+      playKeeps = data.keeps || {};
       salesSummary = data.sales || null;
       renderOrders();
       renderIntake();
@@ -1513,14 +1602,14 @@
       return el;
     }
 
-    function addSaleControls(el, item, rec, kinds) {
+    function addSaleControls(el, item, rec, kinds, kept = 0) {
       const finish = SHEET_FINISHES[item.printing];
       const mine = (o) => o.owner === item.owner && o.scryfallId === item.card_id && o.finish === finish;
       const open = saleOrders.filter((o) => mine(o) && (o.status === AWAITING || o.status === "Paid"));
       // Paid orders are already out of the box (Pulled), so only orders still
       // awaiting payment come off the copies left to sell.
       const awaitingQty = open.filter((o) => o.status === AWAITING).reduce((n, o) => n + o.qty, 0);
-      const available = (item.quantity || 1) - awaitingQty;
+      const available = (item.quantity || 1) - awaitingQty - kept;
 
       if (open.length) {
         const note = document.createElement("div");
@@ -1812,12 +1901,19 @@
     function renderSellPlan() {
       const owner = document.getElementById("sell-plan-owner").value;
       const routeFilter = document.getElementById("sell-plan-route").value;
+      const keeps = playCopies();
       const terms = document.getElementById("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const all = watchlistItems
         .filter((item) => !owner || item.owner === owner)
         .filter((item) => terms.every((t) => `${item.name || ""} ${item.set_name || ""}`.toLowerCase().includes(t)))
         .map((item) => withLiveListing(item, liveListings))
-        .map((item) => ({ item, rec: sellRecommendation(item) }));
+        .map((item) => {
+          const keep = keeps.get(itemKey(item));
+          const rec = sellRecommendation(item);
+          // Nothing left to sell once the kept copies are held back.
+          if (keep && keep.kept >= (item.quantity || 1)) return { item, keep, sellQty: 0, rec: { route: "keep", listed: rec.route === "listed" } };
+          return { item, keep, rec, sellQty: (item.quantity || 1) - ((keep && keep.kept) || 0) };
+        });
 
       // Totals per route for the whole selection, regardless of the route filter.
       const totals = document.getElementById("sell-plan-totals");
@@ -1825,18 +1921,18 @@
       totals.innerHTML = Object.entries(ROUTES)
         .map(([key, { label }]) => {
           const group = all.filter((e) => e.rec.route === key);
-          const qtyOf = (e) => (key === "listed" ? e.rec.listedQty : e.item.quantity || 1);
+          const qtyOf = (e) => (key === "listed" ? e.rec.listedQty : key === "keep" ? e.item.quantity || 1 : e.sellQty);
           const copies = group.reduce((n, e) => n + qtyOf(e), 0);
           const value = group.reduce((n, e) => n + (e.rec.price || 0) * qtyOf(e), 0);
           const undercut = key === "listed" ? group.filter((e) => e.rec.undercutBy != null).length : 0;
-          return `<div><div class="label">${escapeHtml(label)}</div><div class="value">${group.length}</div><div class="label">${copies} copies${key === "review" ? "" : ` · ${money(value)}`}${undercut ? ` · ⚠ ${undercut} undercut` : ""}</div></div>`;
+          return `<div><div class="label">${escapeHtml(label)}</div><div class="value">${group.length}</div><div class="label">${copies} copies${key === "review" || key === "keep" ? "" : ` · ${money(value)}`}${undercut ? ` · ⚠ ${undercut} undercut` : ""}</div></div>`;
         })
         .join("");
       totals.hidden = !all.length;
 
       const shown = all
         .filter((e) => !routeFilter || e.rec.route === routeFilter)
-        .sort((a, b) => (b.rec.price || 0) * (b.item.quantity || 1) - (a.rec.price || 0) * (a.item.quantity || 1));
+        .sort((a, b) => (b.rec.price || 0) * b.sellQty - (a.rec.price || 0) * a.sellQty);
       renderPaged(
         document.getElementById("sell-plan"),
         document.getElementById("sell-plan-more"),
