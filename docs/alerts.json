@@ -1,14 +1,4 @@
 {
-  "generated_at": "2026-11-25T22:55:09.133915+00:00",
-  "alerts": [
-    {
-      "name": "Kindred Judgment",
-      "set_name": "Reality Fracture",
-      "printing": "Foil",
-      "owner": "Joel",
-      "price_before": 1.49,
-      "price_now": 3.99,
-      "pct_change": 167.8
-    }
-  ]
+  "generated_at": "2026-11-26T14:04:50.096169+00:00",
+  "alerts": []
 }
