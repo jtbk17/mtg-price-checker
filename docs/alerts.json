@@ -1,4 +1,14 @@
 {
-  "generated_at": "2026-11-27T14:04:49.207732+00:00",
-  "alerts": []
+  "generated_at": "2026-11-27T22:28:44.964781+00:00",
+  "alerts": [
+    {
+      "name": "Swan Song",
+      "set_name": "Secret Lair Drop",
+      "printing": "Foil",
+      "owner": "Joel",
+      "price_before": 29.99,
+      "price_now": 32.99,
+      "pct_change": 10.0
+    }
+  ]
 }
