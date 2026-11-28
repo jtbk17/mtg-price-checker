@@ -44,6 +44,11 @@
 // happened. Which printing is kept can be chosen ("Play copies" tab);
 // otherwise any one copy left in the box counts.
 //
+// Boxes don't all hold the same number of slots (their length, sleeves), so
+// each can have its own count ("Boxes" tab); any other box uses the
+// Dashboard tab's "Slots per box". The latest batch can be moved into the
+// next box when it doesn't fit, or back into the previous one when it does.
+//
 // Add cards appends a batch to the bottom of Inventory behind one slot —
 // the next empty one unless another is picked, worked out the same way as
 // the Dashboard tab's "Next location" — and records it on an "Intake log"
@@ -69,8 +74,13 @@ const RECENT_DAYS = 14;
 // orders dropped off at once, a sales summary, and a cached list; 6: Add
 // cards from a ManaBox CSV; 7: GOG sales; 8: "Not a sale" can be undone;
 // 9: Joel's play copies and Secret Lair cards are kept; 10: a batch of
-// exactly the same cards as an earlier one asks before logging).
-const VERSION = 10;
+// exactly the same cards as an earlier one asks before logging; 11: slots
+// per box, and moving the latest batch between boxes).
+const VERSION = 11;
+const BOXES_TAB = "Boxes";
+const BOXES_HEADERS = ["Box", "Slots", "Set"];
+const BOX_PATTERN = /^B\d{2}$/;
+const MAX_SLOTS = 99;
 const KEEP_ONE_OWNERS = ["Joel"];
 const PLAY_COPIES_TAB = "Play copies";
 const PLAY_COPIES_HEADERS = ["Card", "Scryfall ID", "Finish", "Set", "Chosen"];
@@ -408,6 +418,48 @@ const ACTIONS = {
     return { logged: { batch: id, owner: req.owner, location, cards, rows: rows.length, firstRow: first }, intake: intakeStatusAll() };
   },
 
+  // How many slots one box holds, changeable at any time, but never fewer
+  // than are already used in it.
+  setBoxSlots(req) {
+    const box = String(req.box || "").trim().toUpperCase();
+    const slots = Number(req.slots);
+    if (!BOX_PATTERN.test(box)) throw new Error(`"${req.box}" isn't a box like B02`);
+    if (!Number.isInteger(slots) || slots < 1 || slots > MAX_SLOTS) throw new Error(`Slots must be a whole number from 1 to ${MAX_SLOTS}`);
+    const used = highestSlotIn(usedSlots(inventoryTable(req.owner)), box);
+    if (slots < used) throw new Error(`${box} already has cards up to slot ${used} — move that batch to the next box first`);
+    saveBoxSlots(req.owner, box, slots);
+    return { intake: intakeStatusAll() };
+  },
+
+  // Moves the latest batch across a box boundary and records what that says
+  // about the box: it didn't fit (-> the next box's first slot, and its old
+  // box holds one fewer), or the previous box had room after all (-> its
+  // next slot). Only while it's the highest slot, holds just this batch, and
+  // none of it is sold or pulled.
+  refitBatch(req) {
+    const log = readIntakeLog(req.owner);
+    const live = liveBatches(log);
+    const e = live[live.length - 1];
+    if (!e || e.batch !== String(req.batch)) throw new Error("Only the latest batch can be moved");
+    const inv = inventoryTable(req.owner);
+    const plan = refitPlan(usedSlots(inv), e);
+    if (!plan) throw new Error("Only a batch in the last slot used can move to another box");
+    const col = columnsOf(inv.headers, ["Location", "Sold", "Pulled"], INVENTORY_TAB);
+    const rows = [];
+    for (let row = e.firstRow; row < e.firstRow + e.rows; row++) {
+      const r = inv.values[row - 1] || [];
+      if (String(r[col["Location"]]).trim().toUpperCase() !== e.location) throw new Error("This batch's rows have changed since — fix it by hand");
+      if (Number(r[col["Sold"]]) || Number(r[col["Pulled"]])) throw new Error("Some of these cards are already sold or pulled — fix it by hand");
+      rows.push(row);
+    }
+    const sharing = inv.values.some((r, i) => i > 0 && rows.indexOf(i + 1) < 0 && String(r[col["Location"]]).trim().toUpperCase() === e.location);
+    if (sharing) throw new Error(`${e.location} holds other cards too — move them by hand`);
+    inv.sheet.getRange(e.firstRow, col["Location"] + 1, e.rows, 1).setValues(rows.map(() => [plan.to]));
+    log.sheet.getRange(e.sheetRow, log.col["Location"] + 1).setValue(plan.to);
+    saveBoxSlots(req.owner, plan.box, plan.slots);
+    return { moved: { batch: e.batch, from: e.location, to: plan.to, cards: e.cards, box: plan.box, slots: plan.slots }, intake: intakeStatusAll() };
+  },
+
   // Takes the latest batch back out, for a wrong sheet or slot — only
   // within UNDO_HOURS, while it's still the last thing on Inventory and
   // none of its cards have been sold or pulled.
@@ -516,6 +568,7 @@ function intakeStatusAll() {
 function intakeStatusOf(owner) {
   const inv = inventoryTable(owner);
   const settings = slotSettings(owner);
+  const boxes = readBoxes(owner);
   const col = columnsOf(inv.headers, ["Location", "In box"], INVENTORY_TAB);
   const slots = {};
   inv.values.slice(1).forEach((r) => {
@@ -524,8 +577,15 @@ function intakeStatusOf(owner) {
   });
   const live = liveBatches(readIntakeLog(owner));
   const latest = live[live.length - 1];
+  const highest = Object.keys(slots).sort().pop();
+  const box = highest ? highest.slice(0, 3) : "B01";
+  const plan = latest ? refitPlan(Object.keys(slots), latest) : null;
   return {
-    next: nextSlot(Object.keys(slots), settings.slotsPerBox),
+    next: nextSlot(Object.keys(slots), settings.slotsPerBox, boxes),
+    // The box being filled: how many slots it holds and how many are used.
+    box: { name: box, slots: boxes[box] || settings.slotsPerBox, used: highest ? Number(highest.slice(4)) : 0 },
+    // Where the latest batch could move to across a box boundary.
+    refit: plan ? { batch: latest.batch, to: plan.to, fits: plan.fits } : null,
     cardsPerSlot: settings.cardsPerSlot,
     slots: Object.keys(slots).sort().map((location) => ({ location, inBox: slots[location] })),
     added: Array.from(new Set([].concat(...live.map((e) => e.added)))),
@@ -535,15 +595,75 @@ function intakeStatusOf(owner) {
 }
 
 // The slot after the highest one in use, rolling over to the next box after
-// its last slot — the Dashboard tab's "Next location (auto)".
-function nextSlot(locations, slotsPerBox) {
+// its last slot — the Dashboard tab's "Next location (auto)", but allowing
+// for boxes with their own number of slots.
+function nextSlot(locations, slotsPerBox, boxes) {
   const highest = locations.filter((l) => SLOT_PATTERN.test(l)).sort().pop();
   if (!highest) return "B01-01";
   const m = highest.match(SLOT_PATTERN);
   const box = Number(m[1]);
   const slot = Number(m[2]);
-  const pad = (n) => String(n).padStart(2, "0");
-  return slot >= slotsPerBox ? `B${pad(box + 1)}-01` : `B${pad(box)}-${pad(slot + 1)}`;
+  const holds = (boxes || {})[`B${pad2(box)}`] || slotsPerBox;
+  return slot >= holds ? `B${pad2(box + 1)}-01` : `B${pad2(box)}-${pad2(slot + 1)}`;
+}
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function usedSlots(inv) {
+  const col = columnsOf(inv.headers, ["Location"], INVENTORY_TAB);
+  const seen = {};
+  inv.values.slice(1).forEach((r) => {
+    const location = String(r[col["Location"]]).trim().toUpperCase();
+    if (SLOT_PATTERN.test(location)) seen[location] = true;
+  });
+  return Object.keys(seen);
+}
+
+const highestSlotIn = (locations, box) =>
+  locations.filter((l) => l.slice(0, 3) === box).reduce((n, l) => Math.max(n, Number(l.slice(4))), 0);
+
+// For a batch in the last slot used: {to, fits, box, slots} — "next" moves it
+// to the following box (its box then holds the slots before it), "previous"
+// moves a box's first slot back into the box before (which then holds one
+// more than it had used).
+function refitPlan(locations, batch) {
+  const m = String(batch.location).match(SLOT_PATTERN);
+  if (!m || locations.slice().sort().pop() !== batch.location) return null;
+  const box = Number(m[1]);
+  const slot = Number(m[2]);
+  if (slot > 1) return { to: `B${pad2(box + 1)}-01`, fits: "next", box: `B${pad2(box)}`, slots: slot - 1 };
+  const before = `B${pad2(box - 1)}`;
+  const used = highestSlotIn(locations, before);
+  if (!used || used >= MAX_SLOTS) return null;
+  return { to: `${before}-${pad2(used + 1)}`, fits: "previous", box: before, slots: used + 1 };
+}
+
+// {box: slots} for boxes given their own count — reading never creates the tab.
+function readBoxes(owner) {
+  const sheet = spreadsheet(owner).getSheetByName(BOXES_TAB);
+  const out = {};
+  if (!sheet) return out;
+  sheet.getDataRange().getValues().slice(1).forEach((r) => {
+    const box = String(r[0]).trim().toUpperCase();
+    const slots = Number(r[1]);
+    if (BOX_PATTERN.test(box) && slots > 0) out[box] = slots;
+  });
+  return out;
+}
+
+function saveBoxSlots(owner, box, slots) {
+  const ss = spreadsheet(owner);
+  let sheet = ss.getSheetByName(BOXES_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(BOXES_TAB);
+    sheet.appendRow(BOXES_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  const values = sheet.getDataRange().getValues();
+  const at = values.findIndex((r, i) => i > 0 && String(r[0]).trim().toUpperCase() === box);
+  const line = [box, slots, new Date()];
+  if (at > 0) sheet.getRange(at + 1, 1, 1, line.length).setValues([line]);
+  else sheet.appendRow(line);
 }
 
 // The Dashboard tab's "Cards per slot" and "Slots per box" settings.

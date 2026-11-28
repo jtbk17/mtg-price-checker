@@ -201,6 +201,46 @@ with sync_playwright() as p:
           and again_buttons == ["inf:Joel", "inx"], ask_again)
     _, tg, _ = tap("inf:Joel", doc=doc6)
     check("Log anyway logs them", "Logged 4 cards behind <b>B02-03</b>" in calls(tg, "editMessageText")[-1]["text"] and inv_len("J") == j_rows + 3)
+
+    # ---- a batch that doesn't fit its box ----
+    keys = lambda edit: [(b["text"], b["callback_data"]) for row in edit["reply_markup"]["inline_keyboard"] for b in row]
+    logged = calls(tg, "editMessageText")[-1]
+    move = [k for k in keys(logged) if k[1].startswith("mv:")]
+    check("logged batch offers to move to the next box", [m[0] for m in move] == ["Doesn't fit → B03-01"], keys(logged))
+    batch_id = move[0][1].split(":")[2]
+    _, tg, _ = tap(f"ik:Joel:{batch_id}")
+    check("Keep restores both buttons", [k[1].split(":")[0] for k in keys(calls(tg, "editMessageReplyMarkup")[0])] == ["iu", "mv"])
+    j_slot = lambda: pg.evaluate("() => __books.J.Inventory.rows.slice(-3).map(r => r[0])")
+    _, tg, _ = tap(move[0][1], text="Logged…")
+    moved = calls(tg, "editMessageText")[-1]
+    check("tap: rows move to the next box, box count updated",
+          j_slot() == ["B03-01"] * 3 and "behind <b>B03-01</b>" in moved["text"] and "Box B02 now holds 2 slots" in moved["text"], moved["text"])
+    check("...buttons off while it moves", calls(tg, "editMessageReplyMarkup")[0]["reply_markup"]["inline_keyboard"] == [])
+    back = [k for k in keys(moved) if k[1].startswith("mv:")]
+    check("...and can be moved back", [m[0] for m in back] == ["Fits in B02 → B02-03"], keys(moved))
+    _, tg, _ = tap(back[0][1], text="…")
+    check("moved back", j_slot() == ["B02-03"] * 3, j_slot())
+    _, tg, _ = tap("mv:Joel:nope", text="Logged…")
+    check("an old batch can't be moved", "Only the latest batch can be moved" in calls(tg, "editMessageText")[-1]["text"])
+
+    # ---- /box ----
+    def say(text, chat=CHAT, env=ENV):
+        return send({"message": {"message_id": 77, "chat": {"id": chat}, "text": text}}, env)
+
+    _, tg, _ = say("/box")
+    msg = calls(tg, "sendMessage")[0]
+    check("/box: each sheet's box, slots and next", "Joel</b> — box B02 holds <b>3</b> slots (3 used) · next B03-01" in msg["text"]
+          and "Shared</b> — box B05 holds <b>10</b>" in msg["text"], msg["text"])
+    joel_keys = [k for k in keys(msg) if k[1].startswith("bx:Joel")]
+    check("...+1 only when the box is full", joel_keys == [("Joel B02: 4", "bx:Joel:B02:4")], joel_keys)
+    _, tg, _ = tap("bx:Joel:B02:4")
+    edited = calls(tg, "editMessageText")[-1]
+    check("tap sets the slots and refreshes", "box B02 holds <b>4</b> slots (3 used) · next B02-04" in edited["text"]
+          and ("Joel B02: 3", "bx:Joel:B02:3") in keys(edited), edited["text"])
+    _, tg, _ = say("/box", chat=7)
+    check("/box from another chat: ignored", tg == [], tg)
+    _, tg, _ = say("hello")
+    check("other messages: no reply", tg == [], tg)
     _, tg, _ = tap("in:Shared", doc=None)
     check("a tap that lost its file says to send it again", "send it again" in calls(tg, "editMessageText")[-1]["text"])
     _, tg, _ = tap("inx")

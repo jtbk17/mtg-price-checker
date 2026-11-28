@@ -221,6 +221,8 @@
     .intake-last { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .intake-last .card-actions { margin-top: 0; }
     .intake-done { color: var(--up); }
+    .intake-box { align-items: center; }
+    .card-actions.intake-box input { width: 4.5em; }
     .intake-warn { color: #e5c07b; font-size: 0.9em; }
     .intake-preview { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; overflow-wrap: anywhere; }
     .file-button {
@@ -1778,8 +1780,12 @@
         <div class="card-actions intake-owner"><select aria-label="Which sheet">${owners
           .map((o) => `<option value="${escapeHtml(o)}"${o === owner ? " selected" : ""}>${escapeHtml(o)}'s sheet</option>`).join("")}</select></div>
         <p>Next empty slot: <strong>${escapeHtml(st.next)}</strong> <span class="meta">· ${st.cardsPerSlot} cards per slot</span></p>
+        ${st.box && scriptVersion >= 11 ? `<div class="card-actions intake-box"><label>Box ${escapeHtml(st.box.name)} holds
+          <input type="number" min="${Math.max(st.box.used, 1)}" max="99" value="${st.box.slots}" inputmode="numeric" aria-label="Slots in box ${escapeHtml(st.box.name)}">
+          slots</label><span class="meta">${st.box.used} used</span></div>` : ""}
         ${last ? `<div class="intake-last"><span class="meta">Last batch: ${plural(last.cards)} → ${escapeHtml(last.location)} · ${escapeHtml(when(last.logged))}</span>
-          ${st.undoable === last.batch ? '<span class="card-actions intake-undo"></span>' : ""}</div>` : ""}
+          ${st.undoable === last.batch ? '<span class="card-actions intake-undo"></span>' : ""}
+          ${st.refit && st.refit.batch === last.batch && scriptVersion >= 11 ? '<span class="card-actions intake-refit"></span>' : ""}</div>` : ""}
         ${intakeDone && intakeDone.owner === owner ? `<p class="intake-done">✓ Logged ${plural(intakeDone.cards)} behind <strong>${escapeHtml(intakeDone.location)}</strong>.
           Write ${escapeHtml(intakeDone.location)} on the divider and box them, then in ManaBox move Inbox to Collection.
           They'll be on the dashboard within 30 minutes.</p>` : ""}
@@ -1835,6 +1841,28 @@
         if (!confirm(`Take the ${plural(last.cards)} logged behind ${last.location} back out of ${owner}'s sheet?`)) return;
         await intakeChange("undoIntake", { owner, batch: last.batch }, () => (intakeDone = null));
       });
+      const boxRow = el.querySelector(".intake-box");
+      if (boxRow) {
+        const input = boxRow.querySelector("input");
+        const save = actionButton(boxRow, "Save", async () => {
+          await intakeChange("setBoxSlots", { owner, box: st.box.name, slots: Number(input.value) }, () => {
+            intakeSlot = null;
+          });
+        });
+        save.disabled = true;
+        input.addEventListener("input", () => (save.disabled = !input.value || Number(input.value) === st.box.slots));
+      }
+      const refitSpot = el.querySelector(".intake-refit");
+      if (refitSpot) {
+        const label = st.refit.fits === "next" ? `Doesn't fit → move to ${st.refit.to}` : `Fits in ${st.refit.to.slice(0, 3)} → move to ${st.refit.to}`;
+        actionButton(refitSpot, label, async () => {
+          if (!confirm(`Move the ${plural(last.cards)} from ${last.location} to ${st.refit.to} in ${owner}'s sheet?`)) return;
+          await intakeChange("refitBatch", { owner, batch: last.batch }, (data) => {
+            if (intakeDone && intakeDone.batch === data.moved.batch) intakeDone = { ...intakeDone, location: data.moved.to };
+            intakeSlot = null;
+          });
+        });
+      }
       const go = el.querySelector(".intake-go");
       if (go) {
         const log = actionButton(go, intakeTwin ? `Log anyway → ${slot}` : `Log ${plural(file.cards)} → ${slot}`, async () => {

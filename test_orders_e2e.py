@@ -639,6 +639,45 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(200)
     intake.locator("text=Cancel").click()
 
+    # ---- slots per box, and moving a batch between boxes ----
+    pg.reload(); pg.wait_for_timeout(1500)
+    pg.select_option("#intake .intake-owner select", "Joel"); pg.wait_for_timeout(200)
+    box_row = pg.locator("#intake .intake-box")
+    check("box being filled and its slots", "Box B02 holds" in box_row.inner_text() and "1 used" in box_row.inner_text()
+          and box_row.locator("input").input_value() == "10" and not box_row.locator("text=Save").is_enabled(), box_row.inner_text())
+    pick([mb("Box Card", 20, added="2026-11-28T10:00:00Z")])
+    intake.locator("text=Log 1 card → B02-02").click(); pg.wait_for_timeout(800)
+    box_row.locator("input").fill("2"); box_row.locator("text=Save").click(); pg.wait_for_timeout(800)
+    check("set how many slots a box holds: next slot follows", "Next empty slot: B03-01" in intake.inner_text()
+          and box_row.locator("input").input_value() == "2", intake.inner_text())
+    tab = gas.evaluate("() => __books.J.Boxes.rows.map(r => r.slice(0, 2))")
+    check("saved on the sheet's Boxes tab", tab == [["Box", "Slots"], ["B02", 2]], tab)
+    box_row.locator("input").fill("1"); box_row.locator("text=Save").click(); pg.wait_for_timeout(800)
+    check("not fewer than the slots already used", "already has cards up to slot 2" in intake.inner_text()
+          and intake_api(action="intakeStatus")["intake"]["Joel"]["box"]["slots"] == 2, intake.inner_text())
+    box_row.locator("input").fill("12"); box_row.locator("text=Save").click(); pg.wait_for_timeout(800)
+    check("a longer box: more slots, any time", "Next empty slot: B02-03" in intake.inner_text(), intake.inner_text())
+
+    locations = lambda: [r[0] for r in inv_rows("J") if r[1] == "Box Card"]
+    intake.locator("text=Doesn't fit → move to B03-01").click(); pg.wait_for_timeout(800)
+    st = intake_api(action="intakeStatus")["intake"]["Joel"]
+    check("doesn't fit: batch moves to the next box's first slot", locations() == ["B03-01"] and "Last batch: 1 card → B03-01" in intake.inner_text(), locations())
+    check("...the old box now holds one fewer", gas.evaluate("() => __books.J.Boxes.rows[1][1]") == 1 and st["next"] == "B03-02", st["next"])
+    check("...and the log follows the move", log_rows("J")[-1][2] == "B03-01", log_rows("J")[-1])
+    intake.locator("text=Fits in B02 → move to B02-02").click(); pg.wait_for_timeout(800)
+    check("fits after all: moved back into the previous box", locations() == ["B02-02"]
+          and gas.evaluate("() => __books.J.Boxes.rows[1][1]") == 2 and "Next empty slot: B03-01" in intake.inner_text(), locations())
+    gas.evaluate("() => { const s = __books.J.Inventory; const h = s.rows[0]; s.rows.find((r) => r[1] === 'Box Card')[h.indexOf('Pulled')] = 1; }")
+    intake.locator("text=Doesn't fit → move to B03-01").click(); pg.wait_for_timeout(800)
+    check("not once a card is pulled", "already sold or pulled" in intake.inner_text() and locations() == ["B02-02"], intake.inner_text())
+    gas.evaluate("() => { const s = __books.J.Inventory; const h = s.rows[0]; s.rows.find((r) => r[1] === 'Box Card')[h.indexOf('Pulled')] = ''; }")
+    intake.locator("text=Undo").click(); pg.wait_for_timeout(800)
+    check("a moved batch can still be undone", locations() == [], locations())
+    pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(300)
+    check("box controls at phone width: no horizontal scroll", not pg.evaluate("document.documentElement.scrollWidth > innerWidth"))
+    pg.set_viewport_size({"width": 1280, "height": 1000}); pg.wait_for_timeout(200)
+    gas.evaluate("() => { delete __books.J.Boxes; }")
+
     # ---- Joel keeps one copy of each card, and every Secret Lair card ----
     watchlist["items"].extend([
         item(name="Lightning Bolt", card_id="bolt-a", set_name="Alpha", owner="Joel", tcgmarketplace_price=1.0, latest_price=1.2, tcgmarketplace_wtb_price=0.9),
@@ -759,6 +798,7 @@ with sync_playwright() as p:
     check("old script: a change falls back to fetching the list", calls[n:] == ["cancel", "list"]
           and "Cancelled" in old.locator("#orders-list .card", has_text="Bulk Card ×7").first.inner_text(), calls[n:])
     check("old script: Add cards asks for the script update", "update the Apps Script" in old.inner_text("#intake"))
+    check("old script: no box controls", old.locator(".intake-box").count() == 0)
     check("old script: no Sold to GOG button", old.locator("text=Sold to GOG").count() == 0)
     check("old script: update note, no drops, no listing button, WTB still works",
           "update the Apps Script" in old.inner_text("#orders-list") and old.locator("#orders-list .card", has_text="Looks sold?").count() == 0

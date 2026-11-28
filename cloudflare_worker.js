@@ -44,7 +44,7 @@
 // below is what actually verifies the request's origin.
 
 // ---- Add cards from Telegram: share a ManaBox CSV export to the bot, pick
-// the sheet, and it's logged through the same Apps Script web app the
+// the sheet (send /box to set how many slots a box holds), and it's logged through the same Apps Script web app the
 // dashboard's Add cards uses (google_apps_script.js) — next empty slot,
 // the same duplicate guard, and an Undo. ----
 
@@ -144,10 +144,55 @@ function allowedChat(env, chatId) {
   return env.TELEGRAM_CHAT_ID && String(chatId) === String(env.TELEGRAM_CHAT_ID).trim();
 }
 
+// Buttons under a logged batch: Undo, and moving it across a box boundary
+// when it doesn't fit (or the previous box had room after all).
+function loggedKeyboard(owner, batch, status) {
+  const rows = [[{ text: "Undo", callback_data: `iu:${owner}:${batch}` }]];
+  const refit = status && status.refit;
+  if (refit && refit.batch === batch) {
+    rows.push([{
+      text: refit.fits === "next" ? `Doesn't fit → ${refit.to}` : `Fits in ${refit.to.slice(0, 3)} → ${refit.to}`,
+      callback_data: `mv:${owner}:${batch}`,
+    }]);
+  }
+  return rows;
+}
+
+const whereToPut = (cards, location, owner) =>
+  `✅ ${plural(cards)} behind <b>${escapeHtml(location)}</b> in ${escapeHtml(owner)}'s sheet.\n`
+  + `Write ${escapeHtml(location)} on the divider and box them, then in ManaBox move Inbox to Collection.`;
+
+// /box: each sheet's box being filled, with -1 / +1 on how many slots it holds.
+function boxMessage(status) {
+  const lines = [];
+  const keyboard = [];
+  for (const [owner, st] of Object.entries(status)) {
+    if (!st.box) throw new Error("Update the Apps Script to set slots per box");
+    const { name, slots, used } = st.box;
+    lines.push(`<b>${escapeHtml(owner)}</b> — box ${name} holds <b>${slots}</b> slots (${used} used) · next ${st.next}`);
+    const row = [];
+    if (slots > Math.max(used, 1)) row.push({ text: `${owner} ${name}: ${slots - 1}`, callback_data: `bx:${owner}:${name}:${slots - 1}` });
+    if (slots < 99) row.push({ text: `${owner} ${name}: ${slots + 1}`, callback_data: `bx:${owner}:${name}:${slots + 1}` });
+    keyboard.push(row);
+  }
+  return { text: `📦 ${lines.join("\n")}\n\nTap how many slots the box holds.`, keyboard };
+}
+
 async function handleMessage(message, env) {
   const doc = message.document;
   const chatId = message.chat && message.chat.id;
-  if (!doc || chatId == null) return;
+  if (chatId == null) return;
+  if (!doc && /^\/box(es)?(@\w+)?(\s|$)/i.test(message.text || "")) {
+    if (!allowedChat(env, chatId)) return;
+    try {
+      const { text, keyboard } = boxMessage((await sheets(env, "intakeStatus")).intake);
+      await tg(env, "sendMessage", { chat_id: chatId, text, parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } });
+    } catch (err) {
+      await tg(env, "sendMessage", { chat_id: chatId, text: `❌ ${err.message}` });
+    }
+    return;
+  }
+  if (!doc) return;
   const reply = (text, extra = {}) => tg(env, "sendMessage", {
     chat_id: chatId, text, parse_mode: "HTML", reply_to_message_id: message.message_id, ...extra,
   });
@@ -202,8 +247,7 @@ async function handleIntakeTap(callback, env) {
   const keyboard = (rows) => tg(env, "editMessageReplyMarkup", {
     chat_id: chatId, message_id: message.message_id, reply_markup: { inline_keyboard: rows },
   });
-  const [kind, owner, batch] = (callback.data || "").split(":");
-  const undoRow = [[{ text: "Undo", callback_data: `iu:${owner}:${batch}` }]];
+  const [kind, owner, batch, count] = (callback.data || "").split(":");
 
   if (kind === "inx") {
     await Promise.all([answer(), edit("Cancelled — nothing logged.")]);
@@ -216,10 +260,10 @@ async function handleIntakeTap(callback, env) {
       const [rows, status] = await Promise.all([readCsv(env, doc.file_id), sheets(env, "intakeStatus").then((d) => d.intake)]);
       if (!status[owner]) throw new Error(`No sheet set up for ${owner}`);
       const slot = status[owner].next;
-      const done = (await sheets(env, "intake", { owner, location: slot, rows, force: kind === "inf" })).logged;
-      await edit(`✅ Logged ${plural(done.cards)} behind <b>${escapeHtml(done.location)}</b> in ${escapeHtml(owner)}'s sheet.\n`
-        + `Write ${escapeHtml(done.location)} on the divider and box them, then in ManaBox move Inbox to Collection.`,
-        [[{ text: "Undo", callback_data: `iu:${owner}:${done.batch}` }]]);
+      const data = await sheets(env, "intake", { owner, location: slot, rows, force: kind === "inf" });
+      const done = data.logged;
+      await edit(whereToPut(done.cards, done.location, owner).replace("✅ ", "✅ Logged "),
+        loggedKeyboard(owner, done.batch, data.intake && data.intake[owner]));
     } catch (err) {
       // The same cards as an earlier batch: ask before logging them again.
       if (err.data && err.data.sameAs) {
@@ -237,7 +281,31 @@ async function handleIntakeTap(callback, env) {
       { text: "Keep", callback_data: `ik:${owner}:${batch}` },
     ]])]);
   } else if (kind === "ik") {
-    await Promise.all([answer(), keyboard(undoRow)]);
+    await answer();
+    const status = await sheets(env, "intakeStatus").then((d) => d.intake[owner]).catch(() => null);
+    await keyboard(loggedKeyboard(owner, batch, status));
+  } else if (kind === "mv") {
+    // Buttons off first, so a double tap can't move it twice.
+    await Promise.all([answer("Moving…"), keyboard([])]);
+    try {
+      const data = await sheets(env, "refitBatch", { owner, batch });
+      const m = data.moved;
+      await edit(`${whereToPut(m.cards, m.to, owner)}\n📦 Box ${m.box} now holds ${m.slots} slots.`,
+        loggedKeyboard(owner, batch, data.intake[owner]));
+    } catch (err) {
+      const status = await sheets(env, "intakeStatus").then((d) => d.intake[owner]).catch(() => null);
+      await edit(`${escapeHtml(message.text || "")}\n\n❌ ${escapeHtml(err.message)}`, loggedKeyboard(owner, batch, status));
+    }
+  } else if (kind === "bx") {
+    // Here `batch` is the box (B02) and `count` its new number of slots.
+    await answer("Saving…");
+    try {
+      const data = await sheets(env, "setBoxSlots", { owner, box: batch, slots: Number(count) });
+      const { text, keyboard: rows } = boxMessage(data.intake);
+      await edit(text, rows);
+    } catch (err) {
+      await edit(`❌ ${escapeHtml(err.message)} — send /box again.`);
+    }
   } else if (kind === "iy") {
     await answer("Undoing…");
     try {
@@ -322,7 +390,7 @@ export default {
     if (!callback) {
       return new Response("OK");
     }
-    if (/^(in|inf|inx|iu|ik|iy)(:|$)/.test(callback.data || "")) {
+    if (/^(in|inf|inx|iu|ik|iy|mv|bx)(:|$)/.test(callback.data || "")) {
       ctx.waitUntil(handleIntakeTap(callback, env).catch((err) => console.log(`Add cards failed: ${err}`)));
       return new Response("OK");
     }
