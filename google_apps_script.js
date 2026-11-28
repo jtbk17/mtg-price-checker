@@ -68,8 +68,9 @@ const RECENT_DAYS = 14;
 // with the fresh list, and cancelled orders can be removed; 5: undo, several
 // orders dropped off at once, a sales summary, and a cached list; 6: Add
 // cards from a ManaBox CSV; 7: GOG sales; 8: "Not a sale" can be undone;
-// 9: Joel's play copies and Secret Lair cards are kept).
-const VERSION = 9;
+// 9: Joel's play copies and Secret Lair cards are kept; 10: a batch of
+// exactly the same cards as an earlier one asks before logging).
+const VERSION = 10;
 const KEEP_ONE_OWNERS = ["Joel"];
 const PLAY_COPIES_TAB = "Play copies";
 const PLAY_COPIES_HEADERS = ["Card", "Scryfall ID", "Finish", "Set", "Chosen"];
@@ -138,7 +139,8 @@ function doPost(e) {
       }
     }
   } catch (err) {
-    result = { ok: false, error: String((err && err.message) || err) };
+    // An error can carry details for the dashboard (sameAs: see intake).
+    result = Object.assign({ ok: false, error: String((err && err.message) || err) }, (err && err.details) || {});
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -366,6 +368,17 @@ const ACTIONS = {
         ? `This file was already logged ${where}.`
         : `${n} of these ${cards} cards were already logged ${where}. In ManaBox, move them from Inbox to Collection, then export and upload again.`);
     }
+    // Exactly the same cards as a batch already logged, but stamped as newly
+    // added in ManaBox (rescanned, or moved back into Inbox): most likely
+    // the same stack twice, so ask first — req.force logs it anyway (two
+    // identical stacks do happen, e.g. one card bought twice).
+    const twin = fingerprints.get(fingerprint);
+    if (twin && !req.force) {
+      const err = new Error(`These are the same ${plural(cards)} as the batch behind ${twin.location}`
+        + `${twin.owner === req.owner ? "" : ` in ${twin.owner}'s sheet`}, logged ${dayOf(twin.logged, twin.owner)}. Log them anyway?`);
+      err.details = { sameAs: { owner: twin.owner, location: twin.location, logged: twin.logged, cards } };
+      throw err;
+    }
 
     const inv = inventoryTable(req.owner);
     const first = lastFilledRow(inv) + 1;
@@ -582,6 +595,8 @@ function intakeFingerprint(rows) {
   }
   return ("0000000" + h.toString(16)).slice(-8);
 }
+
+const plural = (n) => `${n} card${n === 1 ? "" : "s"}`;
 
 function dayOf(when, owner) {
   const d = new Date(when);

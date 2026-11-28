@@ -117,7 +117,7 @@ async function sheets(env, action, params = {}) {
     body: JSON.stringify({ action, passcode: env.SHEETS_PASSCODE, ...params }),
   });
   const data = await resp.json();
-  if (!data.ok) throw new Error(data.error || "The sheets didn't answer");
+  if (!data.ok) throw Object.assign(new Error(data.error || "The sheets didn't answer"), { data });
   return data;
 }
 
@@ -207,7 +207,7 @@ async function handleIntakeTap(callback, env) {
 
   if (kind === "inx") {
     await Promise.all([answer(), edit("Cancelled — nothing logged.")]);
-  } else if (kind === "in") {
+  } else if (kind === "in" || kind === "inf") {
     const doc = message.reply_to_message && message.reply_to_message.document;
     // Buttons off first, so a second tap can't log it twice.
     await Promise.all([answer("Logging…"), edit(`⏳ Logging in ${escapeHtml(owner)}'s sheet…`)]);
@@ -216,12 +216,20 @@ async function handleIntakeTap(callback, env) {
       const [rows, status] = await Promise.all([readCsv(env, doc.file_id), sheets(env, "intakeStatus").then((d) => d.intake)]);
       if (!status[owner]) throw new Error(`No sheet set up for ${owner}`);
       const slot = status[owner].next;
-      const done = (await sheets(env, "intake", { owner, location: slot, rows })).logged;
+      const done = (await sheets(env, "intake", { owner, location: slot, rows, force: kind === "inf" })).logged;
       await edit(`✅ Logged ${plural(done.cards)} behind <b>${escapeHtml(done.location)}</b> in ${escapeHtml(owner)}'s sheet.\n`
         + `Write ${escapeHtml(done.location)} on the divider and box them, then in ManaBox move Inbox to Collection.`,
         [[{ text: "Undo", callback_data: `iu:${owner}:${done.batch}` }]]);
     } catch (err) {
-      await edit(`❌ ${escapeHtml(err.message)}`);
+      // The same cards as an earlier batch: ask before logging them again.
+      if (err.data && err.data.sameAs) {
+        await edit(`⚠️ ${escapeHtml(err.message)}`, [[
+          { text: "Log anyway", callback_data: `inf:${owner}` },
+          { text: "Cancel", callback_data: "inx" },
+        ]]);
+      } else {
+        await edit(`❌ ${escapeHtml(err.message)}`);
+      }
     }
   } else if (kind === "iu") {
     await Promise.all([answer(), keyboard([[
@@ -314,7 +322,7 @@ export default {
     if (!callback) {
       return new Response("OK");
     }
-    if (/^(in|inx|iu|ik|iy)(:|$)/.test(callback.data || "")) {
+    if (/^(in|inf|inx|iu|ik|iy)(:|$)/.test(callback.data || "")) {
       ctx.waitUntil(handleIntakeTap(callback, env).catch((err) => console.log(`Add cards failed: ${err}`)));
       return new Response("OK");
     }

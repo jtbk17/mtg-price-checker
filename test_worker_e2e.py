@@ -191,6 +191,16 @@ with sync_playwright() as p:
 
     _, tg, _ = tap("in:Joel", doc=doc2)
     check("an undone file can go in again (here to Joel's sheet)", "behind <b>B02-02</b> in Joel's sheet" in calls(tg, "editMessageText")[-1]["text"])
+    rescan = [r[:17] + ["2026-11-28T08:07:25Z"] for r in batch]
+    doc6, _ = share("f6", csv_text(rescan))
+    _, tg, _ = tap("in:Joel", doc=doc6)
+    ask_again = calls(tg, "editMessageText")[-1]
+    again_buttons = [b["callback_data"] for row in ask_again["reply_markup"]["inline_keyboard"] for b in row]
+    j_rows = inv_len("J")
+    check("same cards rescanned: asks, with Log anyway", "same 4 cards as the batch behind B02-02" in ask_again["text"]
+          and again_buttons == ["inf:Joel", "inx"], ask_again)
+    _, tg, _ = tap("inf:Joel", doc=doc6)
+    check("Log anyway logs them", "Logged 4 cards behind <b>B02-03</b>" in calls(tg, "editMessageText")[-1]["text"] and inv_len("J") == j_rows + 3)
     _, tg, _ = tap("in:Shared", doc=None)
     check("a tap that lost its file says to send it again", "send it again" in calls(tg, "editMessageText")[-1]["text"])
     _, tg, _ = tap("inx")

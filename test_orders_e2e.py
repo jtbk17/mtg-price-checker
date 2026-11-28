@@ -599,13 +599,25 @@ with sync_playwright() as p:
     pick(batch_a)
     check("an undone file can be logged again", intake.locator("text=Log 4 cards → B05-04").is_enabled())
     intake.locator("text=Log 4 cards → B05-04").click(); pg.wait_for_timeout(800)
+    # the same cards rescanned (new Added stamps): asked about, not refused
+    rescanned = [r[:17] + ["2026-11-28T08:07:25.935423Z"] for r in batch_a]
+    s_rows = len(inv_rows("S"))
+    pick(rescanned)
+    intake.locator("text=Log 4 cards → B05-05").click(); pg.wait_for_timeout(800)
+    check("same cards as an earlier batch: warned, nothing written yet",
+          "same 4 cards as the batch behind B05-04" in intake.inner_text() and len(inv_rows("S")) == s_rows, intake.inner_text())
+    intake.locator("text=Log anyway → B05-05").click(); pg.wait_for_timeout(800)
+    check("Log anyway logs them", len(inv_rows("S")) == s_rows + 3 and "Logged 4 cards behind B05-05" in intake.inner_text(), intake.inner_text())
+    twin = intake_api(action="intakeStatus")["intake"]["Shared"]["undoable"]
+    intake_api(action="undoIntake", owner="Shared", batch=twin)
     gas.evaluate("() => { const s = __books.S.Inventory; s.rows.push(s.rows[1].slice()); }")
     st = intake_api(action="intakeStatus")["intake"]["Shared"]
     refused = intake_api(action="undoIntake", owner="Shared", batch=st["undoable"])
     check("undo refused once rows are added below the batch", not refused["ok"] and "added below" in refused["error"], refused)
     gas.evaluate("() => { __books.S.Inventory.rows.pop(); }")
     gas.evaluate("""() => { const s = __books.S['Intake log']; const h = s.rows[0];
-        s.rows[s.rows.length - 1][h.indexOf('Logged')] = new Date(Date.now() - 25 * 3600 * 1000); }""")
+        const live = s.rows.filter((r, i) => i > 0 && !r[h.indexOf('Undone')]);
+        live[live.length - 1][h.indexOf('Logged')] = new Date(Date.now() - 25 * 3600 * 1000); }""")
     st = intake_api(action="intakeStatus")["intake"]["Shared"]
     old_undo = intake_api(action="undoIntake", owner="Shared", batch=st["recent"][0]["batch"])
     check("no undo after 24 hours", st["undoable"] is None and not old_undo["ok"], old_undo)
